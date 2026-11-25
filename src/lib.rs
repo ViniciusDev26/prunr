@@ -12,3 +12,4 @@ pub mod project;
 pub mod report;
 pub mod resolve;
 pub mod scripts;
+pub mod workspaces;
