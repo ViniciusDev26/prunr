@@ -216,12 +216,13 @@ fn an_unknown_command_is_a_usage_error() {
         &["check", "--nope"],
         &["check", "--json", "--github"],
         &["check", "--since"],
+        &["fix", "--nope"],
     ] {
         let run = prunr("clean", args);
         assert_eq!(run.code, 2, "{args:?}");
         assert_eq!(
             run.stderr,
-            "usage: prunr check [--json | --github] [--since <ref>] | prunr baseline | prunr init | prunr schema | prunr --version\n",
+            "usage: prunr check [--json | --github] [--since <ref>] | prunr fix [--dry-run] | prunr baseline | prunr init | prunr schema | prunr --version\n",
             "{args:?}"
         );
     }
@@ -757,4 +758,126 @@ fn baseline_without_a_config_is_an_error() {
         "{}",
         run.stderr
     );
+}
+
+/// A copy of a fixture with its subdirectories.
+fn copy_tree(fixture: &str) -> tempfile::TempDir {
+    fn copy_dir(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.path().is_dir() {
+                copy_dir(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    copy_dir(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(fixture),
+        dir.path(),
+    );
+    dir
+}
+
+fn read(dir: &Path, file: &str) -> String {
+    std::fs::read_to_string(dir.join(file)).unwrap()
+}
+
+#[test]
+fn fix_removes_what_check_reports_until_nothing_more_can_go() {
+    let dir = copy_tree("fix");
+    let run = run_in(dir.path(), &["fix"]);
+    assert_eq!(run.code, 1, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "fixed unused-file           src/dead.js\n\
+         fixed unused-export         src/greet.mjs: local\n\
+         fixed unused-export         src/greet.mjs: unusedConst\n\
+         fixed unused-export         src/math.js: sub\n\
+         fixed unused-import         src/greet.mjs: writeFile from node:fs/promises\n\
+         fixed unused-import         src/index.js: fs from fs\n\
+         fixed unused-import         src/index.js: unusedHelper from ./math\n\
+         fixed unused-ignore         src/greet.mjs:9: ignores nothing\n\
+         fixed unused-dependency     left-pad\n\
+         fixed misplaced-dependency  supertest: only tests use it, move it to devDependencies\n\
+         fixed unused-file           src/only-dead.js\n\
+         \n\
+         unused-export         src/math.js: mul (only tests use it)\n\
+         \n\
+         errors: 1, warnings: 0\n"
+    );
+    let root = dir.path();
+    assert!(!root.join("src/dead.js").exists());
+    assert!(!root.join("src/only-dead.js").exists());
+    assert_eq!(
+        read(root, "src/index.js"),
+        "const { add } = require(\"./math\");\n\
+         const _ = require(\"lodash\");\n\
+         const { greet, stillUsed } = require(\"./greet.mjs\");\n\
+         \n\
+         console.log(add(1, 2), _.chunk, greet(), stillUsed);\n"
+    );
+    assert_eq!(
+        read(root, "src/math.js"),
+        "exports.add = (a, b) => a + b;\nexports.mul = (a, b) => a * b;\n"
+    );
+    assert_eq!(
+        read(root, "src/greet.mjs"),
+        "import { readFile } from \"node:fs/promises\";\n\
+         \n\
+         export function greet() {\n  return readFile;\n}\n\
+         \n\
+         const unusedConst = 1;\n\
+         \n\
+         export const stillUsed = 2;\n\
+         \n\
+         const local = 3;\n"
+    );
+    assert_eq!(
+        read(root, "package.json"),
+        "{\n  \"name\": \"fix\",\n  \"private\": true,\n  \"dependencies\": {\n    \"lodash\": \"^4.17.0\"\n  },\n  \"devDependencies\": {\n    \"jest\": \"^29.0.0\",\n    \"supertest\": \"^7.0.0\"\n  },\n  \"scripts\": { \"test\": \"jest\" }\n}\n"
+    );
+    let again = run_in(root, &["fix"]);
+    assert_eq!(
+        again.stdout,
+        "unused-export         src/math.js: mul (only tests use it)\n\nerrors: 1, warnings: 0\n",
+        "a second run has nothing left to fix"
+    );
+}
+
+#[test]
+fn fix_dry_run_says_what_it_would_do_and_changes_nothing() {
+    let dir = copy_tree("fix");
+    let before = read(dir.path(), "src/index.js");
+    let run = run_in(dir.path(), &["fix", "--dry-run"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert!(
+        run.stdout
+            .starts_with("would fix unused-file           src/dead.js\n"),
+        "{}",
+        run.stdout
+    );
+    assert!(!run.stdout.contains("only-dead"), "{}", run.stdout);
+    assert_eq!(read(dir.path(), "src/index.js"), before);
+    assert!(dir.path().join("src/dead.js").exists());
+}
+
+#[test]
+fn fix_leaves_baseline_findings_alone() {
+    let dir = copy("baseline");
+    let math = read(dir.path(), "math.js");
+    let run = run_in(dir.path(), &["fix"]);
+    assert!(
+        run.stdout
+            .starts_with("fixed unused-export         math.js: mul\n"),
+        "{}",
+        run.stdout
+    );
+    assert!(read(dir.path(), "math.js").contains("exports.sub"));
+    assert_ne!(read(dir.path(), "math.js"), math);
 }
