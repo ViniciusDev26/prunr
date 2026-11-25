@@ -18,14 +18,35 @@ pub struct Resolver {
 
 impl Default for Resolver {
     fn default() -> Self {
-        todo!()
+        Self {
+            inner: oxc_resolver::Resolver::new(oxc_resolver::ResolveOptions::default()),
+        }
     }
 }
 
 impl Resolver {
     /// Resolves `specifier` as Node.js would from the file `from`.
     pub fn resolve(&self, from: &Path, specifier: &str) -> Target {
-        todo!()
+        if specifier.starts_with('.') || specifier.starts_with('/') {
+            let directory = from.parent().unwrap_or(from);
+            return match self.inner.resolve(directory, specifier) {
+                Ok(resolution) => Target::File(resolution.into_path_buf()),
+                Err(_) => Target::Unresolved,
+            };
+        }
+        if nodejs_built_in_modules::is_nodejs_builtin_module(specifier) {
+            return Target::Builtin;
+        }
+        Target::Package(package_name(specifier).to_string())
+    }
+}
+
+/// `@scope/name/sub` → `@scope/name`, `name/sub` → `name`.
+fn package_name(specifier: &str) -> &str {
+    let segments = if specifier.starts_with('@') { 2 } else { 1 };
+    match specifier.match_indices('/').nth(segments - 1) {
+        Some((end, _)) => &specifier[..end],
+        None => specifier,
     }
 }
 
@@ -66,7 +87,10 @@ mod tests {
         let dir = project();
         let root = dir.path();
         let from = root.join("lib/dir/index.js");
-        assert_eq!(Resolver::default().resolve(&from, "../a"), file(root, "lib/a.js"));
+        assert_eq!(
+            Resolver::default().resolve(&from, "../a"),
+            file(root, "lib/a.js")
+        );
     }
 
     #[test]
@@ -74,7 +98,10 @@ mod tests {
         let dir = project();
         let root = dir.path();
         let absolute = root.join("lib/a.js");
-        assert_eq!(resolve(root, absolute.to_str().unwrap()), file(root, "lib/a.js"));
+        assert_eq!(
+            resolve(root, absolute.to_str().unwrap()),
+            file(root, "lib/a.js")
+        );
     }
 
     #[test]
@@ -87,7 +114,11 @@ mod tests {
     fn builtins_are_recognized_with_and_without_the_prefix() {
         let dir = project();
         for specifier in ["fs", "node:fs", "fs/promises", "node:test"] {
-            assert_eq!(resolve(dir.path(), specifier), Target::Builtin, "{specifier}");
+            assert_eq!(
+                resolve(dir.path(), specifier),
+                Target::Builtin,
+                "{specifier}"
+            );
         }
     }
 
@@ -97,7 +128,13 @@ mod tests {
         let root = dir.path();
         assert_eq!(resolve(root, "lodash"), Target::Package("lodash".into()));
         assert_eq!(resolve(root, "lodash/fp"), Target::Package("lodash".into()));
-        assert_eq!(resolve(root, "@scope/pkg"), Target::Package("@scope/pkg".into()));
-        assert_eq!(resolve(root, "@scope/pkg/sub"), Target::Package("@scope/pkg".into()));
+        assert_eq!(
+            resolve(root, "@scope/pkg"),
+            Target::Package("@scope/pkg".into())
+        );
+        assert_eq!(
+            resolve(root, "@scope/pkg/sub"),
+            Target::Package("@scope/pkg".into())
+        );
     }
 }
