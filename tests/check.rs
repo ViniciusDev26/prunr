@@ -222,12 +222,12 @@ fn an_unknown_command_is_a_usage_error() {
 }
 
 #[test]
-fn an_entry_that_is_not_a_javascript_file_is_an_error() {
-    let run = check("entry-not-javascript");
+fn an_entry_that_is_not_a_source_file_is_an_error() {
+    let run = check("entry-not-source");
     assert_eq!(run.code, 2);
     assert_eq!(
         run.stderr,
-        "error: entry matches no .js or .cjs file: index.ts\n"
+        "error: entry matches no source file: data.json\n"
     );
 }
 
@@ -450,5 +450,67 @@ fn a_package_the_scripts_run_is_used() {
     assert_eq!(
         run.stdout,
         "unused-dependency     left-pad\n\nerrors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
+fn esm_and_commonjs_share_one_graph() {
+    let run = check("esm");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/unused.js\n\
+         unused-export         src/greet.js: whisper\n\
+         unused-export         src/legacy-named.cjs: other\n\
+         unused-export         src/legacy.cjs: stop\n\
+         unused-export         src/math.mjs: sub\n\
+         unused-export         src/math.mjs: unusedBinding\n\
+         unused-import         src/index.js: unusedBinding from ./math.mjs\n\
+         \n\
+         errors: 7, warnings: 0\n"
+    );
+}
+
+#[test]
+fn a_typescript_project_is_read_like_the_compiler_resolves_it() {
+    let run = check("typescript");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-export         src/format.ts: unusedFormat\n\
+         unused-export         src/math.ts: sub\n\
+         unused-export         src/types.ts: Unused\n\
+         unused-export         src/ui/button.tsx: IconButton\n\
+         unused-export         src/ui/card.tsx: Card\n\
+         unused-dependency     @types/express\n\
+         \n\
+         errors: 6, warnings: 0\n"
+    );
+}
+
+#[test]
+fn a_reexport_forwards_uses_to_where_the_export_is_defined() {
+    let run = check("reexports");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-export         src/greek.js: beta\n\
+         unused-export         src/internal.js: other\n\
+         unused-export         src/tools/hammer.js: nail\n\
+         unused-export         src/tools/index.js: local\n\
+         unused-export         src/tools/legacy.cjs: stop\n\
+         unused-export         src/tools/saw.js: saw\n\
+         \n\
+         errors: 6, warnings: 0\n"
+    );
+}
+
+#[test]
+fn a_types_package_is_used_with_the_package_it_types() {
+    let run = check("types-packages");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     @types/unused-lib\n\nerrors: 1, warnings: 0\n"
     );
 }

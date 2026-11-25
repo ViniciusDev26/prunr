@@ -7,7 +7,8 @@
 
 # prunr
 
-Detector de código morto para projetos Node.js, com **CommonJS como cidadão de primeira classe**.
+Detector de código morto para projetos Node.js, com **CommonJS como cidadão de primeira classe**,
+e ESM e TypeScript no mesmo grafo.
 
 O prunr lê cada arquivo uma única vez, monta um grafo de módulos a partir dos pontos de entrada
 do projeto e roda todas as verificações sobre esse mesmo grafo: arquivos e exports sem uso,
@@ -81,7 +82,8 @@ prunr schema         # o JSON Schema do prunr.json
 | `baseline` | não | Arquivo de baseline, relativo à raiz. Veja [Adotando num código legado](#adotando-num-código-legado). |
 
 Caminhos e globs são relativos à raiz; num glob, `*` não atravessa `/` e `**` atravessa. Cada
-entrada precisa casar com pelo menos um arquivo `.js` ou `.cjs`.
+entrada precisa casar com pelo menos um arquivo-fonte (`.js`, `.cjs`, `.mjs`, `.jsx`, `.ts`, `.cts`,
+`.mts` ou `.tsx`).
 
 Uma opção só entra no arquivo quando alguma funcionalidade precisa dela. Uma chave desconhecida é
 erro, para que um erro de digitação não passe em silêncio.
@@ -92,11 +94,11 @@ erro, para que um erro de digitação não passe em silêncio.
 |---|---|
 | `unused-file` | Nenhuma entrada de produção alcança o arquivo. Se só os testes o alcançam, a linha diz `(only tests use it)`: apague-o junto com os testes. |
 | `unused-export` | Nenhum arquivo de produção usa o export, nem o próprio arquivo onde ele está. Métodos estáticos de uma classe exportada contam como exports (`Invoice.total`). Também marca `(only tests use it)`. |
-| `unused-import` | Um `require` declara um binding que o arquivo nunca usa (`const x = require("./x")`, ou uma propriedade desestruturada). Um `require("./x");` sozinho, por efeito colateral, não conta. |
+| `unused-import` | Um `require` ou `import` declara um binding que o arquivo nunca usa (`const x = require("./x")`, uma propriedade desestruturada, `import { a } from "./x"`). Um `require("./x");` ou `import "./x";` sozinho, por efeito colateral, não conta. |
 | `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa e nenhum script do `package.json` o roda. |
 | `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o importam: ele pertence a `devDependencies`. |
 | `missing-dependency` | O arquivo importa um pacote que o `package.json` não declara. |
-| `circular-import` | Há um ciclo de `require`. Cada grupo de arquivos em ciclo é reportado uma vez, pelo caminho mais curto. |
+| `circular-import` | Há um ciclo de `require` ou `import`. Cada grupo de arquivos em ciclo é reportado uma vez, pelo caminho mais curto. Imports só de tipo (`import type`) não contam: somem na compilação. |
 | `unresolved-require` | **Aviso:** um `require` com caminho dinâmico (`require(nome)`), com um padrão que não alcança nenhum arquivo ou que aponta para um arquivo que não existe. Não falha o check. |
 
 Teste não mantém código vivo: o que só os testes usam está morto em produção. Um arquivo que
@@ -109,6 +111,24 @@ que o declara no campo `bin` (lido em `node_modules`; sem ele, vale o nome do pa
 `node -r dotenv/config` ou `--import tsx` conta como uso do pacote carregado. Um pacote usado por
 script não é `unused-dependency` nem `misplaced-dependency`, e um binário sem pacote declarado
 (`docker`, `git`) não é `missing-dependency`.
+
+### ESM e TypeScript
+
+Arquivos `.js`, `.cjs`, `.mjs`, `.jsx`, `.ts`, `.cts`, `.mts` e `.tsx` entram no mesmo grafo
+(arquivos `.d.ts` ficam de fora). Um arquivo ESM pode importar um CommonJS e vice-versa:
+
+- O `default` importado de um arquivo CommonJS é o `module.exports`, como no Node.
+- `import`, `import type`, `import()` com caminho estático, `import x = require()`, `export`,
+  `export default`, `export =` e os métodos estáticos de classes exportadas são lidos como no
+  CommonJS. Tipos, interfaces e enums exportados sem uso são `unused-export`.
+- `export { a } from`, `export * from` e `export * as ns from` repassam o uso para o arquivo de
+  origem, e o export morto é reportado onde é definido, não no barrel. Os reexports de uma
+  entrada de produção contam como usados: são a interface dela.
+- A resolução segue o TypeScript: `./a.js` acha o `a.ts`, e valem os `paths` do `tsconfig.json`
+  e os `imports` (`#interno`) do `package.json`.
+- `@types/x` conta como usado quando `x` é usado; `@types/node`, quando o projeto tem TypeScript
+  ou usa um módulo do Node. Importar `x` com só o `@types/x` declarado não é
+  `missing-dependency`.
 
 Na dúvida, o prunr é conservador: quando o resultado de um `require` é passado adiante ou
 acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um
@@ -186,7 +206,8 @@ errors: 7, warnings: 1
 
 ## Limitações atuais
 
-- **Só CommonJS** (`.js` e `.cjs`). ESM, TypeScript e `.mjs` ainda não são lidos.
+- **Um reexport que ninguém usa não é reportado** quando o export de origem tem outro uso: o
+  achado fica onde o export é definido.
 - **Dependências citadas só em arquivos de configuração de outras ferramentas** (plugins do ESLint,
   presets do Babel) aparecem como `unused-dependency`. Liste-as em `dependencies.ignore`.
 
@@ -208,8 +229,9 @@ cargo clippy --all-targets -- -D warnings
 cargo llvm-cov --fail-under-lines 100 --fail-under-functions 100
 ```
 
-- `src/`: `config` (prunr.json), `facts` (o que um arquivo CommonJS exige e exporta),
-  `resolve` (para onde aponta um `require`), `project` (o grafo), `checks`, `report` e `cli`.
+- `src/`: `config` (prunr.json), `facts` (o que um arquivo exige, importa e exporta),
+  `resolve` (para onde aponta um `require` ou `import`), `scripts` (o que os `scripts` do
+  `package.json` rodam), `project` (o grafo), `checks`, `report` e `cli`.
 - `tests/fixtures/<caso>/`: um mini projeto por comportamento, rodado por `tests/check.rs`.
 - `npm/`: o pacote `@prunr/prunr`, o launcher que executa o binário da plataforma e o script que
   publica tudo.

@@ -1,0 +1,13 @@
+{
+  "name": "typescript",
+  "private": true,
+  "scripts": { "build": "tsc" },
+  "dependencies": { "lodash": "^4.17.0" },
+  "devDependencies": {
+    "@types/estree": "^1.0.0",
+    "@types/express": "^5.0.0",
+    "@types/lodash": "^4.17.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  }
+}

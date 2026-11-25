@@ -18,5 +18,5 @@ os arquivos que o padrão pode alcançar, em vez de virar só um `unresolved-req
 
 ## Critérios de aceite
 
-- [ ] Uma fixture com template literal e com concatenação, alcançando arquivos em subpastas.
-- [ ] Um padrão que não alcança nada continua como aviso.
+- [x] Uma fixture com template literal e com concatenação, alcançando arquivos em subpastas.
+- [x] Um padrão que não alcança nada continua como aviso.

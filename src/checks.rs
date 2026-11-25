@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
-use crate::facts::Use;
-use crate::project::{FileId, Project};
+use crate::facts::{ReexportKind, Use};
+use crate::project::{FileId, Project, as_commonjs};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -117,16 +117,86 @@ fn reachable(project: &Project, entries: &BTreeSet<FileId>) -> BTreeSet<FileId> 
     seen
 }
 
-/// What `files` use of each file they require.
-fn uses<'p>(project: &'p Project, files: &BTreeSet<FileId>) -> BTreeMap<&'p FileId, Vec<&'p Use>> {
-    let mut uses: BTreeMap<&FileId, Vec<&Use>> = BTreeMap::new();
+type Uses<'p> = BTreeMap<&'p FileId, BTreeSet<Use>>;
+
+/// What `files` use of each file they require. An entry is used whole: its exports are its
+/// interface. Uses of a file that reexports others are forwarded to them.
+fn uses<'p>(
+    project: &'p Project,
+    files: &BTreeSet<FileId>,
+    entries: &'p BTreeSet<FileId>,
+) -> Uses<'p> {
+    let mut uses: Uses = BTreeMap::new();
     for id in files {
+        for edge in &project.files[id].edges {
+            uses.entry(&edge.target)
+                .or_default()
+                .extend(edge.uses.iter().cloned());
+        }
+    }
+    for id in entries {
+        uses.entry(id).or_default().insert(Use {
+            path: vec![],
+            whole: true,
+        });
+    }
+    let mut queue: Vec<&FileId> = uses.keys().copied().collect();
+    while let Some(id) = queue.pop() {
         let file = &project.files[id];
-        for edge in &file.edges {
-            uses.entry(&edge.target).or_default().extend(&edge.uses);
+        let mut shadowed: BTreeSet<&str> = file
+            .facts
+            .exports
+            .iter()
+            .map(|export| export.path[0].as_str())
+            .collect();
+        shadowed.insert("default");
+        for (_, kind) in &file.reexports {
+            if let ReexportKind::Named { exported, .. } = kind {
+                shadowed.insert(exported);
+            }
+        }
+        let incoming = uses[id].clone();
+        for (target, kind) in &file.reexports {
+            let commonjs = !project.files[target].facts.esm;
+            let forwarded: Vec<Use> = incoming
+                .iter()
+                .filter_map(|used| forward(used, kind, &shadowed))
+                .map(|used| if commonjs { as_commonjs(&used) } else { used })
+                .collect();
+            let known = uses.entry(target).or_default();
+            let before = known.len();
+            known.extend(forwarded);
+            if known.len() > before {
+                queue.push(target);
+            }
         }
     }
     uses
+}
+
+/// The use of a reexported module that a use of the reexporting one makes. `shadowed` are the
+/// names `export *` does not cover: the module's own exports, its named reexports and `default`.
+fn forward(used: &Use, kind: &ReexportKind, shadowed: &BTreeSet<&str>) -> Option<Use> {
+    let whole = |path: Vec<String>| Some(Use { path, whole: true });
+    let Some((first, rest)) = used.path.split_first() else {
+        return match kind {
+            _ if !used.whole => None,
+            ReexportKind::Named { imported, .. } => whole(vec![imported.clone()]),
+            ReexportKind::All | ReexportKind::Namespace(_) => whole(vec![]),
+        };
+    };
+    let path = match kind {
+        ReexportKind::Named { imported, exported } if first == exported => {
+            [vec![imported.clone()], rest.to_vec()].concat()
+        }
+        ReexportKind::Namespace(name) if first == name => rest.to_vec(),
+        ReexportKind::All if !shadowed.contains(first.as_str()) => used.path.clone(),
+        _ => return None,
+    };
+    Some(Use {
+        path,
+        whole: used.whole,
+    })
 }
 
 /// Exports of live files that no live file uses. A production entry's exports are its interface
@@ -138,15 +208,17 @@ fn unused_exports(
     tested: &BTreeSet<FileId>,
     findings: &mut Vec<Finding>,
 ) {
-    let live_uses = uses(project, live);
-    let test_uses = uses(project, &tested.difference(live).cloned().collect());
+    let live_uses = uses(project, live, production);
+    let none = BTreeSet::new();
+    let test_uses = uses(project, &tested.difference(live).cloned().collect(), &none);
     for id in live.difference(production) {
         let file = &project.files[id];
-        let used_by = |uses: &BTreeMap<&FileId, Vec<&Use>>, path: &[String]| {
-            let incoming = uses.get(id).map(Vec::as_slice).unwrap_or_default();
-            incoming
-                .iter()
-                .any(|u| covers(u, path, file.facts.default_export))
+        let used_by = |uses: &Uses, path: &[String]| {
+            uses.get(id).is_some_and(|incoming| {
+                incoming
+                    .iter()
+                    .any(|u| covers(u, path, file.facts.default_export))
+            })
         };
         for export in &file.facts.exports {
             if !export.used_internally && !used_by(&live_uses, &export.path) {
@@ -185,9 +257,31 @@ fn dependencies(
     };
     let in_production = required(live);
     let in_tests = required(tested);
+    let in_scripts = &project.script_packages;
+    let used = |package: &String| {
+        in_production.contains(package)
+            || in_tests.contains(package)
+            || in_scripts.contains(package)
+    };
+    let typescript = project
+        .files
+        .keys()
+        .any(|id| id.ends_with("ts") || id.ends_with("tsx"));
+    let builtins = live.union(tested).any(|id| project.files[id].builtins);
+    let types_used = |package: &String| match package.strip_prefix("@types/") {
+        Some("node") => typescript || builtins,
+        Some(typed) => used(&typed_package(typed)),
+        None => false,
+    };
     for id in live.union(tested) {
         for package in &project.files[id].packages {
-            if !project.declared_packages.contains(package) {
+            let types = format!(
+                "@types/{}",
+                package.trim_start_matches('@').replace('/', "__")
+            );
+            if !project.declared_packages.contains(package)
+                && !project.declared_packages.contains(&types)
+            {
                 findings.push(Finding::MissingDependency {
                     file: id.clone(),
                     package: package.clone(),
@@ -195,12 +289,8 @@ fn dependencies(
             }
         }
     }
-    let in_scripts = &project.script_packages;
     for package in project.dependencies.union(&project.dev_dependencies) {
-        if !in_production.contains(package)
-            && !in_tests.contains(package)
-            && !in_scripts.contains(package)
-        {
+        if !used(package) && !types_used(package) {
             findings.push(Finding::UnusedDependency {
                 package: package.clone(),
             });
@@ -215,6 +305,24 @@ fn dependencies(
                 package: package.clone(),
             });
         }
+    }
+}
+
+/// The files `id` requires at runtime: imports of types only are gone once TypeScript compiles,
+/// so they cannot form a cycle.
+fn runtime_edges<'p>(project: &'p Project, id: &FileId) -> impl Iterator<Item = &'p FileId> {
+    project.files[id]
+        .edges
+        .iter()
+        .filter(|edge| !edge.type_only)
+        .map(|edge| &edge.target)
+}
+
+/// The package `@types/<typed>` gives types to: `scope__name` → `@scope/name`.
+fn typed_package(typed: &str) -> String {
+    match typed.split_once("__") {
+        Some((scope, name)) => format!("@{scope}/{name}"),
+        None => typed.to_string(),
     }
 }
 
@@ -238,10 +346,7 @@ fn cycles(project: &Project, reachable: &BTreeSet<FileId>) -> Vec<Vec<FileId>> {
         .into_iter()
         .filter(|component| {
             component.len() > 1
-                || project.files[component[0]]
-                    .edges
-                    .iter()
-                    .any(|edge| &edge.target == component[0])
+                || runtime_edges(project, component[0]).any(|target| target == component[0])
         })
         .map(|component| {
             let members: BTreeSet<&FileId> = component.into_iter().collect();
@@ -257,8 +362,7 @@ fn shortest_cycle(project: &Project, members: &BTreeSet<&FileId>) -> Vec<FileId>
     let mut queue = VecDeque::from([start]);
     loop {
         let node = queue.pop_front().expect("a component holds a cycle");
-        for edge in &project.files[node].edges {
-            let next = &edge.target;
+        for next in runtime_edges(project, node) {
             if next == start {
                 let mut cycle = vec![node.clone()];
                 let mut current = node;
@@ -295,8 +399,7 @@ impl<'p> Tarjan<'p> {
         self.low.insert(node, index);
         self.stack.push(node);
         self.on_stack.insert(node);
-        for edge in &self.project.files[node].edges {
-            let next = &edge.target;
+        for next in runtime_edges(self.project, node) {
             if !self.index.contains_key(next) {
                 self.visit(next);
                 let low = self.low[node].min(self.low[next]);

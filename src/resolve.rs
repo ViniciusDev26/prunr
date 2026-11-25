@@ -18,27 +18,47 @@ pub struct Resolver {
 
 impl Default for Resolver {
     fn default() -> Self {
+        let strings = |items: &[&str]| items.iter().map(|item| item.to_string()).collect();
+        let options = oxc_resolver::ResolveOptions {
+            extensions: strings(&[
+                ".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx", ".json", ".node",
+            ]),
+            extension_alias: vec![
+                (".js".into(), strings(&[".js", ".ts", ".tsx", ".jsx"])),
+                (".mjs".into(), strings(&[".mjs", ".mts"])),
+                (".cjs".into(), strings(&[".cjs", ".cts"])),
+            ],
+            tsconfig: Some(oxc_resolver::TsconfigDiscovery::Auto),
+            condition_names: strings(&["node", "import", "require", "default"]),
+            ..oxc_resolver::ResolveOptions::default()
+        };
         Self {
-            inner: oxc_resolver::Resolver::new(oxc_resolver::ResolveOptions::default()),
+            inner: oxc_resolver::Resolver::new(options),
         }
     }
 }
 
 impl Resolver {
-    /// Resolves `specifier` as Node.js would from the file `from`.
+    /// Resolves `specifier` as Node.js (and TypeScript, for `paths`) would from the file `from`.
+    /// A bare specifier is a package unless it resolves to a file outside `node_modules`.
     pub fn resolve(&self, from: &Path, specifier: &str) -> Target {
-        if specifier.starts_with('.') || Path::new(specifier).is_absolute() {
-            let directory = from.parent().unwrap_or(from);
-            return match self.inner.resolve(directory, specifier) {
-                Ok(resolution) => Target::File(canonical(resolution.path())),
-                Err(_) => Target::Unresolved,
-            };
-        }
-        if nodejs_built_in_modules::is_nodejs_builtin_module(specifier) {
+        let local = specifier.starts_with(['.', '#']) || Path::new(specifier).is_absolute();
+        if !local && nodejs_built_in_modules::is_nodejs_builtin_module(specifier) {
             return Target::Builtin;
         }
-        Target::Package(package_name(specifier).to_string())
+        match self.inner.resolve_file(from, specifier) {
+            Ok(resolution) if local || !in_node_modules(resolution.path()) => {
+                Target::File(canonical(resolution.path()))
+            }
+            _ if local => Target::Unresolved,
+            _ => Target::Package(package_name(specifier).to_string()),
+        }
     }
+}
+
+fn in_node_modules(path: &Path) -> bool {
+    path.components()
+        .any(|component| component.as_os_str() == "node_modules")
 }
 
 /// The canonical form of a path that exists, without the `\\?\` prefix Windows adds.
@@ -107,6 +127,59 @@ mod tests {
             resolve(root, absolute.to_str().unwrap()),
             file(root, "lib/a.js")
         );
+    }
+
+    fn typescript_project() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for (path, content) in [
+            ("index.ts", ""),
+            ("src/math.ts", ""),
+            ("src/view.tsx", ""),
+            ("src/lib/format.ts", ""),
+            ("src/internal.mts", ""),
+            ("node_modules/pkg/package.json", r#"{ "main": "index.js" }"#),
+            ("node_modules/pkg/index.js", ""),
+            (
+                "tsconfig.json",
+                r#"{ "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["src/*"] } } }"#,
+            ),
+            (
+                "package.json",
+                r##"{ "imports": { "#internal": "./src/internal.mts" } }"##,
+            ),
+        ] {
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, content).unwrap();
+        }
+        dir
+    }
+
+    #[test]
+    fn typescript_files_resolve_with_or_without_a_javascript_extension() {
+        let dir = typescript_project();
+        let root = dir.path();
+        let resolve = |specifier| Resolver::default().resolve(&root.join("index.ts"), specifier);
+        assert_eq!(resolve("./src/math"), file(root, "src/math.ts"));
+        assert_eq!(resolve("./src/math.js"), file(root, "src/math.ts"));
+        assert_eq!(resolve("./src/view.js"), file(root, "src/view.tsx"));
+        assert_eq!(
+            resolve("./src/internal.mjs"),
+            file(root, "src/internal.mts")
+        );
+    }
+
+    #[test]
+    fn tsconfig_paths_and_package_imports_resolve_to_files() {
+        let dir = typescript_project();
+        let root = dir.path();
+        let resolve = |specifier| Resolver::default().resolve(&root.join("index.ts"), specifier);
+        assert_eq!(resolve("@/lib/format"), file(root, "src/lib/format.ts"));
+        assert_eq!(resolve("#internal"), file(root, "src/internal.mts"));
+        assert_eq!(resolve("#missing"), Target::Unresolved);
+        assert_eq!(resolve("pkg"), Target::Package("pkg".into()));
+        assert_eq!(resolve("@/missing"), Target::Package("@/missing".into()));
     }
 
     #[test]

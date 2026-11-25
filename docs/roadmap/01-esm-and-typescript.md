@@ -29,8 +29,8 @@ um arquivo ESM pode importar um CommonJS e vice-versa.
 
 ## Critérios de aceite
 
-- [ ] Uma fixture por forma de import e de export da lista acima.
-- [ ] Uma fixture mista: ESM importando CommonJS e CommonJS fazendo `require` de ESM.
-- [ ] Uma fixture TypeScript com alias de `paths` e import `./x.js` de um `.ts`.
-- [ ] Um barrel com `export *` não mantém vivos os exports que ninguém usa através dele.
-- [ ] `prunr init` propõe entradas e globs de teste num projeto TypeScript.
+- [x] Uma fixture por forma de import e de export da lista acima.
+- [x] Uma fixture mista: ESM importando CommonJS e CommonJS fazendo `require` de ESM.
+- [x] Uma fixture TypeScript com alias de `paths` e import `./x.js` de um `.ts`.
+- [x] Um barrel com `export *` não mantém vivos os exports que ninguém usa através dele.
+- [x] `prunr init` propõe entradas e globs de teste num projeto TypeScript.
