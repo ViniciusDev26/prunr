@@ -1,3 +1,4 @@
 [tools]
 rust = "1.100.0"
 "cargo:cargo-llvm-cov" = "0.9.2"
+"github:crate-ci/committed" = "1.1.12"

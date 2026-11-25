@@ -1,0 +1,25 @@
+name: commits
+
+# Every commit and the PR title must follow Conventional Commits (committed.toml): release-please
+# reads them, and a squash merge turns the PR title into the commit on main.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  messages:
+    name: Commit messages and PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Commit messages
+        uses: crate-ci/committed@v1.1.12
+      - name: PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$TITLE" | ./committed --commit-file -
