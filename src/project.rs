@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::facts::{Facts, Use, analyze};
+use crate::facts::{Facts, ReexportKind, Use, analyze};
 use crate::resolve::{Resolver, Target};
 
 /// A path relative to the project root, with `/` separators.
@@ -38,12 +38,53 @@ pub struct File {
     pub packages: BTreeSet<String>,
     /// Requires that point nowhere: dynamic ones by their source, missing files by specifier.
     pub unresolved: Vec<String>,
+    /// `export ... from` other project files: uses of this file that they forward there.
+    pub reexports: Vec<(FileId, ReexportKind)>,
+    /// The file requires a Node.js builtin module.
+    pub builtins: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Edge {
     pub target: FileId,
+    /// What the file uses of the target, in the target's terms: an ESM import of a CommonJS
+    /// module has `module.exports` as its default, so the `default` is dropped.
     pub uses: Vec<Use>,
+    /// Only types flow through it: TypeScript erases it.
+    pub type_only: bool,
+}
+
+impl File {
+    /// Records where a specifier points; the project file it names, if any.
+    fn link(
+        &mut self,
+        target: Target,
+        specifier: &str,
+        files: &BTreeMap<PathBuf, FileId>,
+    ) -> Option<FileId> {
+        match target {
+            Target::File(path) => return files.get(&path).cloned(),
+            Target::Package(package) => {
+                self.packages.insert(package);
+            }
+            Target::Builtin => self.builtins = true,
+            Target::Unresolved => self.unresolved.push(specifier.to_string()),
+        }
+        None
+    }
+}
+
+/// A use of a module through an ESM import, made relative to `module.exports` for a CommonJS
+/// target: its `default` is `module.exports` itself.
+pub fn as_commonjs(used: &Use) -> Use {
+    let path = match used.path.split_first() {
+        Some((first, rest)) if first == "default" => rest.to_vec(),
+        _ => used.path.clone(),
+    };
+    Use {
+        path,
+        whole: used.whole,
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -117,7 +158,18 @@ fn file_id(root: &Path, path: &Path) -> Option<FileId> {
     Some(relative.to_string_lossy().replace('\\', "/"))
 }
 
-/// Every `.js` and `.cjs` file under `root`, without `node_modules` and ignored files.
+/// The extensions of the source files prunr reads.
+const EXTENSIONS: &[&str] = &["js", "cjs", "mjs", "jsx", "ts", "cts", "mts", "tsx"];
+
+/// A TypeScript declaration file: it only declares types, so it is not part of the graph.
+fn is_declaration(path: &Path) -> bool {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    [".d.ts", ".d.cts", ".d.mts"]
+        .iter()
+        .any(|suffix| name.ends_with(suffix))
+}
+
+/// Every source file under `root`, without `node_modules`, declarations and ignored files.
 fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
     let walker = ignore::WalkBuilder::new(root)
         .require_git(false)
@@ -126,11 +178,11 @@ fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
     let mut files = BTreeMap::new();
     for entry in walker.flatten() {
         let path = entry.into_path();
-        let javascript = matches!(
-            path.extension().and_then(|e| e.to_str()),
-            Some("js" | "cjs")
-        );
-        if javascript && path.is_file() {
+        let source = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|extension| EXTENSIONS.contains(&extension));
+        if source && !is_declaration(&path) && path.is_file() {
             let id = file_id(root, &path).expect("walked files are under the root");
             files.insert(path, id);
         }
@@ -177,29 +229,48 @@ impl Project {
         let manifest = Manifest::load(&root)?;
         let paths = source_files(&root);
         let resolver = Resolver::default();
-        let mut files = BTreeMap::new();
+        let mut analyzed = BTreeMap::new();
         for (path, id) in &paths {
             let source = std::fs::read_to_string(path).unwrap_or_default();
             let facts = analyze(&source, path).map_err(|message| ProjectError::Parse {
                 file: id.clone(),
                 message,
             })?;
+            analyzed.insert(id.clone(), facts);
+        }
+        let esm: BTreeSet<FileId> = analyzed
+            .iter()
+            .filter(|(_, facts)| facts.esm)
+            .map(|(id, _)| id.clone())
+            .collect();
+        let mut files = BTreeMap::new();
+        for (path, id) in &paths {
+            let facts = analyzed.remove(id).expect("every file was analyzed");
             let mut file = File::default();
             for require in &facts.requires {
-                match resolver.resolve(path, &require.specifier) {
-                    Target::File(target) => {
-                        if let Some(target) = paths.get(&target) {
-                            file.edges.push(Edge {
-                                target: target.clone(),
-                                uses: require.uses.clone(),
-                            });
-                        }
-                    }
-                    Target::Package(package) => {
-                        file.packages.insert(package);
-                    }
-                    Target::Builtin => {}
-                    Target::Unresolved => file.unresolved.push(require.specifier.clone()),
+                let target = resolver.resolve(path, &require.specifier);
+                if let Some(target) = file.link(target, &require.specifier, &paths) {
+                    let uses = if require.esm && !esm.contains(&target) {
+                        require.uses.iter().map(as_commonjs).collect()
+                    } else {
+                        require.uses.clone()
+                    };
+                    file.edges.push(Edge {
+                        target,
+                        uses,
+                        type_only: require.type_only,
+                    });
+                }
+            }
+            for reexport in &facts.reexports {
+                let target = resolver.resolve(path, &reexport.specifier);
+                if let Some(target) = file.link(target, &reexport.specifier, &paths) {
+                    file.edges.push(Edge {
+                        target: target.clone(),
+                        uses: Vec::new(),
+                        type_only: reexport.type_only,
+                    });
+                    file.reexports.push((target, reexport.kind.clone()));
                 }
             }
             for pattern in &facts.patterns {
@@ -214,6 +285,7 @@ impl Project {
                             path: vec![],
                             whole: true,
                         }],
+                        type_only: false,
                     });
                 }
             }
@@ -264,7 +336,7 @@ impl Project {
         for pattern in patterns {
             let matched = self.entry(pattern)?;
             if matched.is_empty() {
-                return Err(format!("entry matches no .js or .cjs file: {pattern}"));
+                return Err(format!("entry matches no source file: {pattern}"));
             }
             entries.extend(matched);
         }
@@ -314,16 +386,132 @@ mod tests {
     }
 
     #[test]
-    fn it_reads_js_and_cjs_files_only() {
+    fn it_reads_javascript_and_typescript_files_but_not_declarations() {
         let dir = project(&[
             ("index.js", ""),
             ("lib/a.cjs", ""),
             ("lib/b.mjs", ""),
-            ("lib/c.ts", ""),
+            ("lib/c.jsx", ""),
+            ("lib/d.ts", ""),
+            ("lib/e.cts", ""),
+            ("lib/f.mts", ""),
+            ("lib/g.tsx", ""),
+            ("lib/types.d.ts", ""),
+            ("lib/types.d.mts", ""),
+            ("lib/types.d.cts", ""),
             ("data.json", "{}"),
         ]);
         let project = Project::load(dir.path()).unwrap();
-        assert_eq!(ids(&project), ["index.js", "lib/a.cjs"]);
+        assert_eq!(
+            ids(&project),
+            [
+                "index.js",
+                "lib/a.cjs",
+                "lib/b.mjs",
+                "lib/c.jsx",
+                "lib/d.ts",
+                "lib/e.cts",
+                "lib/f.mts",
+                "lib/g.tsx"
+            ]
+        );
+    }
+
+    fn edge(target: &str, uses: Vec<Use>) -> Edge {
+        Edge {
+            target: target.into(),
+            uses,
+            type_only: false,
+        }
+    }
+
+    fn used(path: &[&str], whole: bool) -> Use {
+        Use {
+            path: path.iter().map(|s| s.to_string()).collect(),
+            whole,
+        }
+    }
+
+    #[test]
+    fn importing_commonjs_uses_module_exports_as_the_default() {
+        let dir = project(&[
+            (
+                "index.mjs",
+                r#"import a from "./a.cjs"; import { b } from "./a.cjs"; import * as ns from "./a.cjs";
+                   import e from "./e.mjs";
+                   a.x(); b(); ns.default.y; ns.z; e.w;"#,
+            ),
+            ("a.cjs", "exports.x = 1;"),
+            ("e.mjs", "export default {};"),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.files["index.mjs"].edges,
+            [
+                edge("a.cjs", vec![used(&[], false), used(&["x"], true)]),
+                edge("a.cjs", vec![used(&["b"], false)]),
+                edge("a.cjs", vec![used(&[], true), used(&["z"], true)]),
+                edge(
+                    "e.mjs",
+                    vec![used(&["default"], false), used(&["default", "w"], true)]
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_import_of_types_only_is_a_type_only_edge() {
+        let dir = project(&[
+            ("index.ts", r#"import type { T } from "./t"; let x: T;"#),
+            ("t.ts", "export type T = 1;"),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        assert!(project.files["index.ts"].edges[0].type_only);
+    }
+
+    #[test]
+    fn reexports_are_edges_that_forward_uses() {
+        let dir = project(&[
+            (
+                "index.ts",
+                r#"export { a as b } from "./a"; export type * from "./t"; export * from "pkg";
+                   export * from "./missing";"#,
+            ),
+            ("a.ts", "export const a = 1;"),
+            ("t.ts", "export type T = 1;"),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        let index = &project.files["index.ts"];
+        assert_eq!(
+            index.reexports,
+            [
+                (
+                    "a.ts".to_string(),
+                    ReexportKind::Named {
+                        imported: "a".into(),
+                        exported: "b".into()
+                    }
+                ),
+                ("t.ts".to_string(), ReexportKind::All),
+            ]
+        );
+        let edges: Vec<(&str, bool)> = index
+            .edges
+            .iter()
+            .map(|edge| (edge.target.as_str(), edge.type_only))
+            .collect();
+        assert_eq!(edges, [("a.ts", false), ("t.ts", true)]);
+        assert!(index.edges.iter().all(|edge| edge.uses.is_empty()));
+        assert_eq!(index.packages, BTreeSet::from(["pkg".to_string()]));
+        assert_eq!(index.unresolved, ["./missing"]);
+    }
+
+    #[test]
+    fn a_file_that_requires_a_builtin_says_so() {
+        let dir = project(&[("a.js", r#"require("fs");"#), ("b.js", "")]);
+        let project = Project::load(dir.path()).unwrap();
+        assert!(project.files["a.js"].builtins);
+        assert!(!project.files["b.js"].builtins);
     }
 
     #[test]
@@ -372,16 +560,7 @@ mod tests {
         ]);
         let project = Project::load(dir.path()).unwrap();
         let index = &project.files["index.js"];
-        assert_eq!(
-            index.edges,
-            [Edge {
-                target: "lib/a.js".into(),
-                uses: vec![Use {
-                    path: vec!["a".into()],
-                    whole: false
-                }],
-            }]
-        );
+        assert_eq!(index.edges, [edge("lib/a.js", vec![used(&["a"], false)])]);
         assert_eq!(index.packages, BTreeSet::from(["lodash".to_string()]));
         assert_eq!(index.unresolved, ["./missing", "require(name)"]);
     }
@@ -574,7 +753,7 @@ mod tests {
         for pattern in ["nope.js", "data.json", "src/**/*.js"] {
             assert_eq!(
                 entries(&project, pattern),
-                Err(format!("entry matches no .js or .cjs file: {pattern}"))
+                Err(format!("entry matches no source file: {pattern}"))
             );
         }
     }
