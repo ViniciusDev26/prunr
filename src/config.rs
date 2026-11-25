@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 
 pub const FILE_NAME: &str = "prunr.json";
@@ -11,16 +12,21 @@ pub const FILE_NAME: &str = "prunr.json";
 /// Where the JSON Schema of `prunr.json` is published.
 pub const SCHEMA_URL: &str = "https://unpkg.com/prunr/schema.json";
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+/// The configuration of prunr, the dead code detector.
+#[derive(Debug, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "prunr.json")]
 pub struct Config {
+    /// The JSON Schema of this file, for editors.
+    #[serde(rename = "$schema", default)]
+    pub schema: Option<String>,
     pub entries: Entries,
     #[serde(default)]
     pub dependencies: Dependencies,
 }
 
-/// Paths or globs, relative to the project root.
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+/// Paths or globs, relative to the project root. In a glob, `*` does not cross `/` and `**` does.
+#[derive(Debug, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Entries {
     /// Where the program starts. Everything they reach, directly or not, is alive.
@@ -30,7 +36,8 @@ pub struct Entries {
     pub test: Vec<String>,
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Deserialize)]
+/// How the dependency checks treat packages.
+#[derive(Debug, Default, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Dependencies {
     /// Packages to leave out of the dependency checks: those only a command line uses (`jest`,
@@ -41,7 +48,8 @@ pub struct Dependencies {
 
 /// The JSON Schema of `prunr.json`.
 pub fn json_schema() -> String {
-    todo!()
+    let schema = schemars::schema_for!(Config);
+    serde_json::to_string_pretty(&schema).expect("the schema serializes") + "\n"
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,7 +61,9 @@ pub enum ConfigError {
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Missing(path) => write!(f, "{} not found", path.display()),
+            Self::Missing(path) => {
+                write!(f, "{} not found (`prunr init` creates one)", path.display())
+            }
             Self::Invalid(reason) => write!(f, "invalid {FILE_NAME}: {reason}"),
         }
     }

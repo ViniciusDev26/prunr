@@ -1,7 +1,13 @@
 //! `prunr init`: a first `prunr.json`, guessed from `package.json`. From then on the file is
 //! edited by hand; nothing is guessed when the check runs.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+
+use serde::Deserialize;
+
+use crate::config::{FILE_NAME, SCHEMA_URL};
+use crate::project::Project;
 
 /// Test globs `init` proposes when they match a file.
 const TEST_GLOBS: &[&str] = &[
@@ -13,9 +19,63 @@ const TEST_GLOBS: &[&str] = &[
     "**/*.spec.js",
 ];
 
+#[derive(Default, Deserialize)]
+struct Manifest {
+    main: Option<String>,
+    #[serde(default)]
+    scripts: BTreeMap<String, String>,
+}
+
 /// Writes `prunr.json` at `root` and returns its contents.
 pub fn init(root: &Path) -> Result<String, String> {
-    todo!()
+    if root.join(FILE_NAME).exists() {
+        return Err(format!("{FILE_NAME} already exists"));
+    }
+    let manifest = match std::fs::read_to_string(root.join("package.json")) {
+        Ok(text) => {
+            serde_json::from_str(&text).map_err(|e| format!("invalid package.json: {e}"))?
+        }
+        Err(_) => Manifest::default(),
+    };
+    let project = Project::load(root).map_err(|e| e.to_string())?;
+    let is_file = |path: &String| project.entries(std::slice::from_ref(path)).is_ok();
+
+    let mut candidates = vec![manifest.main.unwrap_or_else(|| "index.js".into())];
+    candidates.extend(
+        manifest
+            .scripts
+            .values()
+            .filter_map(|script| node_script(script)),
+    );
+    let production: BTreeSet<String> = candidates.into_iter().filter(is_file).collect();
+    if production.is_empty() {
+        return Err(format!(
+            "no entry found: create {FILE_NAME} with entries.production by hand"
+        ));
+    }
+    let test: Vec<String> = TEST_GLOBS
+        .iter()
+        .map(|glob| glob.to_string())
+        .filter(is_file)
+        .collect();
+
+    let mut entries = serde_json::json!({ "production": production });
+    if !test.is_empty() {
+        entries["test"] = serde_json::json!(test);
+    }
+    let config = serde_json::json!({ "$schema": SCHEMA_URL, "entries": entries });
+    let contents = serde_json::to_string_pretty(&config).expect("the config serializes") + "\n";
+    std::fs::write(root.join(FILE_NAME), &contents).map_err(|e| e.to_string())?;
+    Ok(contents)
+}
+
+/// The file a script runs with `node`: `node --flag file.js` → `file.js`.
+fn node_script(script: &str) -> Option<String> {
+    let mut words = script.split_whitespace().skip_while(|word| *word != "node");
+    words.next()?;
+    words
+        .find(|word| !word.starts_with('-'))
+        .map(|file| file.trim_start_matches("./").to_string())
 }
 
 #[cfg(test)]
@@ -124,5 +184,24 @@ mod tests {
         let dir = project(&[("package.json", "{ nope")]);
         let error = init(dir.path()).unwrap_err();
         assert!(error.starts_with("invalid package.json: "), "{error}");
+    }
+
+    #[test]
+    fn a_file_that_does_not_parse_is_an_error() {
+        let dir = project(&[("index.js", "const = ;")]);
+        let error = init(dir.path()).unwrap_err();
+        assert!(error.starts_with("index.js: "), "{error}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_directory_it_cannot_write_to_is_an_error() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = project(&[("index.js", "")]);
+        let readonly = std::fs::Permissions::from_mode(0o555);
+        std::fs::set_permissions(dir.path(), readonly).unwrap();
+        let result = init(dir.path());
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(result.unwrap_err().contains("ermission denied"));
     }
 }

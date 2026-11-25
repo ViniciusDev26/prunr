@@ -165,6 +165,18 @@ impl Project {
         })
     }
 
+    /// Leaves `packages` out of every dependency check.
+    pub fn ignore_packages(&mut self, packages: &[String]) {
+        for package in packages {
+            self.dependencies.remove(package);
+            self.dev_dependencies.remove(package);
+            self.declared_packages.remove(package);
+            for file in self.files.values_mut() {
+                file.packages.remove(package);
+            }
+        }
+    }
+
     /// The files that entry paths or globs (relative to the root) name. Each must name at least
     /// one project file.
     pub fn entries(&self, patterns: &[String]) -> Result<BTreeSet<FileId>, String> {

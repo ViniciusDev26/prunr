@@ -1,1 +1,68 @@
-{}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "prunr.json",
+  "description": "The configuration of prunr, the dead code detector.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "The JSON Schema of this file, for editors.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "entries": {
+      "$ref": "#/$defs/Entries"
+    },
+    "dependencies": {
+      "$ref": "#/$defs/Dependencies"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "entries"
+  ],
+  "$defs": {
+    "Entries": {
+      "description": "Paths or globs, relative to the project root. In a glob, `*` does not cross `/` and `**` does.",
+      "type": "object",
+      "properties": {
+        "production": {
+          "description": "Where the program starts. Everything they reach, directly or not, is alive.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "test": {
+          "description": "Test code. It is never reported, and what only it reaches is dead in production.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "production"
+      ]
+    },
+    "Dependencies": {
+      "description": "How the dependency checks treat packages.",
+      "type": "object",
+      "properties": {
+        "ignore": {
+          "description": "Packages to leave out of the dependency checks: those only a command line uses (`jest`,\n`husky`), or that are loaded in ways the graph cannot see.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
