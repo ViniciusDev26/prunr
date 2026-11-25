@@ -9,7 +9,7 @@ critérios de aceite:
 - [x] 4. [Pontos de entrada num arquivo de configuração JSON](04-entry-points-config.md)
 - [x] 5. [Variáveis locais com o Biome, imports com o prunr](05-locals-delegated-to-biome.md)
 - [ ] 6. [CI de testes e release automático](06-ci-and-auto-release.md)
-- [ ] 7. [Todo o MVP construído com TDD](07-tdd.md)
+- [x] 7. [Todo o MVP construído com TDD](07-tdd.md)
 
 **Teste de aceite final:** rodar o prunr num projeto CommonJS real de referência e comparar com
 a saída da composição de ferramentas que ele usa hoje (exceto variáveis locais). Toda diferença

@@ -9,7 +9,8 @@ use crate::config::Config;
 use crate::project::Project;
 use crate::report;
 
-pub const USAGE: &str = "usage: prunr check [--json] | prunr baseline | prunr init | prunr schema";
+pub const USAGE: &str =
+    "usage: prunr check [--json] | prunr baseline | prunr init | prunr schema | prunr --version";
 
 /// Runs the command in `root` and returns the exit code: 0 without errors, 1 with findings
 /// that are errors, 2 when the check could not run.
@@ -23,6 +24,10 @@ pub fn run(args: &[String], root: &Path, out: &mut impl Write, err: &mut impl Wr
             let _ = writeln!(out, "created {}", crate::config::FILE_NAME);
             0
         }),
+        ["--version"] => {
+            let _ = writeln!(out, "prunr {}", env!("CARGO_PKG_VERSION"));
+            Ok(0)
+        }
         ["schema"] => {
             let _ = out.write_all(crate::config::json_schema().as_bytes());
             Ok(0)

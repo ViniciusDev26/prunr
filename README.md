@@ -19,12 +19,21 @@ Vitest, Next, Nest etc.
 
 ## Instalação
 
-Ainda não há pacote publicado (isso é o [ponto 6](docs/mvp/06-ci-and-auto-release.md)). Por
-enquanto, compile a partir do código:
+Como dependência de desenvolvimento, fixada por projeto:
 
 ```sh
-cargo install --path .
+npm i -D prunr      # ou: pnpm add -D prunr / yarn add -D prunr
+npx prunr check
 ```
+
+O pacote `prunr` não tem binário próprio nem script de instalação: ele declara um pacote por
+plataforma (`@prunr/linux-x64`, `@prunr/linux-arm64`, `@prunr/darwin-x64`,
+`@prunr/darwin-arm64`, `@prunr/win32-x64`) como dependência opcional, e o gerenciador de pacotes
+baixa só o da sua máquina. Os binários de Linux são estáticos (musl), então rodam em qualquer
+distribuição.
+
+Os binários também ficam anexados a cada [release](https://github.com/ViniciusDev26/prunr/releases),
+com um `.sha256` ao lado. Para compilar do código: `cargo install --path .`.
 
 ## Uso
 
@@ -163,6 +172,10 @@ errors: 7, warnings: 1
 - **Dependências usadas só pela linha de comando** (`jest`, `@biomejs/biome`, `husky`...) aparecem
   como `unused-dependency`, porque nenhum arquivo as importa. Liste-as em `dependencies.ignore`.
 
+## Licença
+
+[MIT](LICENSE).
+
 ## Desenvolvimento
 
 O prunr é construído com **TDD e 100% de cobertura de testes**. As regras estão em
@@ -178,3 +191,19 @@ cargo llvm-cov --fail-under-lines 100 --fail-under-functions 100
 - `src/`: `config` (prunr.json), `facts` (o que um arquivo CommonJS exige e exporta),
   `resolve` (para onde aponta um `require`), `project` (o grafo), `checks`, `report` e `cli`.
 - `tests/fixtures/<caso>/`: um mini projeto por comportamento, rodado por `tests/check.rs`.
+- `npm/`: o pacote `prunr`, o launcher que executa o binário da plataforma e o script que
+  publica tudo.
+
+### Releases
+
+Os commits seguem Conventional Commits, e o [release-please](https://github.com/googleapis/release-please)
+mantém um PR de release aberto com a próxima versão e o CHANGELOG. Ao fazer merge dele, o workflow
+`release`:
+
+1. compila os 5 binários e confere que os de Linux rodam em Alpine e Debian 11;
+2. anexa os binários e os `.sha256` ao release do GitHub;
+3. publica `@prunr/<plataforma>` e `prunr` no npm com *trusted publishing* (OIDC, sem token);
+4. instala `prunr` do npm em Linux, macOS e Windows e roda `npx prunr --version`.
+
+Antes do primeiro release, um mantenedor roda `scripts/bootstrap-npm.sh` uma única vez: o npm
+só aceita configurar *trusted publishing* num pacote que já existe.

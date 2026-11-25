@@ -1,0 +1,172 @@
+name: release
+
+# release-please keeps a release PR open from the Conventional Commits on main. Merging it tags
+# the version, and this workflow then builds the binaries, attaches them to the GitHub release,
+# and publishes the npm packages with trusted publishing (OIDC): no npm token is stored.
+on:
+  push:
+    branches: [main]
+  # A pull request that touches the release only builds and packs, so cross-compiling and
+  # packaging break there instead of during a release.
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - npm/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Release PR
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      created: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          # A token of its own, so the release PR runs the required checks. Without the secret
+          # the PR still opens, but GitHub does not run workflows for it.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: release-please
+    if: ${{ !cancelled() && (needs.release-please.outputs.created == 'true' || github.event_name == 'pull_request') }}
+    strategy:
+      matrix:
+        include:
+          - { platform: linux-x64, os: ubuntu-latest, target: x86_64-unknown-linux-musl }
+          - { platform: linux-arm64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+          - { platform: darwin-x64, os: macos-latest, target: x86_64-apple-darwin }
+          - { platform: darwin-arm64, os: macos-latest, target: aarch64-apple-darwin }
+          - { platform: win32-x64, os: windows-latest, target: x86_64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Collect the binary
+        shell: bash
+        run: |
+          mkdir dist
+          executable=prunr
+          if [[ "${{ matrix.platform }}" == win32-* ]]; then executable=prunr.exe; fi
+          cp "target/${{ matrix.target }}/release/$executable" dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prunr-${{ matrix.platform }}
+          path: dist/
+          if-no-files-found: error
+
+  static:
+    name: Linux binaries are static
+    needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    strategy:
+      matrix:
+        include:
+          - { platform: linux-x64, os: ubuntu-latest }
+          - { platform: linux-arm64, os: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: prunr-${{ matrix.platform }}
+          path: bin
+      - run: chmod +x bin/prunr
+      - name: Run on Alpine (musl) and Debian 11 (old glibc)
+        run: |
+          for image in alpine:3 debian:11; do
+            docker run --rm -v "$PWD/bin:/opt/prunr:ro" "$image" /opt/prunr/prunr --version
+          done
+
+  assets:
+    name: Attach binaries to the GitHub release
+    needs: [release-please, static]
+    if: ${{ !cancelled() && needs.release-please.outputs.created == 'true' && needs.static.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: prunr-*
+          path: artifacts
+      - name: Archive and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-please.outputs.tag }}
+        run: |
+          mkdir upload
+          for dir in artifacts/prunr-*; do
+            platform="${dir#artifacts/}"
+            chmod +x "$dir"/* || true
+            tar -czf "upload/$platform.tar.gz" -C "$dir" .
+          done
+          cd upload
+          for file in *.tar.gz; do sha256sum "$file" > "$file.sha256"; done
+          gh release upload "$TAG" ./* --clobber
+
+  npm:
+    name: Publish to npm
+    needs: [release-please, static]
+    if: ${{ !cancelled() && needs.static.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: prunr-*
+          path: artifacts
+      - name: Publish (pack only on a pull request)
+        env:
+          DRY_RUN: ${{ github.event_name == 'pull_request' && '1' || '' }}
+          VERSION: ${{ needs.release-please.outputs.version || '0.0.0-dry-run' }}
+        run: node npm/publish.mjs "$VERSION" artifacts
+
+  smoke:
+    name: npm install works (${{ matrix.os }})
+    needs: [release-please, npm]
+    if: ${{ !cancelled() && needs.release-please.outputs.created == 'true' && needs.npm.result == 'success' }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install and run
+        shell: bash
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          mkdir smoke && cd smoke && npm init -y > /dev/null
+          for attempt in 1 2 3 4 5 6; do
+            npm i -D "prunr@$VERSION" && break
+            echo "not on the registry yet, retrying"; sleep 20
+          done
+          test "$(npx prunr --version)" = "prunr $VERSION"

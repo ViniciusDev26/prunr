@@ -18,14 +18,17 @@ morto isso é essencial: um falso positivo leva alguém a apagar código vivo.
 
 - **Unitários** junto de cada módulo (parser, resolver, grafo, baseline, config).
 - **Fixtures** em `tests/fixtures/<caso>/`: um mini projeto CommonJS por comportamento, com
-  `package.json`, `prunr.json` e a saída esperada comparada por snapshot (`insta`).
+  `package.json`, `prunr.json` e a saída esperada escrita no próprio teste (`tests/check.rs`).
 - **Teste de aceite** contra um projeto CommonJS real de referência, rodado localmente, já que
   ele é privado e fica fora do CI público.
 
 ## Critérios de aceite
 
-- [ ] Cada critério de aceite dos pontos 1–6 tem pelo menos um teste automatizado correspondente.
-- [ ] Cada linha da tabela de formas CommonJS ([ponto 1](01-single-graph.md)) tem fixture própria.
-- [ ] **Cobertura de 100%** (linhas e funções) medida com `cargo llvm-cov` e exigida no CI:
+- [x] Cada critério de aceite dos pontos 1–6 tem pelo menos um teste automatizado correspondente
+      (os do ponto 6 são os jobs do workflow `release`).
+- [x] Cada linha da tabela de formas CommonJS ([ponto 1](01-single-graph.md)) tem fixture própria.
+- [x] **Cobertura de 100%** (linhas e funções) medida com `cargo llvm-cov` e exigida no CI:
       abaixo de 100% o CI falha.
-- [ ] O histórico do repositório mostra testes entrando antes das implementações ou junto delas.
+- [x] O histórico mostra testes entrando antes das implementações ou junto delas. Com squash
+      merge, essa ordem fica nos commits de cada PR, e o commit da `main` lista as mensagens
+      deles na ordem em que entraram.

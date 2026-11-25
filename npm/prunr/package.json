@@ -1,0 +1,26 @@
+{
+  "name": "prunr",
+  "version": "0.0.0",
+  "description": "Dead code detector for Node.js, with CommonJS as a first-class citizen",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ViniciusDev26/prunr.git"
+  },
+  "homepage": "https://github.com/ViniciusDev26/prunr#readme",
+  "keywords": ["dead-code", "unused", "commonjs", "lint", "cli"],
+  "bin": {
+    "prunr": "bin/prunr.js"
+  },
+  "files": ["bin/prunr.js", "schema.json"],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@prunr/darwin-arm64": "0.0.0",
+    "@prunr/darwin-x64": "0.0.0",
+    "@prunr/linux-arm64": "0.0.0",
+    "@prunr/linux-x64": "0.0.0",
+    "@prunr/win32-x64": "0.0.0"
+  }
+}
