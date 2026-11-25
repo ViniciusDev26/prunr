@@ -4,7 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::facts::{Facts, Use};
+use serde::Deserialize;
+
+use crate::facts::{Facts, Use, analyze};
+use crate::resolve::{Resolver, Target};
 
 /// A path relative to the project root, with `/` separators.
 pub type FileId = String;
@@ -47,20 +50,125 @@ pub enum ProjectError {
 
 impl std::fmt::Display for ProjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        match self {
+            Self::Parse { file, message } => write!(f, "{file}: {message}"),
+            Self::PackageJson(reason) => write!(f, "invalid package.json: {reason}"),
+        }
     }
+}
+
+/// The dependency fields of `package.json`.
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Manifest {
+    #[serde(default)]
+    dependencies: BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
+    dev_dependencies: BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
+    peer_dependencies: BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
+    optional_dependencies: BTreeMap<String, serde_json::Value>,
+}
+
+impl Manifest {
+    fn load(root: &Path) -> Result<Self, ProjectError> {
+        let path = root.join("package.json");
+        if !path.is_file() {
+            return Ok(Self::default());
+        }
+        let text = std::fs::read_to_string(path).unwrap_or_default();
+        serde_json::from_str(&text).map_err(|e| ProjectError::PackageJson(e.to_string()))
+    }
+}
+
+/// `path` relative to `root`, with `/` separators.
+fn file_id(root: &Path, path: &Path) -> Option<FileId> {
+    let relative = path.strip_prefix(root).ok()?;
+    Some(relative.to_string_lossy().replace('\\', "/"))
+}
+
+/// Every `.js` and `.cjs` file under `root`, without `node_modules` and ignored files.
+fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
+    let walker = ignore::WalkBuilder::new(root)
+        .require_git(false)
+        .filter_entry(|entry| entry.file_name() != "node_modules")
+        .build();
+    let mut files = BTreeMap::new();
+    for entry in walker.flatten() {
+        let path = entry.into_path();
+        let javascript = matches!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("js" | "cjs")
+        );
+        if javascript && path.is_file() {
+            let id = file_id(root, &path).expect("walked files are under the root");
+            files.insert(path, id);
+        }
+    }
+    files
 }
 
 impl Project {
     /// Reads every `.js` and `.cjs` file under `root`, skipping `node_modules` and what
     /// `.gitignore` ignores.
     pub fn load(root: &Path) -> Result<Self, ProjectError> {
-        todo!()
+        let root = root.canonicalize().expect("the project root exists");
+        let manifest = Manifest::load(&root)?;
+        let paths = source_files(&root);
+        let resolver = Resolver::default();
+        let mut files = BTreeMap::new();
+        for (path, id) in &paths {
+            let source = std::fs::read_to_string(path).unwrap_or_default();
+            let facts = analyze(&source).map_err(|message| ProjectError::Parse {
+                file: id.clone(),
+                message,
+            })?;
+            let mut file = File::default();
+            for require in &facts.requires {
+                match resolver.resolve(path, &require.specifier) {
+                    Target::File(target) => {
+                        if let Some(target) = paths.get(&target) {
+                            file.edges.push(Edge {
+                                target: target.clone(),
+                                uses: require.uses.clone(),
+                            });
+                        }
+                    }
+                    Target::Package(package) => {
+                        file.packages.insert(package);
+                    }
+                    Target::Builtin => {}
+                    Target::Unresolved => file.unresolved.push(require.specifier.clone()),
+                }
+            }
+            file.unresolved
+                .extend(facts.dynamic_requires.iter().cloned());
+            file.facts = facts;
+            files.insert(id.clone(), file);
+        }
+        let required_packages: BTreeSet<String> = manifest
+            .dependencies
+            .keys()
+            .chain(manifest.dev_dependencies.keys())
+            .cloned()
+            .collect();
+        let mut declared_packages = required_packages.clone();
+        declared_packages.extend(manifest.peer_dependencies.into_keys());
+        declared_packages.extend(manifest.optional_dependencies.into_keys());
+        Ok(Self {
+            root,
+            parsed: files.len(),
+            files,
+            required_packages,
+            declared_packages,
+        })
     }
 
     /// The id of `path`, relative to the root, if it is a project file.
     pub fn id_of(&self, path: &str) -> Option<FileId> {
-        todo!()
+        let path = self.root.join(path).canonicalize().ok()?;
+        file_id(&self.root, &path).filter(|id| self.files.contains_key(id))
     }
 }
 
