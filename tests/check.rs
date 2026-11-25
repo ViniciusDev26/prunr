@@ -625,6 +625,10 @@ fn repository() -> tempfile::TempDir {
         let entry = entry.unwrap();
         std::fs::copy(entry.path(), app.join(entry.file_name())).unwrap();
     }
+    std::fs::write(repo.path().join(".gitignore"), "node_modules/\n").unwrap();
+    let modules = app.join("node_modules/lodash");
+    std::fs::create_dir_all(&modules).unwrap();
+    std::fs::write(modules.join("package.json"), r#"{ "name": "lodash" }"#).unwrap();
     git(repo.path(), &["init", "-q"]);
     git(repo.path(), &["add", "."]);
     git(repo.path(), &["commit", "-qm", "clean"]);
@@ -689,6 +693,67 @@ fn since_needs_a_commit_git_knows() {
     assert!(
         run.stderr
             .starts_with("error: --since needs a git repository: "),
+        "{}",
+        run.stderr
+    );
+}
+
+#[test]
+fn since_a_commit_without_the_project_reports_everything() {
+    let repo = tempfile::tempdir().unwrap();
+    std::fs::write(repo.path().join("README.md"), "empty\n").unwrap();
+    git(repo.path(), &["init", "-q"]);
+    git(repo.path(), &["add", "."]);
+    git(repo.path(), &["commit", "-qm", "before the project"]);
+    let app = repo.path().join("app");
+    let example = copy("destructuring");
+    std::fs::create_dir(&app).unwrap();
+    for entry in std::fs::read_dir(example.path()).unwrap() {
+        let entry = entry.unwrap();
+        if entry.path().is_file() {
+            std::fs::copy(entry.path(), app.join(entry.file_name())).unwrap();
+        }
+    }
+    let run = run_in(&app, &["check", "--since", "HEAD"]);
+    assert_eq!(run.code, 1);
+    assert_eq!(run.stdout, run_in(&app, &["check"]).stdout);
+}
+
+#[test]
+fn since_without_git_is_an_error() {
+    let dir = copy("clean");
+    let output = Command::new(env!("CARGO_BIN_EXE_prunr"))
+        .args(["check", "--since", "HEAD"])
+        .current_dir(dir.path())
+        .env("PATH", "")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.starts_with("error: --since needs a git repository: "),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn github_output_annotates_an_ignore_comment_at_its_line() {
+    let run = prunr("ignore-comments", &["check", "--github"]);
+    assert!(
+        run.stdout.contains(
+            "::error file=src/lib.js,line=12,title=unused-ignore::src/lib.js:12: ignores nothing\n"
+        ),
+        "{}",
+        run.stdout
+    );
+}
+
+#[test]
+fn baseline_without_a_config_is_an_error() {
+    let run = prunr("missing-config", &["baseline"]);
+    assert_eq!(run.code, 2);
+    assert!(
+        run.stderr.contains("prunr.json not found"),
         "{}",
         run.stderr
     );

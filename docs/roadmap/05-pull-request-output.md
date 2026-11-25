@@ -6,14 +6,17 @@ Mostrar os achados onde a revisão acontece: no diff do PR.
 
 ## Escopo
 
-- `prunr check --reporter github`: anotações do GitHub Actions (`::error file=...,line=...::`),
-  com linha e coluna. Exige guardar a posição (span) de cada export e import nos achados.
-- `prunr check --changed <base>`: só reporta achados em arquivos alterados desde `<base>`
-  (`git diff --name-only`), mais os de dependência quando o `package.json` mudou.
-- Avaliar SARIF para o code scanning do GitHub.
+- `prunr check --github`: anotações do GitHub Actions (`::error file=...,line=...,title=...::`),
+  na linha do export, do import, do `require`, do comentário de ignorar ou da dependência no
+  `package.json`. Um arquivo sem uso é anotado no arquivo, sem linha.
+- `prunr check --since <ref>`: só os achados que o commit `<ref>` não tinha. O commit é analisado
+  num worktree temporário do git (com o `node_modules` do projeto) e com o mesmo `prunr.json`.
+- Combina com `--json` e com o baseline.
+- SARIF (code scanning do GitHub) fica de fora: as anotações já aparecem no diff, sem exigir
+  permissão de escrita em *security events*.
 
 ## Critérios de aceite
 
-- [ ] As anotações apontam a linha do export, do import ou do arquivo.
-- [ ] `--changed` não esconde um achado novo causado por mudança em outro arquivo (por exemplo,
+- [x] As anotações apontam a linha do export, do import ou do arquivo.
+- [x] `--since` não esconde um achado novo causado por mudança em outro arquivo (por exemplo,
       um export que ficou sem uso porque o único consumidor foi apagado).

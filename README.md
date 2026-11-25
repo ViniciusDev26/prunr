@@ -65,6 +65,8 @@ Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir
 prunr init           # cria um prunr.json a partir do package.json
 prunr check          # saída para pessoas
 prunr check --json   # saída para máquinas
+prunr check --github # anotações do GitHub Actions, na linha de cada achado
+prunr check --since origin/main   # só o que é novo desde esse commit
 prunr baseline       # grava os achados atuais no arquivo de baseline
 prunr schema         # o JSON Schema do prunr.json
 ```
@@ -195,6 +197,24 @@ module.exports = {
 Um comentário de ignorar que não impede nenhum achado é `unused-ignore`, para não acumular: o
 export voltou a ser usado, o comentário não está antes de um export, ou o arquivo ignorado não
 tem nada a esconder. A tag `@public` é documentação e nunca é reportada.
+
+### No pull request
+
+No GitHub Actions, `--github` transforma cada achado numa anotação no diff do PR, na linha do
+export, do import, do `require` ou da dependência no `package.json`. `--since <ref>` mostra só os
+achados que o commit `<ref>` não tinha: o prunr analisa também esse commit, num worktree
+temporário do git, e compara. Um export que ficou sem uso porque o PR apagou o único consumidor
+aparece mesmo num arquivo que o PR não tocou.
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0 # --since precisa do commit base
+- run: npm ci
+- run: npx prunr check --github --since origin/${{ github.base_ref }}
+```
+
+Rode a partir da raiz do repositório: os caminhos das anotações são relativos à raiz do projeto.
 
 ### Adotando num código legado
 
