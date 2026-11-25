@@ -1,0 +1,10 @@
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    include: ["src/**/*.test.ts"],
+    setupFiles: "./test/setup.ts",
+    environment: "happy-dom",
+    coverage: { provider: "v8" },
+  },
+});
