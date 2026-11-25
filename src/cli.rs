@@ -184,7 +184,8 @@ fn baseline_command(root: &Path, out: &mut impl Write) -> Result<u8, String> {
 fn analyze(root: &Path, config: &Config) -> Result<(Project, Vec<Finding>), String> {
     let mut project = Project::load(root).map_err(|e| e.to_string())?;
     project.ignore_packages(&config.dependencies.ignore);
-    let production = project.entries(&config.entries.production)?;
+    let mut production = project.entries(&config.entries.production)?;
+    production.extend(project.production_files.iter().cloned());
     let mut tests = project.entries(&config.entries.test)?;
     tests.extend(project.test_files.iter().cloned());
     let findings = check(&project, &production, &tests);

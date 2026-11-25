@@ -29,6 +29,10 @@ pub struct Project {
     pub test_files: BTreeSet<FileId>,
     /// Packages the plugins say the tools load by name (presets, environments, reporters).
     pub test_packages: BTreeSet<String>,
+    /// Production entries the frameworks start from by convention (Next.js routes, NestJS main).
+    pub production_files: BTreeSet<FileId>,
+    /// Packages the frameworks load in production without an import.
+    pub production_packages: BTreeSet<String>,
     /// How many files were parsed.
     pub parsed: usize,
 }
@@ -229,6 +233,16 @@ fn matching<'f>(from: &FileId, glob: &str, files: impl Iterator<Item = &'f FileI
     targets
 }
 
+/// The files the globs a plugin gives match. An invalid glob matches nothing.
+fn plugin_files(patterns: &[String], files: &BTreeMap<FileId, File>) -> BTreeSet<FileId> {
+    patterns
+        .iter()
+        .filter_map(|pattern| glob(pattern).ok())
+        .flat_map(|glob| files.keys().filter(move |id| glob.is_match(id)))
+        .cloned()
+        .collect()
+}
+
 /// A glob over file ids, where `*` does not cross `/` and `**` does.
 fn glob(pattern: &str) -> Result<globset::GlobMatcher, globset::Error> {
     Ok(globset::GlobBuilder::new(pattern)
@@ -336,12 +350,8 @@ impl Project {
             declared: &declared_packages,
             manifest: &serde_json::json!({ "jest": manifest.jest, "scripts": manifest.scripts }),
         });
-        let mut test_files = BTreeSet::new();
-        for pattern in &plugins.tests {
-            if let Ok(glob) = glob(pattern) {
-                test_files.extend(files.keys().filter(|id| glob.is_match(id)).cloned());
-            }
-        }
+        let production_files = plugin_files(&plugins.production, &files);
+        let mut test_files = plugin_files(&plugins.tests, &files);
         for file in &plugins.files {
             if let Target::File(path) = resolver.resolve(&root.join("package.json"), file)
                 && let Some(id) = paths.get(&path)
@@ -359,6 +369,8 @@ impl Project {
             script_packages,
             test_files,
             test_packages: plugins.packages,
+            production_files,
+            production_packages: plugins.production_packages,
         })
     }
 

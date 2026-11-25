@@ -98,6 +98,7 @@ mod tests {
                 tests: strings(&["src/**/*.test.ts"]),
                 files: strings(&["./vitest.config.ts", "./test/setup.ts", "./test/global.ts"]),
                 packages: declared(&["@vitest/coverage-v8", "happy-dom", "vitest-sonar-reporter"]),
+                ..Contribution::default()
             }
         );
     }
@@ -114,6 +115,7 @@ mod tests {
                 tests: strings(&["**/*.{test,spec}.*"]),
                 files: strings(&["./vite.config.mjs", "./cov.js"]),
                 packages: declared(&["@edge-runtime/vm"]),
+                ..Contribution::default()
             }
         );
         let dir = project(&[]);

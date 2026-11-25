@@ -11,6 +11,8 @@ use std::path::Path;
 use serde_json::Value;
 
 mod jest;
+mod nest;
+mod next;
 mod static_config;
 mod vitest;
 
@@ -47,8 +49,14 @@ pub struct Contribution {
     /// Test code the tools load (their configuration, setup files), as specifiers relative to
     /// the root (`./jest.config.js`).
     pub files: Vec<String>,
-    /// Packages the tools load by name (presets, environments, reporters): used by tests.
+    /// Packages the tools load by name (presets, environments, reporters, CLIs): used by tests
+    /// and tooling.
     pub packages: BTreeSet<String>,
+    /// Globs, relative to the root, of the production entries a framework starts from by
+    /// convention (Next.js routes, the NestJS `main`).
+    pub production: Vec<String>,
+    /// Packages a framework loads in production without an `import` (its peer dependencies).
+    pub production_packages: BTreeSet<String>,
 }
 
 /// A tool or framework prunr knows.
@@ -66,7 +74,7 @@ pub trait Plugin {
 }
 
 /// Every plugin, in the order they contribute.
-pub const PLUGINS: &[&dyn Plugin] = &[&jest::Jest, &vitest::Vitest];
+pub const PLUGINS: &[&dyn Plugin] = &[&jest::Jest, &vitest::Vitest, &next::Next, &nest::Nest];
 
 /// What the plugins enabled in the project contribute.
 pub fn contribution(context: &Context) -> Contribution {
@@ -203,7 +211,7 @@ mod tests {
     #[test]
     fn every_plugin_is_named_after_its_package() {
         let names: Vec<&str> = PLUGINS.iter().map(|plugin| plugin.name()).collect();
-        assert_eq!(names, ["jest", "vitest"]);
+        assert_eq!(names, ["jest", "vitest", "next", "@nestjs/core"]);
     }
 
     #[test]

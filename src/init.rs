@@ -54,8 +54,16 @@ pub fn init(root: &Path) -> Result<String, String> {
             .values()
             .flat_map(|script| script_files(script)),
     );
-    let production: BTreeSet<String> = candidates.into_iter().filter(is_file).collect();
-    if production.is_empty() {
+    // Next.js routes and the NestJS main are entries by convention.
+    let covered = |path: &String| {
+        let id = path.trim_start_matches("./");
+        project.production_files.iter().any(|file| file == id)
+    };
+    let production: BTreeSet<String> = candidates
+        .into_iter()
+        .filter(|path| is_file(path) && !covered(path))
+        .collect();
+    if production.is_empty() && project.production_files.is_empty() {
         return Err(format!(
             "no entry found: create {FILE_NAME} with entries.production by hand"
         ));
@@ -188,6 +196,22 @@ mod tests {
         assert_eq!(
             written(&dir)["entries"],
             serde_json::json!({ "production": ["index.js"] })
+        );
+    }
+
+    #[test]
+    fn a_framework_project_needs_no_entries_of_its_own() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{ "dependencies": { "@nestjs/core": "11" } }"#,
+            ),
+            ("src/main.ts", ""),
+        ]);
+        init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir)["entries"],
+            serde_json::json!({ "production": [] })
         );
     }
 
