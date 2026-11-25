@@ -210,12 +210,18 @@ fn a_file_that_does_not_parse_is_an_error() {
 
 #[test]
 fn an_unknown_command_is_a_usage_error() {
-    for args in [&[][..], &["nope"], &["check", "--nope"]] {
+    for args in [
+        &[][..],
+        &["nope"],
+        &["check", "--nope"],
+        &["check", "--json", "--github"],
+        &["check", "--since"],
+    ] {
         let run = prunr("clean", args);
         assert_eq!(run.code, 2, "{args:?}");
         assert_eq!(
             run.stderr,
-            "usage: prunr check [--json] | prunr baseline | prunr init | prunr schema | prunr --version\n",
+            "usage: prunr check [--json | --github] [--since <ref>] | prunr baseline | prunr init | prunr schema | prunr --version\n",
             "{args:?}"
         );
     }
@@ -552,5 +558,138 @@ fn a_comment_ignores_an_export_or_a_file_and_must_ignore_something() {
          unused-ignore         src/used-file.js:1: ignores nothing\n\
          \n\
          errors: 6, warnings: 0\n"
+    );
+}
+
+#[test]
+fn github_output_annotates_each_finding_where_it_is() {
+    let run = prunr("example", &["check", "--github"]);
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "::error file=src/legacy-report.js,title=unused-file::src/legacy-report.js\n\
+         ::error file=src/invoices.js,line=11,title=unused-export::src/invoices.js: cancelInvoice\n\
+         ::error file=src/money.js,line=10,title=unused-export::src/money.js: Money.fromCents\n\
+         ::error file=src/money.js,line=13,title=unused-export::src/money.js: Money.invoiceFor\n\
+         ::error file=package.json,line=4,title=unused-dependency::left-pad\n\
+         ::error file=src/index.js,line=2,title=missing-dependency::src/index.js: dotenv\n\
+         ::error file=src/invoices.js,line=1,title=circular-import::src/invoices.js -> src/money.js -> src/invoices.js\n\
+         ::warning file=src/index.js,line=9,title=unresolved-require::src/index.js: require(process.env.PLUGIN)\n\
+         \n\
+         errors: 7, warnings: 1\n"
+    );
+}
+
+#[test]
+fn github_output_annotates_stale_baseline_entries_and_the_rest_of_the_findings() {
+    let run = prunr("baseline", &["check", "--github"]);
+    assert_eq!(
+        run.stdout,
+        "::error file=math.js,line=3,title=unused-export::math.js: mul\n\
+         ::error title=stale-baseline::unused-export math.js: div (fixed: run `prunr baseline`)\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
+    let run = prunr("clean", &["check", "--github"]);
+    assert_eq!(run.stdout, "No findings.\n");
+}
+
+fn git(dir: &Path, args: &[&str]) {
+    let status = Command::new("git")
+        .args([
+            "-c",
+            "user.name=prunr",
+            "-c",
+            "user.email=prunr@example.com",
+        ])
+        .args([
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "init.defaultBranch=main",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(status.status.success(), "{status:?}");
+}
+
+/// A git repository with the `clean` fixture in `app/`, committed.
+fn repository() -> tempfile::TempDir {
+    let repo = tempfile::tempdir().unwrap();
+    let app = repo.path().join("app");
+    std::fs::create_dir(&app).unwrap();
+    let clean = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clean");
+    for entry in std::fs::read_dir(&clean).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), app.join(entry.file_name())).unwrap();
+    }
+    git(repo.path(), &["init", "-q"]);
+    git(repo.path(), &["add", "."]);
+    git(repo.path(), &["commit", "-qm", "clean"]);
+    repo
+}
+
+#[test]
+fn since_reports_only_what_is_new_since_a_commit() {
+    let repo = repository();
+    let app = repo.path().join("app");
+    std::fs::write(app.join("legacy.js"), "exports.old = 1;\n").unwrap();
+    git(repo.path(), &["add", "."]);
+    git(
+        repo.path(),
+        &["commit", "-qm", "a dead file, already there"],
+    );
+    let run = run_in(&app, &["check", "--since", "HEAD"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(run.stdout, "No findings.\n");
+    std::fs::write(app.join("other.js"), "exports.fresh = 1;\n").unwrap();
+    let run = run_in(&app, &["check", "--since", "HEAD", "--json"]);
+    assert_eq!(run.code, 1);
+    let actual: serde_json::Value = serde_json::from_str(&run.stdout).unwrap();
+    assert_eq!(
+        actual,
+        serde_json::json!({ "findings": [{ "kind": "unused-file", "file": "other.js" }] })
+    );
+    assert_eq!(
+        run_in(&app, &["check"]).code,
+        1,
+        "without --since, both are reported"
+    );
+}
+
+#[test]
+fn since_finds_an_export_a_change_elsewhere_left_unused() {
+    let repo = repository();
+    let app = repo.path().join("app");
+    let index = std::fs::read_to_string(app.join("index.js")).unwrap();
+    assert!(index.contains("require("), "{index}");
+    let before = run_in(&app, &["check", "--since", "HEAD"]);
+    assert_eq!(before.stdout, "No findings.\n");
+    std::fs::write(app.join("index.js"), "").unwrap();
+    let run = run_in(&app, &["check", "--since", "HEAD"]);
+    assert_eq!(run.code, 1);
+    assert!(run.stdout.starts_with("unused-file"), "{}", run.stdout);
+}
+
+#[test]
+fn since_needs_a_commit_git_knows() {
+    let repo = repository();
+    let run = run_in(&repo.path().join("app"), &["check", "--since", "nope"]);
+    assert_eq!(run.code, 2);
+    assert!(
+        run.stderr.starts_with("error: cannot check out nope: "),
+        "{}",
+        run.stderr
+    );
+    let outside = copy("clean");
+    let run = run_in(outside.path(), &["check", "--since", "HEAD"]);
+    assert_eq!(run.code, 2);
+    assert!(
+        run.stderr
+            .starts_with("error: --since needs a git repository: "),
+        "{}",
+        run.stderr
     );
 }
