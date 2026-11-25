@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-7 -7 338 98" role="img" aria-label="prunr">
+  <title>prunr</title>
+  <g fill="none" stroke="#10231A" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M0 0V84M0 28a28 28 0 1 0 56 0a28 28 0 1 0-56 0M78 56V28A28 28 0 0 1 106 0h6M134 0v28a28 28 0 0 0 56 0M190 0v56M212 0v56M212 28a28 28 0 0 1 56 0v28M290 56V28A28 28 0 0 1 318 0h6"/>
+  </g>
+</svg>
