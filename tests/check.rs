@@ -427,3 +427,18 @@ fn version_prints_the_crate_version() {
     assert_eq!(run.code, 0);
     assert_eq!(run.stdout, format!("prunr {}\n", env!("CARGO_PKG_VERSION")));
 }
+
+#[test]
+fn a_require_with_a_pattern_uses_every_file_it_can_reach() {
+    let run = check("dynamic-require-pattern");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           handlers/deep/too-deep.js\n\
+         unused-file           jobs/helper.js\n\
+         unresolved-require    index.js: require(`${name}/plugin`) (warning)\n\
+         unresolved-require    index.js: require(`./missing/${name}`) (warning)\n\
+         \n\
+         errors: 2, warnings: 2\n"
+    );
+}
