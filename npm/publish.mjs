@@ -3,6 +3,7 @@
 // publishing (OIDC), so no token is involved.
 //
 // usage: node npm/publish.mjs <version> <artifacts dir>
+// With DRY_RUN=1 it only packs each package and lists its files.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -32,7 +33,13 @@ function published(name) {
   }
 }
 
+const dryRun = process.env.DRY_RUN === "1";
+
 function publish(directory, name) {
+  if (dryRun) {
+    execFileSync("npm", ["pack", "--dry-run"], { cwd: directory, stdio: "inherit" });
+    return;
+  }
   if (published(name)) {
     console.log(`${name}@${version} is already published`);
     return;

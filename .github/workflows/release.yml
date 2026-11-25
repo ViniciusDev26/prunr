@@ -6,6 +6,15 @@ name: release
 on:
   push:
     branches: [main]
+  # A pull request that touches the release only builds and packs, so cross-compiling and
+  # packaging break there instead of during a release.
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - npm/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
 
 permissions:
   contents: read
@@ -13,6 +22,7 @@ permissions:
 jobs:
   release-please:
     name: Release PR
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,15 +35,16 @@ jobs:
       - id: release
         uses: googleapis/release-please-action@v5
         with:
-          # A token of its own, so the release PR runs the required checks.
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          # A token of its own, so the release PR runs the required checks. Without the secret
+          # the PR still opens, but GitHub does not run workflows for it.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
   build:
     name: Build (${{ matrix.platform }})
     needs: release-please
-    if: needs.release-please.outputs.created == 'true'
+    if: ${{ !cancelled() && (needs.release-please.outputs.created == 'true' || github.event_name == 'pull_request') }}
     strategy:
       matrix:
         include:
@@ -65,6 +76,7 @@ jobs:
   static:
     name: Linux binaries are static
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     strategy:
       matrix:
         include:
@@ -86,6 +98,7 @@ jobs:
   assets:
     name: Attach binaries to the GitHub release
     needs: [release-please, static]
+    if: ${{ !cancelled() && needs.release-please.outputs.created == 'true' && needs.static.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -113,6 +126,7 @@ jobs:
   npm:
     name: Publish to npm
     needs: [release-please, static]
+    if: ${{ !cancelled() && needs.static.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -127,11 +141,16 @@ jobs:
         with:
           pattern: prunr-*
           path: artifacts
-      - run: node npm/publish.mjs "${{ needs.release-please.outputs.version }}" artifacts
+      - name: Publish (pack only on a pull request)
+        env:
+          DRY_RUN: ${{ github.event_name == 'pull_request' && '1' || '' }}
+          VERSION: ${{ needs.release-please.outputs.version || '0.0.0-dry-run' }}
+        run: node npm/publish.mjs "$VERSION" artifacts
 
   smoke:
     name: npm install works (${{ matrix.os }})
     needs: [release-please, npm]
+    if: ${{ !cancelled() && needs.release-please.outputs.created == 'true' && needs.npm.result == 'success' }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
