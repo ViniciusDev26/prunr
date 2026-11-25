@@ -1,7 +1,7 @@
 //! `prunr init`: a first `prunr.json`, guessed from `package.json`. From then on the file is
 //! edited by hand; nothing is guessed when the check runs.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use serde::Deserialize;
@@ -22,14 +22,9 @@ const TEST_GLOBS: &[&str] = &[
 /// Entries of a TypeScript project, whose `main` usually points to the compiled output.
 const TYPESCRIPT_ENTRIES: &[&str] = &["index.ts", "src/index.ts", "src/main.ts"];
 
-/// Commands that run a source file: `node`, and the TypeScript runners.
-const RUNNERS: &[&str] = &["node", "tsx", "ts-node"];
-
 #[derive(Default, Deserialize)]
 struct Manifest {
     main: Option<String>,
-    #[serde(default)]
-    scripts: BTreeMap<String, String>,
 }
 
 /// Writes `prunr.json` at `root` and returns its contents.
@@ -48,13 +43,7 @@ pub fn init(root: &Path) -> Result<String, String> {
 
     let mut candidates = vec![manifest.main.unwrap_or_else(|| "index.js".into())];
     candidates.extend(TYPESCRIPT_ENTRIES.iter().map(|entry| entry.to_string()));
-    candidates.extend(
-        manifest
-            .scripts
-            .values()
-            .flat_map(|script| script_files(script)),
-    );
-    // Next.js routes and the NestJS main are entries by convention.
+    // The files the scripts run, Next.js routes and the NestJS main are entries already.
     let covered = |path: &String| {
         let id = path.trim_start_matches("./");
         project.production_files.iter().any(|file| file == id)
@@ -86,18 +75,6 @@ pub fn init(root: &Path) -> Result<String, String> {
     Ok(contents)
 }
 
-/// What may be the file a script runs: the arguments after `node`, `tsx` or `ts-node`
-/// (`tsx watch src/a.ts` → `watch`, `src/a.ts`). The caller keeps those that are files.
-fn script_files(script: &str) -> Vec<String> {
-    script
-        .split_whitespace()
-        .skip_while(|word| !RUNNERS.contains(word))
-        .skip(1)
-        .filter(|word| !word.starts_with('-'))
-        .map(|file| file.trim_start_matches("./").to_string())
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn entries_come_from_main_and_the_node_scripts() {
+    fn the_files_the_scripts_run_are_left_to_the_check() {
         let dir = project(&[
             (
                 "package.json",
@@ -149,7 +126,7 @@ mod tests {
             serde_json::json!({
                 "$schema": "https://unpkg.com/@prunr/prunr/schema.json",
                 "entries": {
-                    "production": ["scripts/cli.js", "src/index.js", "workers/index.js"],
+                    "production": [],
                     "test": ["__tests__/**", "**/*.test.*", "**/*.spec.*"]
                 }
             })
@@ -179,7 +156,7 @@ mod tests {
         assert_eq!(
             written(&dir)["entries"],
             serde_json::json!({
-                "production": ["scripts/seed.ts", "src/index.ts", "src/server.ts"],
+                "production": ["src/index.ts"],
                 "test": ["**/*.test.*", "**/*.spec.*"]
             })
         );
