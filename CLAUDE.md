@@ -48,9 +48,18 @@ com falso positivo leva alguém a apagar código vivo, então isso não é negoc
 - **Teste de aceite** contra um projeto CommonJS real de referência, rodado localmente (privado,
   fora do CI).
 
-## Commits
+## Commits e PRs
 
-- Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `chore:`). O
-  release-please usa isso para gerar a versão e o CHANGELOG ([ponto 6](docs/mvp/06-ci-and-auto-release.md)).
+- **Tudo em inglês:** mensagens de commit, títulos de PR e corpos de PR.
+- **Todo commit segue Conventional Commits**, com as regras do `config-conventional` do
+  commitlint, verificadas pelo [`committed`](https://github.com/crate-ci/committed) (sem Node.js),
+  configurado em [`committed.toml`](committed.toml): `tipo(escopo opcional): assunto`, com tipos
+  `feat`, `fix`, `test`, `refactor`, `docs`, `chore`, `ci`, `build`, `perf`, `style`, `revert`;
+  assunto sem ponto final; linhas de até 100 caracteres. Comece o assunto em minúscula: é regra
+  do commitlint, mas o `committed` não consegue bloquear maiúscula. O release-please depende
+  disso para gerar a versão e o CHANGELOG ([ponto 6](docs/mvp/06-ci-and-auto-release.md)).
+- **O título do PR segue a mesma regra**, porque num squash merge ele vira o commit da `main`.
+- O CI (`.github/workflows/commits.yml`) verifica os commits e o título de todo PR. Valide antes
+  de commitar com `committed main..HEAD` (instalado pelo `mise install`).
 - Antes de cada commit: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
   `cargo test` e a cobertura de 100%.
