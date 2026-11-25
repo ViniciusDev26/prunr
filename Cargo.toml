@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+dunce = "1"
 ignore = "0.4.35"
 nodejs-built-in-modules = "1.0.0"
 oxc_allocator = "0.160.0"
