@@ -1,0 +1,1 @@
+{ "entries": { "production": ["src/index.js"], "test": ["test/**"] } }

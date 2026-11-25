@@ -1,0 +1,15 @@
+{
+  "name": "peer-dependencies",
+  "private": true,
+  "dependencies": {
+    "editor": "1.0.0",
+    "editor-pm": "1.0.0",
+    "editor-core": "1.0.0",
+    "test-helper-peer": "1.0.0",
+    "unused-host": "1.0.0",
+    "orphan-peer": "1.0.0"
+  },
+  "devDependencies": {
+    "test-helper": "1.0.0"
+  }
+}
