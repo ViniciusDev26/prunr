@@ -46,7 +46,8 @@ fazer merge do PR de release.
 
 - [x] Um PR com um teste quebrado fica vermelho no CI nos três sistemas (aconteceu no PR #3:
       o Windows expôs um bug de caminhos).
-- [ ] A versão `0.1.0` é publicada de ponta a ponta pelo pipeline, sem nenhum comando manual.
-- [ ] `npm i -D @prunr/prunr && npx prunr --version` funciona num runner Linux limpo, num macOS e num Windows.
+- [x] A versão `0.1.0` é publicada de ponta a ponta pelo pipeline, sem nenhum comando manual
+      (o passo único de criar os pacotes no npm, feito antes, não faz parte do release).
+- [x] `npm i -D @prunr/prunr && npx prunr --version` funciona num runner Linux limpo, num macOS e num Windows.
 - [x] O binário Linux roda numa imagem `alpine` e numa `debian` (prova de que é estático):
       verificado em todo PR, para x64 e arm64.

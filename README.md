@@ -8,8 +8,7 @@ dependências sem uso ou não declaradas, imports circulares e `require` que nã
 Ele substitui a composição comum de dependency-cruiser + depcheck + madge + scripts próprios por
 uma ferramenta, um arquivo de configuração e um comando.
 
-> **Estado:** em desenvolvimento, antes da primeira versão. O andamento do MVP está em
-> [`docs/mvp/`](docs/mvp/README.md).
+> **Estado:** MVP publicado (`0.1.0`). O que entrou nele está em [`docs/mvp/`](docs/mvp/README.md).
 
 ## Por que não o Knip
 
