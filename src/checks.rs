@@ -257,9 +257,31 @@ fn dependencies(
     };
     let in_production = required(live);
     let in_tests = required(tested);
+    let in_scripts = &project.script_packages;
+    let used = |package: &String| {
+        in_production.contains(package)
+            || in_tests.contains(package)
+            || in_scripts.contains(package)
+    };
+    let typescript = project
+        .files
+        .keys()
+        .any(|id| id.ends_with("ts") || id.ends_with("tsx"));
+    let builtins = live.union(tested).any(|id| project.files[id].builtins);
+    let types_used = |package: &String| match package.strip_prefix("@types/") {
+        Some("node") => typescript || builtins,
+        Some(typed) => used(&typed_package(typed)),
+        None => false,
+    };
     for id in live.union(tested) {
         for package in &project.files[id].packages {
-            if !project.declared_packages.contains(package) {
+            let types = format!(
+                "@types/{}",
+                package.trim_start_matches('@').replace('/', "__")
+            );
+            if !project.declared_packages.contains(package)
+                && !project.declared_packages.contains(&types)
+            {
                 findings.push(Finding::MissingDependency {
                     file: id.clone(),
                     package: package.clone(),
@@ -267,12 +289,8 @@ fn dependencies(
             }
         }
     }
-    let in_scripts = &project.script_packages;
     for package in project.dependencies.union(&project.dev_dependencies) {
-        if !in_production.contains(package)
-            && !in_tests.contains(package)
-            && !in_scripts.contains(package)
-        {
+        if !used(package) && !types_used(package) {
             findings.push(Finding::UnusedDependency {
                 package: package.clone(),
             });
@@ -287,6 +305,24 @@ fn dependencies(
                 package: package.clone(),
             });
         }
+    }
+}
+
+/// The files `id` requires at runtime: imports of types only are gone once TypeScript compiles,
+/// so they cannot form a cycle.
+fn runtime_edges<'p>(project: &'p Project, id: &FileId) -> impl Iterator<Item = &'p FileId> {
+    project.files[id]
+        .edges
+        .iter()
+        .filter(|edge| !edge.type_only)
+        .map(|edge| &edge.target)
+}
+
+/// The package `@types/<typed>` gives types to: `scope__name` → `@scope/name`.
+fn typed_package(typed: &str) -> String {
+    match typed.split_once("__") {
+        Some((scope, name)) => format!("@{scope}/{name}"),
+        None => typed.to_string(),
     }
 }
 
@@ -310,10 +346,7 @@ fn cycles(project: &Project, reachable: &BTreeSet<FileId>) -> Vec<Vec<FileId>> {
         .into_iter()
         .filter(|component| {
             component.len() > 1
-                || project.files[component[0]]
-                    .edges
-                    .iter()
-                    .any(|edge| &edge.target == component[0])
+                || runtime_edges(project, component[0]).any(|target| target == component[0])
         })
         .map(|component| {
             let members: BTreeSet<&FileId> = component.into_iter().collect();
@@ -329,8 +362,7 @@ fn shortest_cycle(project: &Project, members: &BTreeSet<&FileId>) -> Vec<FileId>
     let mut queue = VecDeque::from([start]);
     loop {
         let node = queue.pop_front().expect("a component holds a cycle");
-        for edge in &project.files[node].edges {
-            let next = &edge.target;
+        for next in runtime_edges(project, node) {
             if next == start {
                 let mut cycle = vec![node.clone()];
                 let mut current = node;
@@ -367,8 +399,7 @@ impl<'p> Tarjan<'p> {
         self.low.insert(node, index);
         self.stack.push(node);
         self.on_stack.insert(node);
-        for edge in &self.project.files[node].edges {
-            let next = &edge.target;
+        for next in runtime_edges(self.project, node) {
             if !self.index.contains_key(next) {
                 self.visit(next);
                 let low = self.low[node].min(self.low[next]);

@@ -15,9 +15,8 @@ use oxc_ast::ast::{
     CallExpression, Class, ClassElement, Declaration, ExportAllDeclaration, ExportDeclaration,
     ExportDefaultDeclaration, ExportDefaultDeclarationKind, ExportFromDeclaration,
     ExportNamedDeclaration, Expression, IdentifierReference, ImportDeclaration,
-    ImportDeclarationSpecifier, ImportExpression, MethodDefinitionKind, ModuleExportName,
-    ObjectPropertyKind, StaticMemberExpression, TSImportEqualsDeclaration, TSModuleReference,
-    TemplateLiteral,
+    ImportDeclarationSpecifier, ImportExpression, MethodDefinitionKind, ObjectPropertyKind,
+    StaticMemberExpression, TSImportEqualsDeclaration, TSModuleReference, TemplateLiteral,
 };
 use oxc_parser::Parser;
 use oxc_semantic::{NodeId, Semantic, SemanticBuilder, SymbolId};
@@ -525,8 +524,13 @@ impl<'a> Analyzer<'_, 'a> {
         for specifier in &export.specifiers {
             let path = vec![specifier.exported.name().to_string()];
             self.exports.entry(path.clone()).or_insert(false);
-            if let ModuleExportName::IdentifierReference(ident) = &specifier.local {
-                self.export_reference(path, ident);
+            let local = specifier.local.name();
+            if let Some(symbol) = self
+                .semantic
+                .scoping()
+                .get_root_binding(local.as_str().into())
+            {
+                self.export_symbol(path, symbol, specifier.local.span());
             }
         }
     }

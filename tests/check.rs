@@ -504,3 +504,13 @@ fn a_reexport_forwards_uses_to_where_the_export_is_defined() {
          errors: 6, warnings: 0\n"
     );
 }
+
+#[test]
+fn a_types_package_is_used_with_the_package_it_types() {
+    let run = check("types-packages");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     @types/unused-lib\n\nerrors: 1, warnings: 0\n"
+    );
+}
