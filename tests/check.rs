@@ -213,7 +213,10 @@ fn an_unknown_command_is_a_usage_error() {
     for args in [&[][..], &["nope"], &["check", "--nope"]] {
         let run = prunr("clean", args);
         assert_eq!(run.code, 2, "{args:?}");
-        assert_eq!(run.stderr, "usage: prunr check [--json]\n", "{args:?}");
+        assert_eq!(
+            run.stderr, "usage: prunr check [--json] | prunr init | prunr schema\n",
+            "{args:?}"
+        );
     }
 }
 
@@ -253,4 +256,50 @@ fn json_marks_what_only_tests_use() {
         { "kind": "misplaced-dependency", "package": "supertest" },
     ]});
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn ignored_dependencies_are_left_out_of_the_dependency_checks() {
+    let run = check("dependencies-ignore");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     left-pad\n\nerrors: 1, warnings: 0\n"
+    );
+}
+
+fn run_in(dir: &Path, args: &[&str]) -> Run {
+    let output = Command::new(env!("CARGO_BIN_EXE_prunr"))
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    Run {
+        code: output.status.code().unwrap(),
+        stdout: String::from_utf8(output.stdout).unwrap(),
+        stderr: String::from_utf8(output.stderr).unwrap(),
+    }
+}
+
+#[test]
+fn init_writes_a_config_that_check_can_run() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("package.json"), r#"{ "main": "index.js" }"#).unwrap();
+    std::fs::write(dir.path().join("index.js"), "").unwrap();
+    let run = run_in(dir.path(), &["init"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(run.stdout, "created prunr.json\n");
+    assert_eq!(run_in(dir.path(), &["check"]).stdout, "No findings.\n");
+    let again = run_in(dir.path(), &["init"]);
+    assert_eq!(again.code, 2);
+    assert_eq!(again.stderr, "error: prunr.json already exists\n");
+}
+
+#[test]
+fn schema_prints_the_published_schema() {
+    let run = prunr("clean", &["schema"]);
+    assert_eq!(run.code, 0);
+    let published =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("schema.json")).unwrap();
+    assert_eq!(run.stdout, published);
 }

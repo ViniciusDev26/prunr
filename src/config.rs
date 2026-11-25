@@ -8,10 +8,15 @@ use serde::Deserialize;
 
 pub const FILE_NAME: &str = "prunr.json";
 
+/// Where the JSON Schema of `prunr.json` is published.
+pub const SCHEMA_URL: &str = "https://unpkg.com/prunr/schema.json";
+
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub entries: Entries,
+    #[serde(default)]
+    pub dependencies: Dependencies,
 }
 
 /// Paths or globs, relative to the project root.
@@ -23,6 +28,20 @@ pub struct Entries {
     /// Test code. It is never reported, and what only it reaches is dead in production.
     #[serde(default)]
     pub test: Vec<String>,
+}
+
+#[derive(Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Dependencies {
+    /// Packages to leave out of the dependency checks: those only a command line uses (`jest`,
+    /// `husky`), or that are loaded in ways the graph cannot see.
+    #[serde(default)]
+    pub ignore: Vec<String>,
+}
+
+/// The JSON Schema of `prunr.json`.
+pub fn json_schema() -> String {
+    todo!()
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -73,6 +92,61 @@ mod tests {
     }
 
     #[test]
+    fn dependencies_to_ignore_are_optional() {
+        let dir = project(r#"{ "entries": { "production": [] } }"#);
+        assert!(
+            Config::load(dir.path())
+                .unwrap()
+                .dependencies
+                .ignore
+                .is_empty()
+        );
+        let dir = project(
+            r#"{ "entries": { "production": [] }, "dependencies": { "ignore": ["jest"] } }"#,
+        );
+        assert_eq!(
+            Config::load(dir.path()).unwrap().dependencies.ignore,
+            ["jest"]
+        );
+    }
+
+    #[test]
+    fn an_unknown_key_in_dependencies_is_an_error() {
+        let dir =
+            project(r#"{ "entries": { "production": [] }, "dependencies": { "ignored": [] } }"#);
+        let error = Config::load(dir.path()).unwrap_err();
+        assert!(
+            error.to_string().contains("unknown field `ignored`"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn the_schema_key_is_accepted() {
+        let dir = project(
+            r#"{ "$schema": "https://unpkg.com/prunr/schema.json", "entries": { "production": [] } }"#,
+        );
+        assert!(Config::load(dir.path()).is_ok());
+    }
+
+    #[test]
+    fn the_published_schema_matches_the_config() {
+        let published = include_str!("../schema.json");
+        assert_eq!(
+            json_schema(),
+            published,
+            "run `cargo run -- schema > schema.json`"
+        );
+    }
+
+    #[test]
+    fn the_schema_rejects_unknown_keys() {
+        let schema: serde_json::Value = serde_json::from_str(&json_schema()).unwrap();
+        assert_eq!(schema["additionalProperties"], false);
+        assert_eq!(schema["required"], serde_json::json!(["entries"]));
+    }
+
+    #[test]
     fn test_entries_are_optional() {
         let dir = project(r#"{ "entries": { "production": ["index.js"] } }"#);
         let config = Config::load(dir.path()).unwrap();
@@ -96,7 +170,10 @@ mod tests {
         assert_eq!(error, ConfigError::Missing(dir.path().join(FILE_NAME)));
         assert_eq!(
             error.to_string(),
-            format!("{} not found", dir.path().join(FILE_NAME).display())
+            format!(
+                "{} not found (`prunr init` creates one)",
+                dir.path().join(FILE_NAME).display()
+            )
         );
     }
 
