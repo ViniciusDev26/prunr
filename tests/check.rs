@@ -215,7 +215,7 @@ fn an_unknown_command_is_a_usage_error() {
         assert_eq!(run.code, 2, "{args:?}");
         assert_eq!(
             run.stderr,
-            "usage: prunr check [--json] | prunr baseline | prunr init | prunr schema\n",
+            "usage: prunr check [--json] | prunr baseline | prunr init | prunr schema | prunr --version\n",
             "{args:?}"
         );
     }
@@ -419,4 +419,11 @@ fn a_require_whose_binding_is_never_used_is_an_unused_import() {
          \n\
          errors: 4, warnings: 0\n"
     );
+}
+
+#[test]
+fn version_prints_the_crate_version() {
+    let run = prunr("clean", &["--version"]);
+    assert_eq!(run.code, 0);
+    assert_eq!(run.stdout, format!("prunr {}\n", env!("CARGO_PKG_VERSION")));
 }
