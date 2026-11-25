@@ -537,3 +537,20 @@ fn vitest_finds_its_tests_and_what_its_config_loads() {
         "unused-file           src/legacy.spec.ts\n\nerrors: 1, warnings: 0\n"
     );
 }
+
+#[test]
+fn a_comment_ignores_an_export_or_a_file_and_must_ignore_something() {
+    let run = check("ignore-comments");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-export         src/legacy.cjs: gone\n\
+         unused-export         src/lib.js: dead\n\
+         unused-ignore         src/index.js:8: ignores nothing\n\
+         unused-ignore         src/lib.js:12: ignores nothing\n\
+         unused-ignore         src/lib.js:17: ignores nothing\n\
+         unused-ignore         src/used-file.js:1: ignores nothing\n\
+         \n\
+         errors: 6, warnings: 0\n"
+    );
+}

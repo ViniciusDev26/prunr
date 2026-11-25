@@ -95,6 +95,7 @@ erro, para que um erro de digitação não passe em silêncio.
 | `unused-file` | Nenhuma entrada de produção alcança o arquivo. Se só os testes o alcançam, a linha diz `(only tests use it)`: apague-o junto com os testes. |
 | `unused-export` | Nenhum arquivo de produção usa o export, nem o próprio arquivo onde ele está. Métodos estáticos de uma classe exportada contam como exports (`Invoice.total`). Também marca `(only tests use it)`. |
 | `unused-import` | Um `require` ou `import` declara um binding que o arquivo nunca usa (`const x = require("./x")`, uma propriedade desestruturada, `import { a } from "./x"`). Um `require("./x");` ou `import "./x";` sozinho, por efeito colateral, não conta. |
+| `unused-ignore` | Um comentário `prunr-ignore-next-line` ou `prunr-ignore-file` não impede nenhum achado: o que ele ignorava passou a ser usado, ou ele não está antes de um export. Veja [Ignorar no código](#ignorar-no-código). |
 | `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa e nenhum script do `package.json` o roda. |
 | `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o importam: ele pertence a `devDependencies`. |
 | `missing-dependency` | O arquivo importa um pacote que o `package.json` não declara. |
@@ -162,6 +163,38 @@ Um `require` montado em tempo de execução a partir de um caminho relativo vira
 `` require(`./handlers/${nome}`) `` e `require("./handlers/" + nome)` usam, inteiros, todos os
 arquivos de `handlers/` (cada `${...}` vale um trecho sem `/`, e uma pasta vale pelo seu
 `index`).
+
+### Ignorar no código
+
+Para um export que é API pública de propósito (usado por quem instala o pacote, carregado por
+nome por um sistema de plugins), marque-o no próprio código:
+
+```js
+// prunr-ignore-next-line
+export const register = () => {};
+
+/**
+ * Parte da API pública.
+ * @public
+ */
+export function createClient() {}
+
+module.exports = {
+  // prunr-ignore-next-line: chamado pelo agendador
+  hook() {},
+};
+```
+
+- `// prunr-ignore-next-line` (ou `/* ... */`, com um motivo depois, se quiser) ignora os exports
+  feitos na linha seguinte: uma declaração `export`, um `exports.x =`, uma chave de
+  `module.exports = { ... }` ou um método estático.
+- A tag `@public` num comentário JSDoc faz o mesmo para o export que ele documenta.
+- `/* prunr-ignore-file */` em qualquer lugar do arquivo o deixa fora de `unused-file` e de
+  `unused-export`.
+
+Um comentário de ignorar que não impede nenhum achado é `unused-ignore`, para não acumular: o
+export voltou a ser usado, o comentário não está antes de um export, ou o arquivo ignorado não
+tem nada a esconder. A tag `@public` é documentação e nunca é reportada.
 
 ### Adotando num código legado
 

@@ -9,7 +9,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use oxc_allocator::Allocator;
-use oxc_ast::AstKind;
 use oxc_ast::ast::{
     AssignmentExpression, AssignmentTarget, BinaryOperator, BindingIdentifier, BindingPattern,
     CallExpression, Class, ClassElement, Declaration, ExportAllDeclaration, ExportDeclaration,
@@ -18,6 +17,7 @@ use oxc_ast::ast::{
     ImportDeclarationSpecifier, ImportExpression, MethodDefinitionKind, ObjectPropertyKind,
     StaticMemberExpression, TSImportEqualsDeclaration, TSModuleReference, TemplateLiteral,
 };
+use oxc_ast::{AstKind, Comment};
 use oxc_parser::Parser;
 use oxc_semantic::{NodeId, Semantic, SemanticBuilder, SymbolId};
 use oxc_span::{GetSpan, SourceType, Span};
@@ -90,6 +90,24 @@ pub struct Facts {
     pub patterns: Vec<Pattern>,
     /// Source text of each `require()` whose specifier is neither a static string nor a pattern.
     pub dynamic_requires: Vec<String>,
+    /// The line (from 1) where each export is made.
+    pub export_lines: BTreeMap<Vec<String>, u32>,
+    /// Exports a comment says not to report.
+    pub ignores: BTreeMap<Vec<String>, Ignore>,
+    /// The line of a `prunr-ignore-file` comment: the file and its exports are not reported.
+    pub ignore_file: Option<u32>,
+    /// Lines of `prunr-ignore-next-line` comments whose next line makes no export.
+    pub stray_ignores: Vec<u32>,
+}
+
+/// Why an export is not reported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Ignore {
+    /// A `prunr-ignore-next-line` comment at this line. It must ignore something: on an export
+    /// that is used, it is reported.
+    NextLine(u32),
+    /// A JSDoc comment with `@public`: API on purpose, documented as such.
+    Public,
 }
 
 /// Analyzes one source, parsed as its path's extension says. Fails with the parser's first
@@ -112,6 +130,8 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
         facts: Facts::default(),
         exports: BTreeMap::new(),
         reads: BTreeSet::new(),
+        sites: BTreeMap::new(),
+        site: Span::default(),
     };
     for node in semantic.nodes().iter() {
         match node.kind() {
@@ -128,11 +148,14 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
             AstKind::ExportDeclaration(export) => analyzer.export_declaration(export),
             AstKind::ExportDefaultDeclaration(export) => analyzer.export_default(export),
             AstKind::ExportAllDeclaration(export) => analyzer.export_all(export),
-            AstKind::TSExportAssignment(export) => analyzer.module_exports(&export.expression),
+            AstKind::TSExportAssignment(export) => {
+                analyzer.site = export.span;
+                analyzer.module_exports(&export.expression);
+            }
             _ => {}
         }
     }
-    Ok(analyzer.finish())
+    Ok(analyzer.finish(&program.comments))
 }
 
 type Path = Vec<String>;
@@ -145,13 +168,54 @@ struct Analyzer<'s, 'a> {
     exports: BTreeMap<Path, bool>,
     /// Exports read back through `exports.x` / `module.exports.x`.
     reads: BTreeSet<Path>,
+    /// Where each export is made: the statement, property or method a comment before it
+    /// refers to.
+    sites: BTreeMap<Path, Span>,
+    /// The site of the exports being declared.
+    site: Span,
 }
 
 impl<'a> Analyzer<'_, 'a> {
-    fn finish(mut self) -> Facts {
+    fn finish(mut self, comments: &[Comment]) -> Facts {
         for path in &self.reads {
             if let Some(used) = self.exports.get_mut(path) {
                 *used = true;
+            }
+        }
+        let newlines: Vec<usize> = self.source.match_indices('\n').map(|(at, _)| at).collect();
+        let line = |offset: u32| newlines.partition_point(|&at| at < offset as usize) as u32 + 1;
+        self.facts.export_lines = self
+            .sites
+            .iter()
+            .map(|(path, site)| (path.clone(), line(site.start)))
+            .collect();
+        for comment in comments {
+            let text = &self.source[comment.span.start as usize..comment.span.end as usize];
+            let at = line(comment.span.start);
+            if text.contains("prunr-ignore-file") {
+                self.facts.ignore_file.get_or_insert(at);
+                continue;
+            }
+            let ignore = if text.contains("prunr-ignore-next-line") {
+                Ignore::NextLine(at)
+            } else if comment.is_jsdoc() && text.contains("@public") {
+                Ignore::Public
+            } else {
+                continue;
+            };
+            let next = line(comment.span.end) + 1;
+            let targets: Vec<&Path> = self
+                .facts
+                .export_lines
+                .iter()
+                .filter(|(_, line)| **line == next)
+                .map(|(path, _)| path)
+                .collect();
+            if targets.is_empty() && ignore != Ignore::Public {
+                self.facts.stray_ignores.push(at);
+            }
+            for path in targets {
+                self.facts.ignores.insert(path.clone(), ignore.clone());
             }
         }
         self.facts.exports = self
@@ -415,10 +479,17 @@ impl<'a> Analyzer<'_, 'a> {
 
     // ---- exports ----
 
+    /// Records an export made at the current site.
+    fn declare(&mut self, path: &Path) {
+        self.exports.entry(path.clone()).or_insert(false);
+        self.sites.entry(path.clone()).or_insert(self.site);
+    }
+
     fn assignment(&mut self, assignment: &AssignmentExpression<'a>) {
         let AssignmentTarget::StaticMemberExpression(target) = &assignment.left else {
             return;
         };
+        self.site = assignment.span;
         if self.is_module_exports(target) {
             self.module_exports(&assignment.right);
         } else if self.is_exports_object(&target.object) {
@@ -434,6 +505,7 @@ impl<'a> Analyzer<'_, 'a> {
                 if let ObjectPropertyKind::ObjectProperty(property) = property
                     && let Some(name) = property.key.static_name()
                 {
+                    self.site = property.span;
                     self.export_value(vec![name.display().to_string()], &property.value);
                 }
             }
@@ -444,7 +516,7 @@ impl<'a> Analyzer<'_, 'a> {
     }
 
     fn export_value(&mut self, path: Path, value: &Expression<'a>) {
-        self.exports.entry(path.clone()).or_insert(false);
+        self.declare(&path);
         match value {
             Expression::Identifier(ident) => self.export_reference(path, ident),
             Expression::ClassExpression(class) => {
@@ -464,7 +536,7 @@ impl<'a> Analyzer<'_, 'a> {
 
     /// An export of the local `ident` declares.
     fn export_binding(&mut self, path: Path, ident: &BindingIdentifier) {
-        self.exports.entry(path.clone()).or_insert(false);
+        self.declare(&path);
         self.export_symbol(path, ident.symbol_id(), ident.span);
     }
 
@@ -512,6 +584,7 @@ impl<'a> Analyzer<'_, 'a> {
                 let name = name.display().to_string();
                 let used = called.contains(&name);
                 member.push(name);
+                self.sites.entry(member.clone()).or_insert(method.span);
                 self.exports.insert(member, used);
             }
         }
@@ -523,7 +596,8 @@ impl<'a> Analyzer<'_, 'a> {
         self.facts.esm = true;
         for specifier in &export.specifiers {
             let path = vec![specifier.exported.name().to_string()];
-            self.exports.entry(path.clone()).or_insert(false);
+            self.site = specifier.span;
+            self.declare(&path);
             let local = specifier.local.name();
             if let Some(symbol) = self
                 .semantic
@@ -553,6 +627,7 @@ impl<'a> Analyzer<'_, 'a> {
     /// `export const a = 1`, `export function f() {}`, `export type T = ...` and the like.
     fn export_declaration(&mut self, export: &ExportDeclaration<'a>) {
         self.facts.esm = true;
+        self.site = export.span;
         let idents = match &export.declaration {
             Declaration::VariableDeclaration(variables) => variables
                 .declarations
@@ -574,6 +649,7 @@ impl<'a> Analyzer<'_, 'a> {
 
     fn export_default(&mut self, export: &ExportDefaultDeclaration<'a>) {
         self.facts.esm = true;
+        self.site = export.span;
         let path = vec!["default".to_string()];
         let id = match &export.declaration {
             ExportDefaultDeclarationKind::FunctionDeclaration(function) => function.id.as_ref(),
@@ -594,9 +670,7 @@ impl<'a> Analyzer<'_, 'a> {
         };
         match id {
             Some(id) => self.export_binding(path, id),
-            None => {
-                self.exports.entry(path).or_insert(false);
-            }
+            None => self.declare(&path),
         }
     }
 
@@ -1328,6 +1402,87 @@ mod tests {
         );
         assert_eq!(facts.exports, [export(&["x"], false)]);
         assert!(analyze("const x: number = 1;", std::path::Path::new("index.js")).is_err());
+    }
+
+    // ---- ignore comments ----
+
+    fn path(segments: &[&str]) -> Vec<String> {
+        segments.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn each_export_knows_its_line() {
+        let found = facts(
+            "exports.a = 1;\nmodule.exports.b = 2;\nclass X {\n  static m() {}\n}\nexports.X = X;",
+        );
+        let lines: Vec<(Vec<String>, u32)> = found.export_lines.into_iter().collect();
+        assert_eq!(
+            lines,
+            [
+                (path(&["X"]), 6),
+                (path(&["X", "m"]), 4),
+                (path(&["a"]), 1),
+                (path(&["b"]), 2)
+            ]
+        );
+        let found = facts_at(
+            "a.ts",
+            "export const c = 1;\nexport {\n  c as d,\n};\nexport default c;\n",
+        );
+        assert_eq!(found.export_lines[&path(&["d"])], 3);
+        assert_eq!(found.export_lines[&path(&["default"])], 5);
+        let found = facts("module.exports = {\n  a,\n  b() {},\n};");
+        assert_eq!(found.export_lines[&path(&["b"])], 3);
+        let found = facts("function f() {}\nmodule.exports = f;");
+        assert_eq!(found.export_lines[&path(&["default"])], 2);
+        let found = facts_at("a.ts", "function f() {}\nexport = f;");
+        assert_eq!(found.export_lines[&path(&["default"])], 2);
+    }
+
+    #[test]
+    fn a_next_line_comment_ignores_the_exports_on_the_next_line() {
+        let found = facts(
+            "// prunr-ignore-next-line\nexport const a = 1, b = 2;\nexport const c = 3;\n\
+             module.exports = {\n  /* prunr-ignore-next-line: hook */\n  d,\n};",
+        );
+        assert_eq!(
+            found.ignores,
+            BTreeMap::from([
+                (path(&["a"]), Ignore::NextLine(1)),
+                (path(&["b"]), Ignore::NextLine(1)),
+                (path(&["d"]), Ignore::NextLine(5)),
+            ])
+        );
+        assert!(found.stray_ignores.is_empty());
+    }
+
+    #[test]
+    fn a_public_jsdoc_tag_ignores_the_export_it_documents() {
+        let found = facts(
+            "/**\n * API.\n * @public\n */\nexport function f() {}\n/* @public */\nexport const g = 1;",
+        );
+        assert_eq!(
+            found.ignores,
+            BTreeMap::from([(path(&["f"]), Ignore::Public)])
+        );
+    }
+
+    #[test]
+    fn a_next_line_comment_before_no_export_is_stray() {
+        let found = facts(
+            "// prunr-ignore-next-line\n\nexport const a = 1;\n// prunr-ignore-next-line\nconst b = 2;",
+        );
+        assert!(found.ignores.is_empty());
+        assert_eq!(found.stray_ignores, [1, 4]);
+    }
+
+    #[test]
+    fn a_file_comment_ignores_the_file() {
+        assert_eq!(facts("exports.a = 1;").ignore_file, None);
+        assert_eq!(
+            facts("// header\n/* prunr-ignore-file: loaded by name */\nexports.a = 1;").ignore_file,
+            Some(2)
+        );
     }
 
     #[test]
