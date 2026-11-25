@@ -9,7 +9,7 @@ todas as verificações sobre esse mesmo grafo.
 | `unused-export` | Nenhum arquivo de produção usa o export, nem o próprio arquivo onde ele está. Métodos estáticos de uma classe exportada contam como exports (`Invoice.total`). Também marca `(only tests use it)`. |
 | `unused-import` | Um `require` ou `import` declara um binding que o arquivo nunca usa (`const x = require("./x")`, uma propriedade desestruturada, `import { a } from "./x"`). Um `require("./x");` ou `import "./x";` sozinho, por efeito colateral, não conta. |
 | `unused-ignore` | Um comentário `prunr-ignore-next-line` ou `prunr-ignore-file` não impede nenhum achado. Veja [Ignorar no código](ignore.md). |
-| `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa e nenhum script do `package.json` o roda. |
+| `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa, nenhum script do `package.json` o roda e nenhum pacote usado o exige como `peerDependencies`. |
 | `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o importam: ele pertence a `devDependencies`. |
 | `missing-dependency` | O arquivo importa um pacote que o `package.json` não declara. |
 | `circular-import` | Há um ciclo de `require` ou `import`. Cada grupo de arquivos em ciclo é reportado uma vez, pelo caminho mais curto. Imports só de tipo (`import type`) não contam: somem na compilação. |
@@ -18,6 +18,11 @@ todas as verificações sobre esse mesmo grafo.
 Teste não mantém código vivo: o que só os testes usam está morto em produção. Um arquivo que
 nem produção nem testes alcançam não gera outros achados nem mantém nada vivo. No JSON, os
 achados que só os testes usam têm `"testOnly": true`.
+
+Um pacote que outro pacote usado exige em `peerDependencies` (o `@tiptap/pm` do
+`@tiptap/react`, o `vite` do `@vitejs/plugin-react`) é usado do mesmo jeito que ele: em produção,
+se o outro é usado em produção, e só nos testes, se o outro só é usado nos testes. Os peers são
+lidos do `package.json` instalado em `node_modules`, inclusive os opcionais.
 
 Na dúvida, o prunr é conservador: quando o resultado de um `require` é passado adiante ou
 acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um
