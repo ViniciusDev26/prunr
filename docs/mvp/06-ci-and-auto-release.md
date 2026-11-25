@@ -29,9 +29,10 @@ fazer merge do PR de release.
   `@prunr/darwin-x64`, `@prunr/darwin-arm64`, `@prunr/win32-x64`, um por binário.
 - **Só npm**; nada é publicado no crates.io (`publish = false`).
 - **Trusted publishing (OIDC) desde o primeiro release, sem token npm.** Como o npm só configura
-  OIDC num pacote que já existe, `scripts/bootstrap-npm.sh` publica um placeholder `0.0.0`
-  (depreciado) de cada pacote e liga cada um ao workflow `release.yml`. Roda uma vez, na máquina
-  de um mantenedor, com 2FA.
+  OIDC num pacote que já existe, cada pacote foi criado uma vez, à mão, na máquina de um
+  mantenedor (com 2FA): um placeholder `0.0.0` depreciado e `npm trust` ligando-o ao workflow
+  `release.yml`. O passo a passo está no README, em *Um pacote npm novo*; não há script, porque
+  é feito uma vez por pacote.
 - **`RELEASE_PLEASE_TOKEN`:** um token próprio para o release-please, porque PRs abertos com o
   `GITHUB_TOKEN` não disparam workflows e o PR de release não passaria pelo ruleset.
 - **A esteira inteira roda em todo PR:** testes, cobertura, os 5 builds, a checagem de binário
