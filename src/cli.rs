@@ -78,7 +78,8 @@ fn findings(root: &Path) -> Result<(Config, Vec<crate::checks::Finding>), String
     let mut project = Project::load(root).map_err(|e| e.to_string())?;
     project.ignore_packages(&config.dependencies.ignore);
     let production = project.entries(&config.entries.production)?;
-    let tests = project.entries(&config.entries.test)?;
+    let mut tests = project.entries(&config.entries.test)?;
+    tests.extend(project.test_files.iter().cloned());
     let findings = check(&project, &production, &tests);
     Ok((config, findings))
 }

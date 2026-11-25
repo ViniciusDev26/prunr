@@ -4,11 +4,11 @@ O que vem depois do [MVP](../mvp/). Cada item tem um arquivo com objetivo, escop
 aceite, e segue as mesmas regras do MVP: TDD e 100% de cobertura ([CLAUDE.md](../../CLAUDE.md)).
 A numeração é a da priorização original e não muda quando um item termina.
 
-## Em andamento
+## Feito
 
 - [x] 1. [ESM e TypeScript](01-esm-and-typescript.md)
 - [x] 2. [Dependências usadas fora do código](02-dependencies-outside-code.md)
-- [ ] 3. [Jest e Vitest](03-jest-and-vitest.md)
+- [x] 3. [Jest e Vitest](03-jest-and-vitest.md)
 - [x] 8. [`require` dinâmico com padrão](08-dynamic-require-patterns.md)
 
 ## Depois

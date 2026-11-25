@@ -75,7 +75,7 @@ prunr schema         # o JSON Schema do prunr.json
 |---|---|---|
 | `entries.production` | sim | Caminhos ou globs dos arquivos por onde o programa começa. Tudo o que eles alcançam, direta ou indiretamente, está vivo. |
 | `$schema` | não | O JSON Schema do arquivo, para autocompletar e validar no editor. |
-| `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. |
+| `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. Com Jest ou Vitest, liste só o que o runner não acha sozinho (veja [Jest e Vitest](#jest-e-vitest)). |
 
 | `dependencies.ignore` | não | Pacotes que ficam de fora das verificações de dependência: os carregados de um jeito que nem o grafo nem os `scripts` mostram (um plugin citado no arquivo de configuração de outra ferramenta). |
 
@@ -107,8 +107,9 @@ achados que só os testes usam têm `"testOnly": true`.
 
 Os `scripts` do `package.json` também usam pacotes: o binário de cada comando (`jest`,
 `tsc`, `npx nodemon`, `cross-env NODE_ENV=test jest`, `dotenv -- jest`) conta como uso do pacote
-que o declara no campo `bin` (lido em `node_modules`; sem ele, vale o nome do pacote), e
-`node -r dotenv/config` ou `--import tsx` conta como uso do pacote carregado. Um pacote usado por
+que o declara no campo `bin` (lido em `node_modules`; sem ele, vale o nome do pacote),
+`node -r dotenv/config` ou `--import tsx` conta como uso do pacote carregado, e um caminho
+dentro de `node_modules` (`node node_modules/jest/bin/jest.js`) conta como uso do pacote dele. Um pacote usado por
 script não é `unused-dependency` nem `misplaced-dependency`, e um binário sem pacote declarado
 (`docker`, `git`) não é `missing-dependency`.
 
@@ -129,6 +130,29 @@ Arquivos `.js`, `.cjs`, `.mjs`, `.jsx`, `.ts`, `.cts`, `.mts` e `.tsx` entram no
 - `@types/x` conta como usado quando `x` é usado; `@types/node`, quando o projeto tem TypeScript
   ou usa um módulo do Node. Importar `x` com só o `@types/x` declarado não é
   `missing-dependency`.
+
+### Jest e Vitest
+
+Quando `jest` ou `vitest` está declarado no `package.json`, o prunr lê a configuração do runner
+(`jest.config.*`, a chave `jest` do `package.json`, `vitest.config.*` ou `vite.config.*`) sem
+executá-la:
+
+- **Arquivos de teste:** os de `testMatch` (Jest) ou `test.include` (Vitest), ou os padrões de
+  cada runner quando a opção não existe, mais as pastas `__mocks__` do Jest. Eles se somam a
+  `entries.test`.
+- **Configurações passadas por script:** `jest --config jest.e2e.config.js` (ou `-c`, também
+  com `node node_modules/jest/bin/jest.js`) é lida como as outras.
+- **Arquivos carregados:** a própria configuração e os arquivos de `setupFiles`,
+  `setupFilesAfterEnv`, `globalSetup` e `globalTeardown` (Jest) ou `test.setupFiles` e
+  `test.globalSetup` (Vitest) são código de teste.
+- **Pacotes citados como texto** (`preset`, `testEnvironment`, `transform`, `reporters`,
+  `snapshotSerializers`, `watchPlugins`; no Vitest, `test.environment`, `test.reporters` e
+  `test.coverage.provider`) contam como uso de teste: não são `unused-dependency` e, se estiverem
+  em `dependencies`, são `misplaced-dependency`.
+
+Só valores literais são lidos. Uma configuração montada em tempo de execução (uma função, uma
+variável importada) cai nos padrões do runner; cubra o resto com `entries.test`. `testRegex`
+não é lido.
 
 Na dúvida, o prunr é conservador: quando o resultado de um `require` é passado adiante ou
 acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um

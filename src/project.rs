@@ -25,6 +25,10 @@ pub struct Project {
     pub declared_packages: BTreeSet<String>,
     /// Packages the `scripts` of `package.json` run or preload.
     pub script_packages: BTreeSet<String>,
+    /// Files the test runners (Jest, Vitest) run or load: test files, their config and setup.
+    pub test_files: BTreeSet<FileId>,
+    /// Packages the test runners' configuration loads (presets, environments, reporters).
+    pub test_packages: BTreeSet<String>,
     /// How many files were parsed.
     pub parsed: usize,
 }
@@ -116,6 +120,8 @@ struct Manifest {
     optional_dependencies: BTreeMap<String, serde_json::Value>,
     #[serde(default)]
     scripts: BTreeMap<String, String>,
+    /// Jest's configuration, when it lives in `package.json`.
+    jest: Option<serde_json::Value>,
 }
 
 impl Manifest {
@@ -221,6 +227,14 @@ fn matching<'f>(from: &FileId, glob: &str, files: impl Iterator<Item = &'f FileI
     targets
 }
 
+/// A glob over file ids, where `*` does not cross `/` and `**` does.
+fn glob(pattern: &str) -> Result<globset::GlobMatcher, globset::Error> {
+    Ok(globset::GlobBuilder::new(pattern)
+        .literal_separator(true)
+        .build()?
+        .compile_matcher())
+}
+
 impl Project {
     /// Reads every `.js` and `.cjs` file under `root`, skipping `node_modules` and what
     /// `.gitignore` ignores.
@@ -306,6 +320,24 @@ impl Project {
             .values()
             .flat_map(|script| crate::scripts::packages(script, &binaries))
             .collect();
+        let runners = crate::runners::setup(
+            &root,
+            &declared_packages,
+            &serde_json::json!({ "jest": manifest.jest, "scripts": manifest.scripts }),
+        );
+        let mut test_files = BTreeSet::new();
+        for pattern in &runners.tests {
+            if let Ok(glob) = glob(pattern) {
+                test_files.extend(files.keys().filter(|id| glob.is_match(id)).cloned());
+            }
+        }
+        for file in &runners.files {
+            if let Target::File(path) = resolver.resolve(&root.join("package.json"), file)
+                && let Some(id) = paths.get(&path)
+            {
+                test_files.insert(id.clone());
+            }
+        }
         Ok(Self {
             root,
             parsed: files.len(),
@@ -314,6 +346,8 @@ impl Project {
             dev_dependencies,
             declared_packages,
             script_packages,
+            test_files,
+            test_packages: runners.packages,
         })
     }
 
@@ -353,11 +387,7 @@ impl Project {
                 .filter(|id| self.files.contains_key(id))
                 .collect());
         }
-        let glob = globset::GlobBuilder::new(pattern)
-            .literal_separator(true)
-            .build()
-            .map_err(|e| format!("invalid entry glob {pattern}: {e}"))?
-            .compile_matcher();
+        let glob = glob(pattern).map_err(|e| format!("invalid entry glob {pattern}: {e}"))?;
         Ok(self
             .files
             .keys()
@@ -685,6 +715,35 @@ mod tests {
                 "undeclared".into(),
             ]),
             "a package without a bin field runs nothing; one not installed is guessed by name"
+        );
+    }
+
+    #[test]
+    fn the_test_runners_name_test_files_and_packages() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{
+                    "devDependencies": { "jest": "29" },
+                    "jest": {
+                        "testMatch": ["[", "*.test.js"],
+                        "setupFiles": ["./missing.js", "./setup", "jest-plugin"]
+                    }
+                }"#,
+            ),
+            ("a.test.js", ""),
+            ("setup.js", ""),
+            ("index.js", ""),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.test_files,
+            BTreeSet::from(["a.test.js".into(), "setup.js".into()]),
+            "an invalid glob or a missing file is left out"
+        );
+        assert_eq!(
+            project.test_packages,
+            BTreeSet::from(["jest-plugin".into()])
         );
     }
 

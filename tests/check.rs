@@ -514,3 +514,26 @@ fn a_types_package_is_used_with_the_package_it_types() {
         "unused-dependency     @types/unused-lib\n\nerrors: 1, warnings: 0\n"
     );
 }
+
+#[test]
+fn jest_finds_its_tests_and_what_its_config_loads() {
+    let run = check("jest");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-export         src/math.js: sub (only tests use it)\n\
+         misplaced-dependency  jest-junit: only tests use it, move it to devDependencies\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
+}
+
+#[test]
+fn vitest_finds_its_tests_and_what_its_config_loads() {
+    let run = check("vitest");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/legacy.spec.ts\n\nerrors: 1, warnings: 0\n"
+    );
+}

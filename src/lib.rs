@@ -7,4 +7,5 @@ pub mod init;
 pub mod project;
 pub mod report;
 pub mod resolve;
+pub mod runners;
 pub mod scripts;

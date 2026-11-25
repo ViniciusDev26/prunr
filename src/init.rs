@@ -60,10 +60,12 @@ pub fn init(root: &Path) -> Result<String, String> {
             "no entry found: create {FILE_NAME} with entries.production by hand"
         ));
     }
+    // Jest and Vitest find their own test files.
+    let runner = !project.test_files.is_empty();
     let test: Vec<String> = TEST_GLOBS
         .iter()
         .map(|glob| glob.to_string())
-        .filter(is_file)
+        .filter(|glob| !runner && is_file(glob))
         .collect();
 
     let mut entries = serde_json::json!({ "production": production });
@@ -172,6 +174,20 @@ mod tests {
                 "production": ["scripts/seed.ts", "src/index.ts", "src/server.ts"],
                 "test": ["**/*.test.*", "**/*.spec.*"]
             })
+        );
+    }
+
+    #[test]
+    fn with_a_test_runner_no_test_entries_are_proposed() {
+        let dir = project(&[
+            ("package.json", r#"{ "devDependencies": { "jest": "29" } }"#),
+            ("index.js", ""),
+            ("index.test.js", ""),
+        ]);
+        init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir)["entries"],
+            serde_json::json!({ "production": ["index.js"] })
         );
     }
 

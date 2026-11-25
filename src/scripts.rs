@@ -6,14 +6,50 @@ use std::collections::{BTreeMap, BTreeSet};
 /// The packages `script` uses. `bins` maps each binary to the package that declares it.
 pub fn packages(script: &str, bins: &BTreeMap<String, String>) -> BTreeSet<String> {
     let mut used = BTreeSet::new();
-    for command in script.split([';', '|', '&', '\n']) {
-        let words: Vec<&str> = command
-            .split_whitespace()
-            .map(|word| word.trim_matches(['"', '\'']))
-            .collect();
+    for words in commands(script) {
         run(&words, bins, &mut used);
+        for word in &words {
+            if let Some((_, inside)) = word.split_once("node_modules/")
+                && !inside.is_empty()
+            {
+                used.insert(crate::resolve::package_name(inside).to_string());
+            }
+        }
     }
     used
+}
+
+/// The configuration files a script passes to `runner` with `--config`/`-c`.
+pub fn configs(script: &str, runner: &str) -> Vec<String> {
+    let installed = format!("node_modules/{runner}/");
+    let mut found = Vec::new();
+    for words in commands(script) {
+        let runs = words
+            .iter()
+            .any(|word| *word == runner || word.contains(&installed));
+        if !runs {
+            continue;
+        }
+        for (index, word) in words.iter().enumerate() {
+            let value = match word.split_once('=') {
+                Some(("--config" | "-c", value)) => Some(value),
+                _ if ["--config", "-c"].contains(word) => words.get(index + 1).copied(),
+                _ => None,
+            };
+            found.extend(value.map(str::to_string));
+        }
+    }
+    found
+}
+
+/// The words of each command of a script.
+fn commands(script: &str) -> impl Iterator<Item = Vec<&str>> {
+    script.split([';', '|', '&', '\n']).map(|command| {
+        command
+            .split_whitespace()
+            .map(|word| word.trim_matches(['"', '\'']))
+            .collect()
+    })
 }
 
 /// Package managers that run a binary: as `yarn jest`, or through a subcommand (`pnpm exec jest`).
@@ -196,6 +232,36 @@ mod tests {
         );
         assert_eq!(used("dotenv -e .env -- jest"), ["dotenv-cli", "jest"]);
         assert_eq!(used("dotenv -e .env"), ["dotenv-cli"]);
+    }
+
+    #[test]
+    fn a_file_inside_node_modules_uses_its_package() {
+        assert_eq!(
+            used(
+                "node --flag node_modules/jest/bin/jest.js && node ./node_modules/@scope/tool/cli.js"
+            ),
+            ["@scope/tool", "jest"]
+        );
+        assert!(used("node node_modules/").is_empty());
+    }
+
+    #[test]
+    fn the_config_a_script_passes_to_a_runner_is_found() {
+        let found = |script: &str| configs(script, "jest");
+        assert_eq!(
+            found("jest --config jest.e2e.config.js && jest -c=./other.json; jest --config=x.js"),
+            ["jest.e2e.config.js", "./other.json", "x.js"]
+        );
+        assert_eq!(
+            found("node node_modules/jest/bin/jest.js --config jest.integration.config.js"),
+            ["jest.integration.config.js"]
+        );
+        assert!(found("vitest --config vitest.e2e.ts").is_empty());
+        assert!(found("jest --config").is_empty());
+        assert_eq!(
+            configs("npx vitest run -c vitest.e2e.ts", "vitest"),
+            ["vitest.e2e.ts"]
+        );
     }
 
     #[test]

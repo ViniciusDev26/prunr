@@ -34,7 +34,8 @@ pub struct Config {
 pub struct Entries {
     /// Where the program starts. Everything they reach, directly or not, is alive.
     pub production: Vec<String>,
-    /// Test code. It is never reported, and what only it reaches is dead in production.
+    /// Test code. It is never reported, and what only it reaches is dead in production. Jest and
+    /// Vitest find their own test files; list here what they do not (helpers, mocks).
     #[serde(default)]
     pub test: Vec<String>,
 }

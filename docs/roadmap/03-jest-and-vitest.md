@@ -23,6 +23,6 @@ runner carrega sem que `entries.test` precise listar nada.
 
 ## Critérios de aceite
 
-- [ ] Uma fixture Jest (`jest.config.js` com setup e preset) e uma Vitest (`vitest.config.ts`).
-- [ ] Uma fixture Jest só com os padrões padrão, sem `entries.test`.
-- [ ] `prunr init` deixa de propor `entries.test` quando o runner já cobre os arquivos.
+- [x] Uma fixture Jest (`jest.config.js` com setup e preset) e uma Vitest (`vitest.config.ts`).
+- [x] Uma fixture Jest só com os padrões padrão, sem `entries.test`.
+- [x] `prunr init` deixa de propor `entries.test` quando o runner já cobre os arquivos.
