@@ -29,7 +29,6 @@ pub struct Entries {
 pub enum ConfigError {
     Missing(PathBuf),
     Invalid(String),
-    EntryNotFound(String),
 }
 
 impl std::fmt::Display for ConfigError {
@@ -37,7 +36,6 @@ impl std::fmt::Display for ConfigError {
         match self {
             Self::Missing(path) => write!(f, "{} not found", path.display()),
             Self::Invalid(reason) => write!(f, "invalid {FILE_NAME}: {reason}"),
-            Self::EntryNotFound(entry) => write!(f, "entry not found: {entry}"),
         }
     }
 }
@@ -51,17 +49,7 @@ impl Config {
         }
         let text =
             std::fs::read_to_string(&path).map_err(|e| ConfigError::Invalid(e.to_string()))?;
-        let config: Self =
-            serde_json::from_str(&text).map_err(|e| ConfigError::Invalid(e.to_string()))?;
-        if let Some(entry) = config
-            .entries
-            .production
-            .iter()
-            .find(|e| !root.join(e).is_file())
-        {
-            return Err(ConfigError::EntryNotFound(entry.clone()));
-        }
-        Ok(config)
+        serde_json::from_str(&text).map_err(|e| ConfigError::Invalid(e.to_string()))
     }
 }
 
@@ -69,21 +57,16 @@ impl Config {
 mod tests {
     use super::*;
 
-    fn project(config: &str, files: &[&str]) -> tempfile::TempDir {
+    fn project(config: &str) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join(FILE_NAME), config).unwrap();
-        for file in files {
-            std::fs::write(dir.path().join(file), "").unwrap();
-        }
         dir
     }
 
     #[test]
     fn reads_the_production_and_test_entries() {
-        let dir = project(
-            r#"{ "entries": { "production": ["index.js"], "test": ["**/*.test.js"] } }"#,
-            &[],
-        );
+        let dir =
+            project(r#"{ "entries": { "production": ["index.js"], "test": ["**/*.test.js"] } }"#);
         let config = Config::load(dir.path()).unwrap();
         assert_eq!(config.entries.production, ["index.js"]);
         assert_eq!(config.entries.test, ["**/*.test.js"]);
@@ -91,14 +74,14 @@ mod tests {
 
     #[test]
     fn test_entries_are_optional() {
-        let dir = project(r#"{ "entries": { "production": ["index.js"] } }"#, &[]);
+        let dir = project(r#"{ "entries": { "production": ["index.js"] } }"#);
         let config = Config::load(dir.path()).unwrap();
         assert!(config.entries.test.is_empty());
     }
 
     #[test]
     fn an_unknown_key_in_entries_is_an_error() {
-        let dir = project(r#"{ "entries": { "production": [], "tests": [] } }"#, &[]);
+        let dir = project(r#"{ "entries": { "production": [], "tests": [] } }"#);
         let error = Config::load(dir.path()).unwrap_err();
         assert!(
             error.to_string().contains("unknown field `tests`"),
@@ -119,7 +102,7 @@ mod tests {
 
     #[test]
     fn malformed_json_is_an_error() {
-        let dir = project("{ nope", &[]);
+        let dir = project("{ nope");
         let error = Config::load(dir.path()).unwrap_err();
         assert!(matches!(error, ConfigError::Invalid(_)), "{error:?}");
         assert!(
@@ -130,7 +113,7 @@ mod tests {
 
     #[test]
     fn an_unknown_key_is_an_error() {
-        let dir = project(r#"{ "entries": { "production": [] }, "entrys": [] }"#, &[]);
+        let dir = project(r#"{ "entries": { "production": [] }, "entrys": [] }"#);
         let error = Config::load(dir.path()).unwrap_err();
         assert!(
             error.to_string().contains("unknown field `entrys`"),
@@ -140,7 +123,7 @@ mod tests {
 
     #[test]
     fn entries_are_required() {
-        let dir = project("{}", &[]);
+        let dir = project("{}");
         let error = Config::load(dir.path()).unwrap_err();
         assert!(
             error.to_string().contains("missing field `entries`"),

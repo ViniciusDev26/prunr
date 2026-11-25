@@ -1,7 +1,8 @@
 //! The checks, all run over the same module graph.
 //!
-//! Only the files the entries reach take part: a file nothing reaches is reported as unused,
-//! and what it requires or exports does not count.
+//! Two graphs share the files: production, from the production entries, and test, from the test
+//! files. What only tests reach is dead in production. A file neither reaches is reported as
+//! unused, and what it requires or exports does not count.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -56,24 +57,24 @@ pub fn check(
     production: &BTreeSet<FileId>,
     tests: &BTreeSet<FileId>,
 ) -> Vec<Finding> {
-    todo!()
-}
-
-fn old_check(project: &Project, entries: &[FileId]) -> Vec<Finding> {
-    let reachable = reachable(project, entries);
+    let live = reachable(project, production);
+    let tested = reachable(project, tests);
+    let all: BTreeSet<FileId> = live.union(&tested).cloned().collect();
     let mut findings = Vec::new();
-    for file in project.files.keys().filter(|id| !reachable.contains(*id)) {
-        findings.push(Finding::UnusedFile {
-            file: file.clone(),
-            test_only: false,
-        });
+    for file in project.files.keys() {
+        if !live.contains(file) && !tests.contains(file) {
+            findings.push(Finding::UnusedFile {
+                file: file.clone(),
+                test_only: tested.contains(file),
+            });
+        }
     }
-    unused_exports(project, entries, &reachable, &mut findings);
-    dependencies(project, &reachable, &mut findings);
-    for cycle in cycles(project, &reachable) {
+    unused_exports(project, production, &live, &tested, &mut findings);
+    dependencies(project, &live, &tested, &mut findings);
+    for cycle in cycles(project, &all) {
         findings.push(Finding::CircularImport { cycle });
     }
-    for id in &reachable {
+    for id in &all {
         for specifier in &project.files[id].unresolved {
             findings.push(Finding::UnresolvedRequire {
                 file: id.clone(),
@@ -86,8 +87,8 @@ fn old_check(project: &Project, entries: &[FileId]) -> Vec<Finding> {
 }
 
 /// The files the entries reach, the entries included.
-fn reachable(project: &Project, entries: &[FileId]) -> BTreeSet<FileId> {
-    let mut seen: BTreeSet<FileId> = entries.iter().cloned().collect();
+fn reachable(project: &Project, entries: &BTreeSet<FileId>) -> BTreeSet<FileId> {
+    let mut seen = entries.clone();
     let mut queue: VecDeque<&FileId> = entries.iter().collect();
     while let Some(id) = queue.pop_front() {
         for edge in &project.files[id].edges {
@@ -99,33 +100,43 @@ fn reachable(project: &Project, entries: &[FileId]) -> BTreeSet<FileId> {
     seen
 }
 
-/// Exports of reachable files that no reachable file uses. An entry's exports are its
-/// interface to whoever runs it, so they are not checked.
-fn unused_exports(
-    project: &Project,
-    entries: &[FileId],
-    reachable: &BTreeSet<FileId>,
-    findings: &mut Vec<Finding>,
-) {
+/// What `files` use of each file they require.
+fn uses<'p>(project: &'p Project, files: &BTreeSet<FileId>) -> BTreeMap<&'p FileId, Vec<&'p Use>> {
     let mut uses: BTreeMap<&FileId, Vec<&Use>> = BTreeMap::new();
-    for id in reachable {
-        for edge in &project.files[id].edges {
+    for id in files {
+        let file = &project.files[id];
+        for edge in &file.edges {
             uses.entry(&edge.target).or_default().extend(&edge.uses);
         }
     }
-    for id in reachable.iter().filter(|id| !entries.contains(id)) {
+    uses
+}
+
+/// Exports of live files that no live file uses. A production entry's exports are its interface
+/// to whoever runs it, so they are not checked.
+fn unused_exports(
+    project: &Project,
+    production: &BTreeSet<FileId>,
+    live: &BTreeSet<FileId>,
+    tested: &BTreeSet<FileId>,
+    findings: &mut Vec<Finding>,
+) {
+    let live_uses = uses(project, live);
+    let test_uses = uses(project, &tested.difference(live).cloned().collect());
+    for id in live.difference(production) {
         let file = &project.files[id];
-        let incoming = uses.get(id).map(Vec::as_slice).unwrap_or_default();
+        let used_by = |uses: &BTreeMap<&FileId, Vec<&Use>>, path: &[String]| {
+            let incoming = uses.get(id).map(Vec::as_slice).unwrap_or_default();
+            incoming
+                .iter()
+                .any(|u| covers(u, path, file.facts.default_export))
+        };
         for export in &file.facts.exports {
-            let used = export.used_internally
-                || incoming
-                    .iter()
-                    .any(|u| covers(u, &export.path, file.facts.default_export));
-            if !used {
+            if !export.used_internally && !used_by(&live_uses, &export.path) {
                 findings.push(Finding::UnusedExport {
-                    test_only: false,
                     file: id.clone(),
                     symbol: export.path.join("."),
+                    test_only: used_by(&test_uses, &export.path),
                 });
             }
         }
@@ -143,11 +154,22 @@ fn covers(used: &Use, export: &[String], default_export: bool) -> bool {
     path.starts_with(export) || (used.whole && export.starts_with(&path))
 }
 
-fn dependencies(project: &Project, reachable: &BTreeSet<FileId>, findings: &mut Vec<Finding>) {
-    let mut required = BTreeSet::new();
-    for id in reachable {
+fn dependencies(
+    project: &Project,
+    live: &BTreeSet<FileId>,
+    tested: &BTreeSet<FileId>,
+    findings: &mut Vec<Finding>,
+) {
+    let required = |files: &BTreeSet<FileId>| -> BTreeSet<&String> {
+        files
+            .iter()
+            .flat_map(|id| &project.files[id].packages)
+            .collect()
+    };
+    let in_production = required(live);
+    let in_tests = required(tested);
+    for id in live.union(tested) {
         for package in &project.files[id].packages {
-            required.insert(package);
             if !project.declared_packages.contains(package) {
                 findings.push(Finding::MissingDependency {
                     file: id.clone(),
@@ -157,8 +179,15 @@ fn dependencies(project: &Project, reachable: &BTreeSet<FileId>, findings: &mut 
         }
     }
     for package in project.dependencies.union(&project.dev_dependencies) {
-        if !required.contains(package) {
+        if !in_production.contains(package) && !in_tests.contains(package) {
             findings.push(Finding::UnusedDependency {
+                package: package.clone(),
+            });
+        }
+    }
+    for package in &project.dependencies {
+        if !in_production.contains(package) && in_tests.contains(package) {
+            findings.push(Finding::MisplacedDependency {
                 package: package.clone(),
             });
         }

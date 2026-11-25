@@ -168,7 +168,38 @@ impl Project {
     /// The files that entry paths or globs (relative to the root) name. Each must name at least
     /// one project file.
     pub fn entries(&self, patterns: &[String]) -> Result<BTreeSet<FileId>, String> {
-        todo!()
+        let mut entries = BTreeSet::new();
+        for pattern in patterns {
+            let matched = self.entry(pattern)?;
+            if matched.is_empty() {
+                return Err(format!("entry matches no .js or .cjs file: {pattern}"));
+            }
+            entries.extend(matched);
+        }
+        Ok(entries)
+    }
+
+    fn entry(&self, pattern: &str) -> Result<Vec<FileId>, String> {
+        if !pattern.contains(['*', '?', '[', '{']) {
+            let id = dunce::canonicalize(self.root.join(pattern))
+                .ok()
+                .and_then(|path| file_id(&self.root, &path));
+            return Ok(id
+                .into_iter()
+                .filter(|id| self.files.contains_key(id))
+                .collect());
+        }
+        let glob = globset::GlobBuilder::new(pattern)
+            .literal_separator(true)
+            .build()
+            .map_err(|e| format!("invalid entry glob {pattern}: {e}"))?
+            .compile_matcher();
+        Ok(self
+            .files
+            .keys()
+            .filter(|id| glob.is_match(id))
+            .cloned()
+            .collect())
     }
 }
 
