@@ -25,9 +25,9 @@ pub struct Project {
     pub declared_packages: BTreeSet<String>,
     /// Packages the `scripts` of `package.json` run or preload.
     pub script_packages: BTreeSet<String>,
-    /// Files the test runners (Jest, Vitest) run or load: test files, their config and setup.
+    /// Test code the plugins name: test files, the tools' configuration and setup files.
     pub test_files: BTreeSet<FileId>,
-    /// Packages the test runners' configuration loads (presets, environments, reporters).
+    /// Packages the plugins say the tools load by name (presets, environments, reporters).
     pub test_packages: BTreeSet<String>,
     /// How many files were parsed.
     pub parsed: usize,
@@ -320,18 +320,18 @@ impl Project {
             .values()
             .flat_map(|script| crate::scripts::packages(script, &binaries))
             .collect();
-        let runners = crate::runners::setup(
-            &root,
-            &declared_packages,
-            &serde_json::json!({ "jest": manifest.jest, "scripts": manifest.scripts }),
-        );
+        let plugins = crate::plugins::contribution(&crate::plugins::Context {
+            root: &root,
+            declared: &declared_packages,
+            manifest: &serde_json::json!({ "jest": manifest.jest, "scripts": manifest.scripts }),
+        });
         let mut test_files = BTreeSet::new();
-        for pattern in &runners.tests {
+        for pattern in &plugins.tests {
             if let Ok(glob) = glob(pattern) {
                 test_files.extend(files.keys().filter(|id| glob.is_match(id)).cloned());
             }
         }
-        for file in &runners.files {
+        for file in &plugins.files {
             if let Target::File(path) = resolver.resolve(&root.join("package.json"), file)
                 && let Some(id) = paths.get(&path)
             {
@@ -347,7 +347,7 @@ impl Project {
             declared_packages,
             script_packages,
             test_files,
-            test_packages: runners.packages,
+            test_packages: plugins.packages,
         })
     }
 

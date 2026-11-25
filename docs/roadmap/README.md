@@ -11,6 +11,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 3. [Jest e Vitest](03-jest-and-vitest.md)
 - [x] 6. [Ignorar no código](06-ignore-in-code.md)
 - [x] 8. [`require` dinâmico com padrão](08-dynamic-require-patterns.md)
+- [x] 11. [Plugins internos](11-plugins.md)
 
 ## Depois
 
