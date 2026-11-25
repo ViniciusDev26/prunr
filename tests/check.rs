@@ -398,3 +398,10 @@ fn an_invalid_baseline_is_an_error() {
         run.stderr
     );
 }
+
+#[test]
+fn unused_locals_are_left_to_biome() {
+    let run = check("unused-locals");
+    assert_eq!(run.code, 0);
+    assert_eq!(run.stdout, "No findings.\n");
+}

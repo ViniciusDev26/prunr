@@ -17,17 +17,33 @@ os códigos de erro com `grep`.
     "rules": {
       "correctness": {
         "noUnusedVariables": "error",
-        "noUnusedImports": "error"
+        "noUnusedImports": "error",
+        "noUnusedPrivateClassMembers": "error"
       }
     }
   }
 }
 ```
 
+### Verificação contra o `tsc`
+
+Uma sonda com 10 tipos de símbolo local sem uso (`require` inteiro e desestruturado, `const`,
+`let`, função, classe, variável interna, elemento de array desestruturado, campo e método
+`#privados`) foi rodada com `tsc` (`checkJs` + `noUnusedLocals`, os códigos que o script antigo
+filtrava) e com o Biome:
+
+- O `tsc` acusou os 10.
+- O Biome com as três regras acima acusou os mesmos 10, e também um `catch (error)` sem uso.
+- Sem `noUnusedPrivateClassMembers`, os dois membros `#privados` escapariam: por isso a regra
+  entrou na configuração recomendada.
+
+O projeto de referência está limpo nos dois hoje (0 achados no `tsc`), então a troca não muda o
+resultado do gate dele.
+
 ## Critérios de aceite
 
-- [ ] O README do prunr tem uma seção "O que o prunr não faz" citando o Biome para variáveis locais.
-- [ ] O prunr não emite nenhum achado sobre variáveis locais (teste com fixture que tem uma
+- [x] O README do prunr tem uma seção "O que o prunr não faz" citando o Biome para variáveis locais.
+- [x] O prunr não emite nenhum achado sobre variáveis locais (teste com fixture que tem uma
       variável local sem uso → nenhum achado).
-- [ ] No projeto de referência, a regra do Biome acima cobre o que o `tsc` + `grep` pegava,
+- [x] No projeto de referência, a regra do Biome acima cobre o que o `tsc` + `grep` pegava,
       conferido rodando os dois antes de remover o script antigo.

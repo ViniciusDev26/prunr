@@ -130,13 +130,34 @@ errors: 7, warnings: 1
 | `1` | Há achados novos, ou entradas obsoletas no baseline. |
 | `2` | O comando não pôde rodar: `prunr.json` ausente ou inválido, `package.json` inválido, arquivo com erro de sintaxe ou argumento desconhecido. |
 
+## O que o prunr não faz
+
+- **Variáveis, imports e membros privados sem uso dentro de um arquivo.** Isso é trabalho de
+  linter, e o [Biome](https://biomejs.dev/) já faz. Ative estas regras no `biome.json`:
+
+  ```json
+  {
+    "linter": {
+      "rules": {
+        "correctness": {
+          "noUnusedVariables": "error",
+          "noUnusedImports": "error",
+          "noUnusedPrivateClassMembers": "error"
+        }
+      }
+    }
+  }
+  ```
+
+  Elas cobrem tudo o que `tsc` com `noUnusedLocals` pega num projeto JavaScript, e substituem o
+  truque de rodar `tsc` num `tsconfig` dedicado e filtrar os erros com `grep`.
+- **Formatação, estilo e tipos.** Use Biome e `tsc --noEmit`.
+
 ## Limitações atuais
 
 - **Só CommonJS** (`.js` e `.cjs`). ESM, TypeScript e `.mjs` ainda não são lidos.
 - **Dependências usadas só pela linha de comando** (`jest`, `@biomejs/biome`, `husky`...) aparecem
   como `unused-dependency`, porque nenhum arquivo as importa. Liste-as em `dependencies.ignore`.
-- **Variáveis locais sem uso ficam com o Biome** (`noUnusedVariables`, `noUnusedImports`). Ver o
-  [ponto 5](docs/mvp/05-locals-delegated-to-biome.md).
 
 ## Desenvolvimento
 
