@@ -10,6 +10,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 2. [Dependências usadas fora do código](02-dependencies-outside-code.md)
 - [x] 3. [Jest e Vitest](03-jest-and-vitest.md)
 - [x] 8. [`require` dinâmico com padrão](08-dynamic-require-patterns.md)
+- [x] 11. [Plugins internos](11-plugins.md)
 
 ## Depois
 

@@ -255,7 +255,8 @@ cargo llvm-cov --fail-under-lines 100 --fail-under-functions 100
 
 - `src/`: `config` (prunr.json), `facts` (o que um arquivo exige, importa e exporta),
   `resolve` (para onde aponta um `require` ou `import`), `scripts` (o que os `scripts` do
-  `package.json` rodam), `project` (o grafo), `checks`, `report` e `cli`.
+  `package.json` rodam), `plugins` (o que cada ferramenta, como Jest e Vitest, carrega por
+  convenção ou configuração), `project` (o grafo), `checks`, `report` e `cli`.
 - `tests/fixtures/<caso>/`: um mini projeto por comportamento, rodado por `tests/check.rs`.
 - `npm/`: o pacote `@prunr/prunr`, o launcher que executa o binário da plataforma e o script que
   publica tudo.
