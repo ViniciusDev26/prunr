@@ -15,9 +15,15 @@ const TEST_GLOBS: &[&str] = &[
     "__mocks__/**",
     "test/**",
     "tests/**",
-    "**/*.test.js",
-    "**/*.spec.js",
+    "**/*.test.*",
+    "**/*.spec.*",
 ];
+
+/// Entries of a TypeScript project, whose `main` usually points to the compiled output.
+const TYPESCRIPT_ENTRIES: &[&str] = &["index.ts", "src/index.ts", "src/main.ts"];
+
+/// Commands that run a source file: `node`, and the TypeScript runners.
+const RUNNERS: &[&str] = &["node", "tsx", "ts-node"];
 
 #[derive(Default, Deserialize)]
 struct Manifest {
@@ -41,11 +47,12 @@ pub fn init(root: &Path) -> Result<String, String> {
     let is_file = |path: &String| project.entries(std::slice::from_ref(path)).is_ok();
 
     let mut candidates = vec![manifest.main.unwrap_or_else(|| "index.js".into())];
+    candidates.extend(TYPESCRIPT_ENTRIES.iter().map(|entry| entry.to_string()));
     candidates.extend(
         manifest
             .scripts
             .values()
-            .filter_map(|script| node_script(script)),
+            .flat_map(|script| script_files(script)),
     );
     let production: BTreeSet<String> = candidates.into_iter().filter(is_file).collect();
     if production.is_empty() {
@@ -69,13 +76,16 @@ pub fn init(root: &Path) -> Result<String, String> {
     Ok(contents)
 }
 
-/// The file a script runs with `node`: `node --flag file.js` → `file.js`.
-fn node_script(script: &str) -> Option<String> {
-    let mut words = script.split_whitespace().skip_while(|word| *word != "node");
-    words.next()?;
-    words
-        .find(|word| !word.starts_with('-'))
+/// What may be the file a script runs: the arguments after `node`, `tsx` or `ts-node`
+/// (`tsx watch src/a.ts` → `watch`, `src/a.ts`). The caller keeps those that are files.
+fn script_files(script: &str) -> Vec<String> {
+    script
+        .split_whitespace()
+        .skip_while(|word| !RUNNERS.contains(word))
+        .skip(1)
+        .filter(|word| !word.starts_with('-'))
         .map(|file| file.trim_start_matches("./").to_string())
+        .collect()
 }
 
 #[cfg(test)]
@@ -130,8 +140,37 @@ mod tests {
                 "$schema": "https://unpkg.com/@prunr/prunr/schema.json",
                 "entries": {
                     "production": ["scripts/cli.js", "src/index.js", "workers/index.js"],
-                    "test": ["__tests__/**", "**/*.test.js", "**/*.spec.js"]
+                    "test": ["__tests__/**", "**/*.test.*", "**/*.spec.*"]
                 }
+            })
+        );
+    }
+
+    #[test]
+    fn a_typescript_project_gets_its_sources_and_tests() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{
+                    "main": "dist/index.js",
+                    "scripts": {
+                        "dev": "tsx watch src/server.ts",
+                        "seed": "ts-node --transpile-only scripts/seed.ts"
+                    }
+                }"#,
+            ),
+            ("src/index.ts", ""),
+            ("src/server.ts", ""),
+            ("scripts/seed.ts", ""),
+            ("src/a.test.ts", ""),
+            ("src/b.spec.tsx", ""),
+        ]);
+        init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir)["entries"],
+            serde_json::json!({
+                "production": ["scripts/seed.ts", "src/index.ts", "src/server.ts"],
+                "test": ["**/*.test.*", "**/*.spec.*"]
             })
         );
     }
