@@ -958,3 +958,16 @@ fn fix_says_which_file_it_could_not_change() {
         run.stderr
     );
 }
+
+#[test]
+fn a_jsdoc_import_type_uses_its_module() {
+    let run = check("jsdoc-imports");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           lib/not-jsdoc.js\n\
+         unused-export         lib/types.js: Draft\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
+}
