@@ -101,6 +101,53 @@ pub struct Facts {
     pub ignore_file: Option<u32>,
     /// Lines of `prunr-ignore-next-line` comments whose next line makes no export.
     pub stray_ignores: Vec<u32>,
+    /// Where each ignore comment is, by its line.
+    pub ignore_comments: BTreeMap<u32, Span>,
+    /// How to stop exporting each export.
+    pub export_removals: BTreeMap<Vec<String>, Removal>,
+    /// How to drop each import binding, by specifier and local name.
+    pub import_removals: BTreeMap<(String, String), Removal>,
+}
+
+/// How `prunr fix` takes an export or an import binding out of the code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Removal {
+    /// Delete these bytes: the `export` before a declaration, shared by the names it declares.
+    Prefix(Span),
+    /// Delete this statement or class member, as whole lines.
+    Statement(Span),
+    /// Drop item `index` of the comma-separated list at `items`. When every item goes, delete
+    /// `all` as whole lines, or just the items when there is no `all`.
+    Item {
+        items: Vec<Span>,
+        index: usize,
+        all: Option<Span>,
+    },
+    /// Drop specifier `index` of the ESM import at `statement`, which is rebuilt from `parts`;
+    /// when every specifier goes, the statement is deleted.
+    Import {
+        statement: Span,
+        index: usize,
+        parts: ImportParts,
+    },
+}
+
+/// An ESM import, in pieces of source text to rebuild it from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportParts {
+    /// `import` or `import type`.
+    pub keyword: String,
+    pub specifiers: Vec<(Specifier, String)>,
+    /// The quoted specifier, as written.
+    pub source: String,
+    pub semicolon: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Specifier {
+    Default,
+    Namespace,
+    Named,
 }
 
 /// Why an export is not reported.
@@ -136,13 +183,14 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
         sites: BTreeMap::new(),
         site: Span::default(),
         require_sites: BTreeMap::new(),
+        removal: None,
     };
     for node in semantic.nodes().iter() {
         match node.kind() {
             AstKind::CallExpression(call) if analyzer.is_global(&call.callee, "require") => {
                 analyzer.require(node.id(), call);
             }
-            AstKind::AssignmentExpression(assignment) => analyzer.assignment(assignment),
+            AstKind::AssignmentExpression(assignment) => analyzer.assignment(node.id(), assignment),
             AstKind::StaticMemberExpression(member) => analyzer.read(node.id(), member),
             AstKind::ImportDeclaration(import) => analyzer.import(import),
             AstKind::ImportExpression(import) => analyzer.dynamic_import(import),
@@ -154,6 +202,7 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
             AstKind::ExportAllDeclaration(export) => analyzer.export_all(export),
             AstKind::TSExportAssignment(export) => {
                 analyzer.site = export.span;
+                analyzer.removal = Some(Removal::Statement(export.span));
                 analyzer.module_exports(&export.expression);
             }
             _ => {}
@@ -179,6 +228,8 @@ struct Analyzer<'s, 'a> {
     site: Span,
     /// Where each specifier is first required, imported or reexported.
     require_sites: BTreeMap<String, u32>,
+    /// How to remove the exports being declared.
+    removal: Option<Removal>,
 }
 
 impl<'a> Analyzer<'_, 'a> {
@@ -205,9 +256,11 @@ impl<'a> Analyzer<'_, 'a> {
             let at = line(comment.span.start);
             if text.contains("prunr-ignore-file") {
                 self.facts.ignore_file.get_or_insert(at);
+                self.facts.ignore_comments.insert(at, comment.span);
                 continue;
             }
             let ignore = if text.contains("prunr-ignore-next-line") {
+                self.facts.ignore_comments.insert(at, comment.span);
                 Ignore::NextLine(at)
             } else if comment.is_jsdoc() && text.contains("@public") {
                 Ignore::Public
@@ -282,7 +335,28 @@ impl<'a> Analyzer<'_, 'a> {
         let mut unused = Vec::new();
         match self.semantic.nodes().parent_kind(node) {
             AstKind::VariableDeclarator(declarator) => {
-                self.pattern_uses(&declarator.id, &mut uses, &mut unused);
+                let nodes = self.semantic.nodes();
+                let statement = match nodes.parent_kind(nodes.parent_id(node)) {
+                    AstKind::VariableDeclaration(declaration)
+                        if declaration.declarations.len() == 1 =>
+                    {
+                        Some(declaration.span)
+                    }
+                    _ => None,
+                };
+                let mut removals = Vec::new();
+                self.pattern_uses(
+                    &declarator.id,
+                    statement,
+                    &mut uses,
+                    &mut unused,
+                    &mut removals,
+                );
+                for (name, removal) in removals {
+                    self.facts
+                        .import_removals
+                        .insert((specifier.clone(), name), removal);
+                }
             }
             AstKind::StaticMemberExpression(member) => {
                 uses.insert(Use {
@@ -356,6 +430,45 @@ impl<'a> Analyzer<'_, 'a> {
             .specifiers
             .as_deref()
             .map_or(&[][..], |s| s.as_slice());
+        let text = |span: Span| self.source[span.start as usize..span.end as usize].to_string();
+        let source = import.source.value.display().to_string();
+        if import.with_clause.is_none() && import.phase.is_none() {
+            let parts = ImportParts {
+                keyword: if import.import_kind.is_type() {
+                    "import type".into()
+                } else {
+                    "import".into()
+                },
+                specifiers: specifiers
+                    .iter()
+                    .map(|specifier| {
+                        let kind = match specifier {
+                            ImportDeclarationSpecifier::ImportDefaultSpecifier(_) => {
+                                Specifier::Default
+                            }
+                            ImportDeclarationSpecifier::ImportNamespaceSpecifier(_) => {
+                                Specifier::Namespace
+                            }
+                            ImportDeclarationSpecifier::ImportSpecifier(_) => Specifier::Named,
+                        };
+                        (kind, text(specifier.span()))
+                    })
+                    .collect(),
+                source: text(import.source.span),
+                semicolon: text(import.span).ends_with(';'),
+            };
+            for (index, specifier) in specifiers.iter().enumerate() {
+                let removal = Removal::Import {
+                    statement: import.span,
+                    index,
+                    parts: parts.clone(),
+                };
+                self.facts.import_removals.insert(
+                    (source.clone(), specifier.local().name.to_string()),
+                    removal,
+                );
+            }
+        }
         for specifier in specifiers {
             match specifier {
                 ImportDeclarationSpecifier::ImportSpecifier(named) => {
@@ -417,6 +530,13 @@ impl<'a> Analyzer<'_, 'a> {
         if !self.binding_uses(import.id.symbol_id(), &[], &mut uses) {
             unused.push(import.id.name.to_string());
         }
+        self.facts.import_removals.insert(
+            (
+                reference.expression.value.display().to_string(),
+                import.id.name.to_string(),
+            ),
+            Removal::Statement(import.span),
+        );
         self.required(
             &reference.expression.value.display().to_string(),
             import.span,
@@ -431,11 +551,15 @@ impl<'a> Analyzer<'_, 'a> {
     }
 
     /// What a `const <pattern> = require(...)` uses; bindings never referenced go to `unused`.
+    /// `statement` is the declaration to delete with the last binding, when it declares nothing
+    /// else; how to remove each binding goes to `removals`.
     fn pattern_uses(
         &self,
         pattern: &BindingPattern,
+        statement: Option<Span>,
         uses: &mut BTreeSet<Use>,
         unused: &mut Vec<String>,
+        removals: &mut Vec<(String, Removal)>,
     ) {
         let whole_module = Use {
             path: vec![],
@@ -446,12 +570,26 @@ impl<'a> Analyzer<'_, 'a> {
                 if !self.binding_uses(ident.symbol_id(), &[], uses) {
                     unused.push(ident.name.to_string());
                 }
+                if let Some(statement) = statement {
+                    removals.push((ident.name.to_string(), Removal::Statement(statement)));
+                }
             }
             BindingPattern::ObjectPattern(object) => {
                 if object.rest.is_some() {
                     uses.insert(whole_module.clone());
                 }
-                for property in &object.properties {
+                let items: Vec<Span> = object.properties.iter().map(|p| p.span).collect();
+                for (index, property) in object.properties.iter().enumerate() {
+                    if object.rest.is_none()
+                        && let BindingPattern::BindingIdentifier(ident) = &property.value
+                    {
+                        let removal = Removal::Item {
+                            items: items.clone(),
+                            index,
+                            all: statement,
+                        };
+                        removals.push((ident.name.to_string(), removal));
+                    }
                     let Some(name) = property.key.static_name() else {
                         uses.insert(whole_module.clone());
                         continue;
@@ -509,13 +647,23 @@ impl<'a> Analyzer<'_, 'a> {
     fn declare(&mut self, path: &Path) {
         self.exports.entry(path.clone()).or_insert(false);
         self.sites.entry(path.clone()).or_insert(self.site);
+        if let Some(removal) = &self.removal {
+            self.facts
+                .export_removals
+                .entry(path.clone())
+                .or_insert_with(|| removal.clone());
+        }
     }
 
-    fn assignment(&mut self, assignment: &AssignmentExpression<'a>) {
+    fn assignment(&mut self, node: NodeId, assignment: &AssignmentExpression<'a>) {
         let AssignmentTarget::StaticMemberExpression(target) = &assignment.left else {
             return;
         };
         self.site = assignment.span;
+        self.removal = match self.semantic.nodes().parent_kind(node) {
+            AstKind::ExpressionStatement(statement) => Some(Removal::Statement(statement.span)),
+            _ => None,
+        };
         if self.is_module_exports(target) {
             self.module_exports(&assignment.right);
         } else if self.is_exports_object(&target.object) {
@@ -527,11 +675,17 @@ impl<'a> Analyzer<'_, 'a> {
     /// `module.exports = value`.
     fn module_exports(&mut self, value: &Expression<'a>) {
         if let Expression::ObjectExpression(object) = value {
-            for property in &object.properties {
+            let items: Vec<Span> = object.properties.iter().map(|p| p.span()).collect();
+            for (index, property) in object.properties.iter().enumerate() {
                 if let ObjectPropertyKind::ObjectProperty(property) = property
                     && let Some(name) = property.key.static_name()
                 {
                     self.site = property.span;
+                    self.removal = Some(Removal::Item {
+                        items: items.clone(),
+                        index,
+                        all: None,
+                    });
                     self.export_value(vec![name.display().to_string()], &property.value);
                 }
             }
@@ -611,6 +765,10 @@ impl<'a> Analyzer<'_, 'a> {
                 let used = called.contains(&name);
                 member.push(name);
                 self.sites.entry(member.clone()).or_insert(method.span);
+                self.facts
+                    .export_removals
+                    .entry(member.clone())
+                    .or_insert(Removal::Statement(method.span));
                 self.exports.insert(member, used);
             }
         }
@@ -620,9 +778,15 @@ impl<'a> Analyzer<'_, 'a> {
 
     fn export_named(&mut self, export: &ExportNamedDeclaration<'a>) {
         self.facts.esm = true;
-        for specifier in &export.specifiers {
+        let items: Vec<Span> = export.specifiers.iter().map(|s| s.span).collect();
+        for (index, specifier) in export.specifiers.iter().enumerate() {
             let path = vec![specifier.exported.name().to_string()];
             self.site = specifier.span;
+            self.removal = Some(Removal::Item {
+                items: items.clone(),
+                index,
+                all: Some(export.span),
+            });
             self.declare(&path);
             let local = specifier.local.name();
             if let Some(symbol) = self
@@ -655,6 +819,10 @@ impl<'a> Analyzer<'_, 'a> {
     fn export_declaration(&mut self, export: &ExportDeclaration<'a>) {
         self.facts.esm = true;
         self.site = export.span;
+        self.removal = Some(Removal::Prefix(Span::new(
+            export.span.start,
+            export.declaration.span().start,
+        )));
         let idents = match &export.declaration {
             Declaration::VariableDeclaration(variables) => variables
                 .declarations
@@ -678,6 +846,23 @@ impl<'a> Analyzer<'_, 'a> {
         self.facts.esm = true;
         self.site = export.span;
         let path = vec!["default".to_string()];
+        let prefix = Removal::Prefix(Span::new(
+            export.span.start,
+            export.declaration.span().start,
+        ));
+        self.removal = match &export.declaration {
+            ExportDefaultDeclarationKind::FunctionDeclaration(function)
+                if function.id.is_some() =>
+            {
+                Some(prefix)
+            }
+            ExportDefaultDeclarationKind::ClassDeclaration(class) if class.id.is_some() => {
+                Some(prefix)
+            }
+            ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => Some(prefix),
+            ExportDefaultDeclarationKind::Identifier(_) => Some(Removal::Statement(export.span)),
+            _ => None,
+        };
         let id = match &export.declaration {
             ExportDefaultDeclarationKind::FunctionDeclaration(function) => function.id.as_ref(),
             ExportDefaultDeclarationKind::ClassDeclaration(class) => {
@@ -1537,6 +1722,201 @@ mod tests {
                 ("./f", 8),
                 ("require(`./p/${x}`)", 4),
                 ("require(x)", 3),
+            ]
+        );
+    }
+
+    // ---- removals, for `prunr fix` ----
+
+    /// The text of each span a removal names, and the index for an item.
+    fn removal(source: &str, removal: &Removal) -> String {
+        let text = |span: &Span| source[span.start as usize..span.end as usize].to_string();
+        match removal {
+            Removal::Prefix(span) => format!("prefix {:?}", text(span)),
+            Removal::Statement(span) => format!("statement {:?}", text(span)),
+            Removal::Item { items, index, all } => format!(
+                "item {index} of {:?}, all {:?}",
+                items.iter().map(text).collect::<Vec<_>>(),
+                all.as_ref().map(text)
+            ),
+            Removal::Import {
+                statement, index, ..
+            } => format!("import {index} of {:?}", text(statement)),
+        }
+    }
+
+    fn export_removals(path: &str, source: &str) -> Vec<(String, String)> {
+        let found = facts_at(path, source);
+        found
+            .export_removals
+            .iter()
+            .map(|(path, r)| (path.join("."), removal(source, r)))
+            .collect()
+    }
+
+    fn pairs(items: &[(&str, &str)]) -> Vec<(String, String)> {
+        items
+            .iter()
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn commonjs_exports_know_how_to_be_removed() {
+        assert_eq!(
+            export_removals(
+                "a.js",
+                "exports.a = 1;\nmodule.exports.b = () => {};\nuse(exports.c = 3);\n\
+                 class X { static m() {} }\nexports.X = X;"
+            ),
+            pairs(&[
+                ("X", "statement \"exports.X = X;\""),
+                ("X.m", "statement \"static m() {}\""),
+                ("a", "statement \"exports.a = 1;\""),
+                ("b", "statement \"module.exports.b = () => {};\""),
+            ])
+        );
+        assert_eq!(
+            export_removals("a.js", "module.exports = { a, b() {}, ...rest };"),
+            pairs(&[
+                ("a", "item 0 of [\"a\", \"b() {}\", \"...rest\"], all None"),
+                ("b", "item 1 of [\"a\", \"b() {}\", \"...rest\"], all None"),
+            ])
+        );
+        assert_eq!(
+            export_removals("a.js", "module.exports = function () {};"),
+            pairs(&[("default", "statement \"module.exports = function () {};\"")])
+        );
+        assert_eq!(
+            export_removals("a.ts", "function f() {}\nexport = f;"),
+            pairs(&[("default", "statement \"export = f;\"")])
+        );
+    }
+
+    #[test]
+    fn esm_exports_know_how_to_be_removed() {
+        assert_eq!(
+            export_removals(
+                "a.ts",
+                "export const a = 1, b = 2;\nexport function f() {}\nexport interface I {}\n\
+                 const c = 1;\nexport { c, c as d };"
+            ),
+            pairs(&[
+                ("I", "prefix \"export \""),
+                ("a", "prefix \"export \""),
+                ("b", "prefix \"export \""),
+                (
+                    "c",
+                    "item 0 of [\"c\", \"c as d\"], all Some(\"export { c, c as d };\")"
+                ),
+                (
+                    "d",
+                    "item 1 of [\"c\", \"c as d\"], all Some(\"export { c, c as d };\")"
+                ),
+                ("f", "prefix \"export \""),
+            ])
+        );
+        for (source, expected) in [
+            (
+                "export default function f() {}",
+                Some("prefix \"export default \""),
+            ),
+            (
+                "export default class C {}",
+                Some("prefix \"export default \""),
+            ),
+            (
+                "const a = 1;\nexport default a;",
+                Some("statement \"export default a;\""),
+            ),
+            ("export default function () {}", None),
+            ("export default 42;", None),
+        ] {
+            let found = export_removals("a.js", source);
+            let expected: Vec<(String, String)> = expected
+                .map(|e| ("default".to_string(), e.to_string()))
+                .into_iter()
+                .collect();
+            assert_eq!(found, expected, "{source}");
+        }
+    }
+
+    fn import_removals(path: &str, source: &str) -> Vec<(String, String)> {
+        let found = facts_at(path, source);
+        let mut found: Vec<(String, String)> = found
+            .import_removals
+            .iter()
+            .map(|((specifier, name), r)| (format!("{name} from {specifier}"), removal(source, r)))
+            .collect();
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn unused_requires_know_how_to_be_removed() {
+        assert_eq!(
+            import_removals(
+                "a.js",
+                "const x = require('./x');\nconst { a, b: c } = require('./y');\n\
+                 const z = require('./z'), other = 1;\nconst { d, ...rest } = require('./w');\n\
+                 const { e } = require('./v'), more = 2;"
+            ),
+            pairs(&[
+                (
+                    "a from ./y",
+                    "item 0 of [\"a\", \"b: c\"], all Some(\"const { a, b: c } = require('./y');\")"
+                ),
+                (
+                    "c from ./y",
+                    "item 1 of [\"a\", \"b: c\"], all Some(\"const { a, b: c } = require('./y');\")"
+                ),
+                ("e from ./v", "item 0 of [\"e\"], all None"),
+                ("x from ./x", "statement \"const x = require('./x');\""),
+            ])
+        );
+    }
+
+    #[test]
+    fn unused_imports_know_how_to_be_removed() {
+        assert_eq!(
+            import_removals(
+                "a.ts",
+                "import a, { b, c as d } from './x';\nimport * as ns from './y';\n\
+                 import e = require('./z');\nimport j from './j.json' with { type: 'json' };"
+            ),
+            pairs(&[
+                (
+                    "a from ./x",
+                    "import 0 of \"import a, { b, c as d } from './x';\""
+                ),
+                (
+                    "b from ./x",
+                    "import 1 of \"import a, { b, c as d } from './x';\""
+                ),
+                (
+                    "d from ./x",
+                    "import 2 of \"import a, { b, c as d } from './x';\""
+                ),
+                ("e from ./z", "statement \"import e = require('./z');\""),
+                ("ns from ./y", "import 0 of \"import * as ns from './y';\""),
+            ])
+        );
+    }
+
+    #[test]
+    fn ignore_comments_know_where_they_are() {
+        let source = "// prunr-ignore-next-line\nexport const a = 1;\n/* prunr-ignore-file */";
+        let found = facts(source);
+        let comments: Vec<(u32, &str)> = found
+            .ignore_comments
+            .iter()
+            .map(|(line, span)| (*line, &source[span.start as usize..span.end as usize]))
+            .collect();
+        assert_eq!(
+            comments,
+            [
+                (1, "// prunr-ignore-next-line"),
+                (3, "/* prunr-ignore-file */")
             ]
         );
     }
