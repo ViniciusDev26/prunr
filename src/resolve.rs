@@ -42,7 +42,8 @@ impl Resolver {
     /// Resolves `specifier` as Node.js (and TypeScript, for `paths`) would from the file `from`.
     /// A bare specifier is a package unless it resolves to a file outside `node_modules`.
     pub fn resolve(&self, from: &Path, specifier: &str) -> Target {
-        let local = specifier.starts_with(['.', '#']) || Path::new(specifier).is_absolute();
+        // `/x` is a path on every system, even where an absolute path needs a drive (Windows).
+        let local = specifier.starts_with(['.', '#', '/']) || Path::new(specifier).is_absolute();
         if !local && nodejs_built_in_modules::is_nodejs_builtin_module(specifier) {
             return Target::Builtin;
         }

@@ -51,8 +51,9 @@ com falso positivo leva alguém a apagar código vivo, então isso não é negoc
 
 ## Plugins
 
-Cada tecnologia JS/TS (Jest, Vitest, Next.js, NestJS, Vue...) é um plugin em `src/plugins/`,
-nunca um caso especial no núcleo (`facts`, `project`, `checks`). Para adicionar uma:
+Cada tecnologia JS/TS (Jest, Vitest, Vite, React, Next.js, NestJS, Vue...) é um plugin em
+`src/plugins/`, nunca um caso especial no núcleo (`facts`, `project`, `checks`). Para adicionar
+uma:
 
 1. Uma fixture em `tests/fixtures/<tecnologia>/` com a saída esperada, falhando.
 2. Um arquivo `src/plugins/<tecnologia>.rs` com um tipo que implementa `Plugin`: `name` é o pacote

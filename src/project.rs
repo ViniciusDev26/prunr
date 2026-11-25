@@ -326,6 +326,22 @@ fn plugin_files(patterns: &[String], files: &BTreeMap<FileId, File>) -> BTreeSet
         .collect()
 }
 
+/// The index in `dirs` of the package `file` belongs to: the one whose directory is the longest
+/// prefix of its path (the root, `""`, when none is).
+fn workspace_index<S: AsRef<str>>(dirs: &[S], file: &str) -> usize {
+    dirs.iter()
+        .enumerate()
+        .filter(|(_, dir)| {
+            let dir = dir.as_ref();
+            dir.is_empty()
+                || file
+                    .strip_prefix(dir)
+                    .is_some_and(|rest| rest.starts_with('/'))
+        })
+        .max_by_key(|(_, dir)| dir.as_ref().len())
+        .map_or(0, |(index, _)| index)
+}
+
 /// A glob over file ids, where `*` does not cross `/` and `**` does.
 fn glob(pattern: &str) -> Result<globset::GlobMatcher, globset::Error> {
     Ok(globset::GlobBuilder::new(pattern)
@@ -355,6 +371,24 @@ impl Project {
             .collect();
         let paths = source_files(&root);
         let resolver = Resolver::default();
+        let root_declared = manifests[0].declared();
+        // What the root declares is available to every package (hoisting, shared tools).
+        let visible: Vec<BTreeSet<String>> = manifests
+            .iter()
+            .map(|manifest| manifest.declared().union(&root_declared).cloned().collect())
+            .collect();
+        let contributions: Vec<crate::plugins::Contribution> = dirs
+            .iter()
+            .zip(&manifests)
+            .zip(&visible)
+            .map(|((dir, manifest), visible)| {
+                crate::plugins::contribution(&crate::plugins::Context {
+                    root: &root.join(dir),
+                    declared: visible,
+                    manifest: &serde_json::json!({ "jest": manifest.jest, "scripts": manifest.scripts }),
+                })
+            })
+            .collect();
         let mut analyzed = BTreeMap::new();
         for (path, id) in &paths {
             let source = std::fs::read_to_string(path).unwrap_or_default();
@@ -388,7 +422,25 @@ impl Project {
                     file.packages.insert(package);
                     Some(target)
                 }
-                None => file.link(resolver.resolve(from, specifier), specifier, &paths),
+                None => {
+                    let mut target = resolver.resolve(from, specifier);
+                    if target == Target::Unresolved && specifier.starts_with('/') {
+                        // A bundler's absolute specifier: from its public directory or root.
+                        let id = &paths[from];
+                        let index = workspace_index(&dirs, id);
+                        let package = root.join(&dirs[index]);
+                        let roots = &contributions[index].absolute_roots;
+                        if let Some(found) = roots
+                            .iter()
+                            .map(|dir| package.join(dir).join(&specifier[1..]))
+                            .map(|path| resolver.resolve(from, &path.to_string_lossy()))
+                            .find(|found| *found != Target::Unresolved)
+                        {
+                            target = found;
+                        }
+                    }
+                    file.link(target, specifier, &paths)
+                }
             };
         let mut files = BTreeMap::new();
         for (path, id) in &paths {
@@ -448,27 +500,20 @@ impl Project {
             file.facts = facts;
             files.insert(id.clone(), file);
         }
-        let root_declared = manifests[0].declared();
         let mut workspaces = Vec::new();
         let mut production_files = BTreeSet::new();
         let mut test_files = BTreeSet::new();
-        for (index, (dir, manifest)) in dirs.iter().zip(&manifests).enumerate() {
+        for (index, ((dir, manifest), plugins)) in
+            dirs.iter().zip(&manifests).zip(contributions).enumerate()
+        {
             let package = root.join(dir);
             let declared_packages = manifest.declared();
-            // What the root declares is available to every package (hoisting, shared tools).
-            let visible: BTreeSet<String> =
-                declared_packages.union(&root_declared).cloned().collect();
-            let binaries = binaries(&[package.clone(), root.clone()], &visible);
+            let binaries = binaries(&[package.clone(), root.clone()], &visible[index]);
             let script_packages = manifest
                 .scripts
                 .values()
                 .flat_map(|script| crate::scripts::packages(script, &binaries))
                 .collect();
-            let plugins = crate::plugins::contribution(&crate::plugins::Context {
-                root: &package,
-                declared: &visible,
-                manifest: &serde_json::json!({ "jest": manifest.jest, "scripts": manifest.scripts }),
-            });
             let in_package = |globs: &[String]| -> Vec<String> {
                 globs
                     .iter()
@@ -515,17 +560,8 @@ impl Project {
     /// The index in `workspaces` of the package `file` belongs to: the one whose directory is
     /// the longest prefix of its path.
     pub fn workspace_of(&self, file: &str) -> usize {
-        self.workspaces
-            .iter()
-            .enumerate()
-            .filter(|(_, workspace)| {
-                workspace.dir.is_empty()
-                    || file
-                        .strip_prefix(&workspace.dir)
-                        .is_some_and(|rest| rest.starts_with('/'))
-            })
-            .max_by_key(|(_, workspace)| workspace.dir.len())
-            .map_or(0, |(index, _)| index)
+        let dirs: Vec<&str> = self.workspaces.iter().map(|w| w.dir.as_str()).collect();
+        workspace_index(&dirs, file)
     }
 
     /// Leaves `packages` out of every dependency check.

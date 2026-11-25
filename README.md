@@ -27,8 +27,8 @@ depcheck + madge + scripts próprios.
   estáticos e `require` com caminho montado (`` require(`./handlers/${nome}`) ``).
 - **ESM e TypeScript no mesmo grafo**, com `paths` do `tsconfig.json` e interop CJS/ESM como no
   Node.
-- **Entende o seu stack** sem configuração: Jest, Vitest, Next.js, NestJS e monorepos (npm, yarn,
-  pnpm, bun, lerna, rush, nx, turbo).
+- **Entende o seu stack** sem configuração: Jest, Vitest, Vite, React, Next.js, NestJS e
+  monorepos (npm, yarn, pnpm, bun, lerna, rush, nx, turbo).
 - **Conserta sozinho:** `prunr fix` apaga o que está morto e limpa o `package.json`.
 - **Feito para CI:** anotações no diff do PR, só os achados novos com `--since`, e um baseline
   para adotar em código legado.
@@ -76,7 +76,7 @@ que só os testes alcançam está morto em produção.
 }
 ```
 
-Com Jest, Vitest, Next.js ou NestJS, boa parte disso o prunr acha sozinho. Todas as opções estão
+Com Jest, Vitest, Vite, Next.js ou NestJS, boa parte disso o prunr acha sozinho. Todas as opções estão
 em [Configuração](docs/guide/configuration.md).
 
 ## Comandos
@@ -128,7 +128,7 @@ Cada achado novo vira uma anotação na linha certa do diff. Para um código leg
 - [Configuração](docs/guide/configuration.md): o `prunr.json` e os `scripts` do `package.json`.
 - [Achados](docs/guide/checks.md): o que cada um significa, ESM e TypeScript, `require` dinâmico.
 - [`prunr fix`](docs/guide/fix.md): o que ele remove e o que deixa para você.
-- [Frameworks](docs/guide/frameworks.md): Jest, Vitest, Next.js e NestJS.
+- [Frameworks](docs/guide/frameworks.md): Jest, Vitest, Vite, React, Next.js e NestJS.
 - [Monorepos](docs/guide/monorepos.md): como os pacotes são encontrados e checados.
 - [Ignorar no código](docs/guide/ignore.md): exports públicos de propósito.
 - [CI e código legado](docs/guide/ci.md): anotações, `--since` e baseline.

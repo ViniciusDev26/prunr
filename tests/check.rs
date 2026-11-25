@@ -1105,3 +1105,17 @@ fn an_invalid_package_json_of_a_package_is_an_error_that_names_it() {
         run.stderr
     );
 }
+
+#[test]
+fn vite_starts_at_the_scripts_of_its_index_html() {
+    let run = check("vite-react");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/components/Dead.tsx\n\
+         unused-export         src/components/Button.tsx: unusedSize\n\
+         unresolved-require    src/components/Button.tsx: /gone.svg (warning)\n\
+         \n\
+         errors: 2, warnings: 1\n"
+    );
+}

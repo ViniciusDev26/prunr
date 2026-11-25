@@ -21,7 +21,7 @@ Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir
 
 | Opção | Obrigatória | O que é |
 |---|---|---|
-| `entries.production` | sim | Caminhos ou globs dos arquivos por onde o programa começa. Tudo o que eles alcançam, direta ou indiretamente, está vivo. Com Next.js ou NestJS, pode ficar vazio (`[]`): veja [Frameworks](frameworks.md). |
+| `entries.production` | sim | Caminhos ou globs dos arquivos por onde o programa começa. Tudo o que eles alcançam, direta ou indiretamente, está vivo. Com Vite, Next.js ou NestJS, pode ficar vazio (`[]`): veja [Frameworks](frameworks.md). |
 | `$schema` | não | O JSON Schema do arquivo, para autocompletar e validar no editor. |
 | `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. Com Jest ou Vitest, liste só o que o runner não acha sozinho. |
 | `dependencies.ignore` | não | Pacotes que ficam de fora das verificações de dependência: os carregados de um jeito que nem o grafo nem os `scripts` mostram (um plugin citado no arquivo de configuração de outra ferramenta). |
