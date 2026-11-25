@@ -31,7 +31,7 @@ fazer merge do PR de release.
 - **Trusted publishing (OIDC) desde o primeiro release, sem token npm.** Como o npm só configura
   OIDC num pacote que já existe, cada pacote foi criado uma vez, à mão, na máquina de um
   mantenedor (com 2FA): um placeholder `0.0.0` depreciado e `npm trust` ligando-o ao workflow
-  `release.yml`. O passo a passo está no README, em *Um pacote npm novo*; não há script, porque
+  `release.yml`. O passo a passo está no [CONTRIBUTING](../../CONTRIBUTING.md), em *Um pacote npm novo*; não há script, porque
   é feito uma vez por pacote.
 - **`RELEASE_PLEASE_TOKEN`:** um token próprio para o release-please, porque PRs abertos com o
   `GITHUB_TOKEN` não disparam workflows e o PR de release não passaria pelo ruleset.
