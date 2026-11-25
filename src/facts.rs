@@ -10,8 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
-    Argument, AssignmentExpression, AssignmentTarget, BindingPattern, CallExpression, Class,
-    ClassElement, Expression, MethodDefinitionKind, ObjectPropertyKind, StaticMemberExpression,
+    Argument, AssignmentExpression, AssignmentTarget, BinaryOperator, BindingPattern,
+    CallExpression, Class, ClassElement, Expression, MethodDefinitionKind, ObjectPropertyKind,
+    StaticMemberExpression, TemplateLiteral,
 };
 use oxc_parser::Parser;
 use oxc_semantic::{NodeId, Semantic, SemanticBuilder, SymbolId};
@@ -40,13 +41,24 @@ pub struct Export {
     pub used_internally: bool,
 }
 
+/// A `require()` whose specifier is built at runtime from a relative prefix, as a glob relative
+/// to the file: `` require(`./handlers/${name}`) `` → `./handlers/*`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pattern {
+    /// The source text of the `require()`.
+    pub source: String,
+    pub glob: String,
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Facts {
     pub requires: Vec<Require>,
     pub exports: Vec<Export>,
     /// `module.exports` is assigned something other than an object literal.
     pub default_export: bool,
-    /// Source text of each `require()` whose specifier is not a static string.
+    /// `require()`s whose specifier is a pattern; each uses every file it matches whole.
+    pub patterns: Vec<Pattern>,
+    /// Source text of each `require()` whose specifier is neither a static string nor a pattern.
     pub dynamic_requires: Vec<String>,
 }
 
@@ -149,8 +161,13 @@ impl<'a> Analyzer<'_, 'a> {
             _ => None,
         };
         let Some(specifier) = specifier else {
-            let text = &self.source[call.span.start as usize..call.span.end as usize];
-            self.facts.dynamic_requires.push(text.to_string());
+            let source = self.source[call.span.start as usize..call.span.end as usize].to_string();
+            match call.arguments.as_slice() {
+                [argument] if let Some(glob) = argument.as_expression().and_then(pattern) => {
+                    self.facts.patterns.push(Pattern { source, glob });
+                }
+                _ => self.facts.dynamic_requires.push(source),
+            }
             return;
         };
         let mut uses = BTreeSet::new();
@@ -363,6 +380,57 @@ impl<'a> Analyzer<'_, 'a> {
     }
 }
 
+/// The glob a specifier built at runtime can match, when it starts with a relative path.
+fn pattern(expression: &Expression) -> Option<String> {
+    let mut parts = Vec::new();
+    pattern_parts(expression, &mut parts);
+    match parts.first() {
+        Some(Some(prefix)) if prefix.starts_with("./") || prefix.starts_with("../") => {}
+        _ => return None,
+    }
+    let mut glob = String::new();
+    for part in parts {
+        match part {
+            Some(text) => glob.extend(text.chars().map(|c| match c {
+                '*' | '?' | '[' | ']' | '{' | '}' => format!("[{c}]"),
+                c => c.to_string(),
+            })),
+            None if glob.ends_with('*') && !glob.ends_with("[*]") => {}
+            None => glob.push('*'),
+        }
+    }
+    Some(glob)
+}
+
+/// The literal text (`Some`) and runtime values (`None`) a specifier is concatenated from.
+fn pattern_parts(expression: &Expression, parts: &mut Vec<Option<String>>) {
+    match expression {
+        Expression::StringLiteral(literal) => parts.push(Some(literal.value.display().to_string())),
+        Expression::TemplateLiteral(template) => template_parts(template, parts),
+        Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::Addition => {
+            pattern_parts(&binary.left, parts);
+            pattern_parts(&binary.right, parts);
+        }
+        _ => parts.push(None),
+    }
+}
+
+fn template_parts(template: &TemplateLiteral, parts: &mut Vec<Option<String>>) {
+    for (index, quasi) in template.quasis.iter().enumerate() {
+        let text = quasi
+            .value
+            .cooked
+            .map(|c| c.display().to_string())
+            .unwrap_or_default();
+        if !text.is_empty() {
+            parts.push(Some(text));
+        }
+        if index < template.expressions.len() {
+            parts.push(None);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -426,11 +494,76 @@ mod tests {
 
     #[test]
     fn a_dynamic_require_is_reported_by_its_source() {
-        let facts = facts("const name = 'x'; require(name); require(`./${name}`); require();");
+        let facts = facts("const name = 'x'; require(name); require(`${name}/x`); require();");
         assert_eq!(facts.requires, []);
         assert_eq!(
             facts.dynamic_requires,
-            ["require(name)", "require(`./${name}`)", "require()"]
+            ["require(name)", "require(`${name}/x`)", "require()"]
+        );
+    }
+
+    fn patterns_of(source: &str) -> Vec<(String, String)> {
+        let facts = facts(source);
+        assert_eq!(facts.requires, []);
+        assert_eq!(facts.dynamic_requires, Vec::<String>::new());
+        facts
+            .patterns
+            .into_iter()
+            .map(|p| (p.source, p.glob))
+            .collect()
+    }
+
+    fn pattern(source: &str, glob: &str) -> (String, String) {
+        (source.to_string(), glob.to_string())
+    }
+
+    #[test]
+    fn a_template_require_with_a_relative_prefix_is_a_pattern() {
+        assert_eq!(
+            patterns_of("require(`./handlers/${a}/${b}.js`); require(`../up/${a}${b}`);"),
+            [
+                pattern("require(`./handlers/${a}/${b}.js`)", "./handlers/*/*.js"),
+                pattern("require(`../up/${a}${b}`)", "../up/*"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_concatenated_require_with_a_relative_prefix_is_a_pattern() {
+        assert_eq!(
+            patterns_of(r#"require("./jobs/" + name + ".job.js"); require('./a/' + `b` + x);"#),
+            [
+                pattern(
+                    r#"require("./jobs/" + name + ".job.js")"#,
+                    "./jobs/*.job.js"
+                ),
+                pattern("require('./a/' + `b` + x)", "./a/b*"),
+            ]
+        );
+    }
+
+    #[test]
+    fn glob_characters_in_a_pattern_are_literal() {
+        assert_eq!(
+            patterns_of("require(`./[x]{y}?*/${a}`);"),
+            [pattern(
+                "require(`./[x]{y}?*/${a}`)",
+                "./[[]x[]][{]y[}][?][*]/*"
+            )]
+        );
+    }
+
+    #[test]
+    fn a_pattern_without_a_relative_prefix_is_dynamic() {
+        let facts = facts(r#"require(`/abs/${a}`); require(a + "./x"); require("x" - a);"#);
+        assert_eq!(facts.patterns, []);
+        assert_eq!(
+            facts.dynamic_requires,
+            [
+                "require(`/abs/${a}`)",
+                r#"require(a + "./x")"#,
+                r#"require("x" - a)"#
+            ]
         );
     }
 

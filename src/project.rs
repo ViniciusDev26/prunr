@@ -111,6 +111,37 @@ fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
     files
 }
 
+/// The files other than `from` that a require pattern in `from` can load: those the glob
+/// matches with or without their extension, and directories through their index file.
+fn matching<'f>(from: &FileId, glob: &str, files: impl Iterator<Item = &'f FileId>) -> Vec<FileId> {
+    let mut segments: Vec<&str> = from.split('/').collect();
+    segments.pop();
+    for segment in glob.split('/') {
+        match segment {
+            "." => {}
+            ".." if segments.pop().is_none() => return Vec::new(),
+            ".." => {}
+            segment => segments.push(segment),
+        }
+    }
+    let glob = globset::GlobBuilder::new(&segments.join("/"))
+        .literal_separator(true)
+        .build()
+        .expect("a require pattern escapes its literal text")
+        .compile_matcher();
+    let mut targets: Vec<FileId> = files
+        .filter(|id| *id != from)
+        .filter(|id| {
+            let stem = id.rsplit_once('.').map_or(id.as_str(), |(stem, _)| stem);
+            let directory = stem.strip_suffix("/index");
+            glob.is_match(id) || glob.is_match(stem) || directory.is_some_and(|d| glob.is_match(d))
+        })
+        .cloned()
+        .collect();
+    targets.sort();
+    targets
+}
+
 impl Project {
     /// Reads every `.js` and `.cjs` file under `root`, skipping `node_modules` and what
     /// `.gitignore` ignores.
@@ -142,6 +173,21 @@ impl Project {
                     }
                     Target::Builtin => {}
                     Target::Unresolved => file.unresolved.push(require.specifier.clone()),
+                }
+            }
+            for pattern in &facts.patterns {
+                let targets = matching(id, &pattern.glob, paths.values());
+                if targets.is_empty() {
+                    file.unresolved.push(pattern.source.clone());
+                }
+                for target in targets {
+                    file.edges.push(Edge {
+                        target,
+                        uses: vec![Use {
+                            path: vec![],
+                            whole: true,
+                        }],
+                    });
                 }
             }
             file.unresolved
@@ -304,6 +350,63 @@ mod tests {
         );
         assert_eq!(index.packages, BTreeSet::from(["lodash".to_string()]));
         assert_eq!(index.unresolved, ["./missing", "require(name)"]);
+    }
+
+    fn whole() -> Vec<Use> {
+        vec![Use {
+            path: vec![],
+            whole: true,
+        }]
+    }
+
+    fn targets(file: &File) -> Vec<&str> {
+        file.edges.iter().map(|edge| edge.target.as_str()).collect()
+    }
+
+    #[test]
+    fn a_pattern_uses_every_file_it_matches_whole() {
+        let dir = project(&[
+            (
+                "lib/index.js",
+                "require(`./${a}`); require(`../jobs/${a}.job.js`); require(`./sub/${a}`);",
+            ),
+            ("lib/a.js", ""),
+            ("lib/sub/index.js", ""),
+            ("lib/sub/deep/b.js", ""),
+            ("jobs/daily.job.js", ""),
+            ("jobs/daily.js", ""),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        let index = &project.files["lib/index.js"];
+        assert_eq!(
+            targets(index),
+            [
+                "lib/a.js",
+                "lib/sub/index.js",
+                "jobs/daily.job.js",
+                "lib/sub/index.js"
+            ],
+            "a file never matches its own pattern, and a directory matches its index"
+        );
+        assert!(index.edges.iter().all(|edge| edge.uses == whole()));
+        assert!(index.unresolved.is_empty(), "{:?}", index.unresolved);
+    }
+
+    #[test]
+    fn a_pattern_that_matches_nothing_is_unresolved() {
+        let dir = project(&[(
+            "index.js",
+            "require(`./nope/${a}`); require(`../outside/${a}`); require(`./${a}`);",
+        )]);
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.files["index.js"].unresolved,
+            [
+                "require(`./nope/${a}`)",
+                "require(`../outside/${a}`)",
+                "require(`./${a}`)"
+            ]
+        );
     }
 
     #[test]
