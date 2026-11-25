@@ -617,6 +617,21 @@ mod tests {
     }
 
     #[test]
+    fn reading_a_name_that_was_never_exported_is_not_an_export() {
+        let facts = facts("exports.b = 1; exports.a();");
+        assert_eq!(facts.exports, [export(&["b"], false)]);
+    }
+
+    #[test]
+    fn exporting_a_global_is_an_export_the_file_does_not_use() {
+        let facts = facts("module.exports = { log: console, env: process.env };");
+        assert_eq!(
+            facts.exports,
+            [export(&["env"], false), export(&["log"], false)]
+        );
+    }
+
+    #[test]
     fn shadowed_module_and_exports_are_not_exports() {
         let facts = facts("function f(exports, module) { exports.a = 1; module.exports = {}; }");
         assert_eq!(facts.exports, []);

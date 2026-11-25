@@ -221,5 +221,8 @@ fn an_unknown_command_is_a_usage_error() {
 fn an_entry_that_is_not_a_javascript_file_is_an_error() {
     let run = check("entry-not-javascript");
     assert_eq!(run.code, 2);
-    assert_eq!(run.stderr, "error: entry is not a .js or .cjs file: index.ts\n");
+    assert_eq!(
+        run.stderr,
+        "error: entry is not a .js or .cjs file: index.ts\n"
+    );
 }

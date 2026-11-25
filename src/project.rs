@@ -306,10 +306,10 @@ mod tests {
     fn a_file_that_does_not_parse_is_an_error() {
         let dir = project(&[("lib/broken.js", "const = ;")]);
         let error = Project::load(dir.path()).unwrap_err();
-        let ProjectError::Parse { file, .. } = &error else {
-            panic!("{error:?}");
-        };
-        assert_eq!(file, "lib/broken.js");
+        assert!(
+            matches!(&error, ProjectError::Parse { file, .. } if file == "lib/broken.js"),
+            "{error:?}"
+        );
         assert!(error.to_string().starts_with("lib/broken.js: "), "{error}");
     }
 
