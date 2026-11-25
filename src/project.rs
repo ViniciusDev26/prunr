@@ -471,6 +471,11 @@ impl Project {
                 }
                 None => {
                     let mut target = resolver.resolve(from, specifier);
+                    if let Target::File(path) = &target
+                        && crate::stylesheets::is_stylesheet(path)
+                    {
+                        file.packages.extend(crate::stylesheets::packages(path));
+                    }
                     if target == Target::Unresolved && specifier.starts_with('/') {
                         // A bundler's absolute specifier: from its public directory or root.
                         let id = &paths[from];
