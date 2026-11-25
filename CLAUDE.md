@@ -49,6 +49,20 @@ com falso positivo leva alguém a apagar código vivo, então isso não é negoc
 - **Teste de aceite** contra um projeto CommonJS real de referência, rodado localmente (privado,
   fora do CI).
 
+## Plugins
+
+Cada tecnologia JS/TS (Jest, Vitest, Next.js, NestJS, Vue...) é um plugin em `src/plugins/`,
+nunca um caso especial no núcleo (`facts`, `project`, `checks`). Para adicionar uma:
+
+1. Uma fixture em `tests/fixtures/<tecnologia>/` com a saída esperada, falhando.
+2. Um arquivo `src/plugins/<tecnologia>.rs` com um tipo que implementa `Plugin`: `name` é o pacote
+   que o ativa; `contribute` lê a configuração com `static_config` (nunca a executa) e acrescenta
+   à `Contribution`. Os testes unitários ficam no próprio arquivo.
+3. O plugin entra em `PLUGINS`, e o teste que fixa essa lista é atualizado.
+4. Se a `Contribution` não tem o campo de que o plugin precisa (entradas de produção por
+   convenção, exports lidos pelo framework), o campo nasce junto com esse plugin, e o núcleo
+   passa a usá-lo nesse mesmo PR.
+
 ## Commits e PRs
 
 - **Tudo em inglês:** mensagens de commit, títulos de PR e corpos de PR.

@@ -12,7 +12,8 @@ Os pontos de entrada vêm da convenção do framework, sem listar cada arquivo n
   não são reportados.
 - **NestJS:** `main.ts` é a entrada; classes registradas em `@Module({ imports, controllers,
   providers })` são usadas mesmo que nenhum código as chame diretamente.
-- Detecção pelo pacote declarado (`next`, `@nestjs/core`), como no item 3.
+- Um plugin para cada um ([item 11](11-plugins.md)), ativado pelo pacote declarado (`next`,
+  `@nestjs/core`), como os de Jest e Vitest.
 - Depende do [item 1](01-esm-and-typescript.md).
 
 ## Critérios de aceite
