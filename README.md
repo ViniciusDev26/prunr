@@ -77,6 +77,7 @@ erro, para que um erro de digitação não passe em silêncio.
 |---|---|
 | `unused-file` | Nenhuma entrada de produção alcança o arquivo. Se só os testes o alcançam, a linha diz `(only tests use it)`: apague-o junto com os testes. |
 | `unused-export` | Nenhum arquivo de produção usa o export, nem o próprio arquivo onde ele está. Métodos estáticos de uma classe exportada contam como exports (`Invoice.total`). Também marca `(only tests use it)`. |
+| `unused-import` | Um `require` declara um binding que o arquivo nunca usa (`const x = require("./x")`, ou uma propriedade desestruturada). Um `require("./x");` sozinho, por efeito colateral, não conta. |
 | `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa. |
 | `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o importam: ele pertence a `devDependencies`. |
 | `missing-dependency` | O arquivo importa um pacote que o `package.json` não declara. |
@@ -132,7 +133,7 @@ errors: 7, warnings: 1
 
 ## O que o prunr não faz
 
-- **Variáveis, imports e membros privados sem uso dentro de um arquivo.** Isso é trabalho de
+- **Variáveis, funções e membros privados sem uso dentro de um arquivo.** Isso é trabalho de
   linter, e o [Biome](https://biomejs.dev/) já faz. Ative estas regras no `biome.json`:
 
   ```json
@@ -141,7 +142,6 @@ errors: 7, warnings: 1
       "rules": {
         "correctness": {
           "noUnusedVariables": "error",
-          "noUnusedImports": "error",
           "noUnusedPrivateClassMembers": "error"
         }
       }
@@ -149,8 +149,12 @@ errors: 7, warnings: 1
   }
   ```
 
-  Elas cobrem tudo o que `tsc` com `noUnusedLocals` pega num projeto JavaScript, e substituem o
-  truque de rodar `tsc` num `tsconfig` dedicado e filtrar os erros com `grep`.
+  Junto com o `unused-import` do prunr, elas cobrem tudo o que `tsc` com `noUnusedLocals` pega
+  num projeto JavaScript, e substituem o truque de rodar `tsc` num `tsconfig` dedicado e filtrar
+  os erros com `grep`.
+
+  Imports sem uso são do prunr, e não só do linter: um `require` esquecido mantém o arquivo
+  exigido "vivo" e faz a dependência parecer usada, escondendo outros achados.
 - **Formatação, estilo e tipos.** Use Biome e `tsc --noEmit`.
 
 ## Limitações atuais
