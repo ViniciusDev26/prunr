@@ -28,6 +28,26 @@ Na dúvida, o prunr é conservador: quando o resultado de um `require` é passad
 acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um
 export morto do que reportar um vivo.
 
+## Folhas de estilo
+
+Um arquivo que importa uma folha de estilo (`import "./globals.css"`, também `.scss`, `.sass`,
+`.less` e `.pcss`) usa os pacotes que ela carrega:
+
+```css
+@import "tailwindcss";
+@import url("normalize.css");
+@plugin "daisyui";
+@import "./fonts.css"; /* lida também, e os pacotes dela contam */
+```
+
+- Contam `@import`, `@use`, `@forward`, `@plugin`, `@reference` e `@config`, com aspas ou
+  `url(...)`, fora de comentários.
+- Um nome sem `./` que aponta para um arquivo ao lado da folha (`@import "variables"`, o parcial
+  `_mixins.scss` do Sass) é local, como no Sass e no `postcss-import`; senão é um pacote. O `~`
+  do webpack é ignorado, e endereços (`https://...`) e módulos do Sass (`sass:math`) ficam de
+  fora.
+- O uso é do mesmo tipo do arquivo que importa: produção ou teste.
+
 ## `require` dinâmico
 
 Um `require` montado em tempo de execução a partir de um caminho relativo vira um padrão:

@@ -1,0 +1,12 @@
+{
+  "name": "css-imports",
+  "private": true,
+  "dependencies": {
+    "tailwindcss": "^4.0.0",
+    "normalize.css": "^8.0.0",
+    "@fontsource/inter": "^5.0.0",
+    "bootstrap": "^5.0.0",
+    "daisyui": "^5.0.0",
+    "unused-lib": "1.0.0"
+  }
+}

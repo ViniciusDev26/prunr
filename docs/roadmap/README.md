@@ -21,6 +21,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 17. [Os arquivos que os scripts rodam são entradas](17-script-entries.md)
 - [x] 18. [Dependências exigidas como peer](18-peer-dependencies.md)
 - [x] 19. [Playwright, Drizzle Kit, PostCSS e Vitest `projects`](19-tooling-plugins.md)
+- [x] 20. [Imports em folhas de estilo](20-stylesheet-imports.md)
 
 ## Depois
 

@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@import url("normalize.css");
+@import './fonts.css' layer(base);
+@plugin "daisyui";
+/* @import "commented-out"; */
+@import "https://fonts.googleapis.com/css2?family=Inter";
+@import "variables";
