@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/ViniciusDev26/prunr/compare/v0.2.1...v0.3.0) (2026-11-25)
+
+
+### Features
+
+* monorepos are one graph with dependencies checked per package ([#33](https://github.com/ViniciusDev26/prunr/issues/33)) ([7be094f](https://github.com/ViniciusDev26/prunr/commit/7be094f53bb8c7b2e49145966b2083a3e572283e))
+* next.js routes and the nestjs main are entries by convention ([#32](https://github.com/ViniciusDev26/prunr/issues/32)) ([9611941](https://github.com/ViniciusDev26/prunr/commit/96119417ff90923fe56d95e78a1925ce044b3c1d))
+* prunr fix deletes the declaration an export leaves unused ([#31](https://github.com/ViniciusDev26/prunr/issues/31)) ([bb6170c](https://github.com/ViniciusDev26/prunr/commit/bb6170c87ba334efb255a77b93d6292eb6a24143))
+
+
+### Documentation
+
+* roadmap items for fix declarations, test-only, plugin toggles and name-loaded packages ([#29](https://github.com/ViniciusDev26/prunr/issues/29)) ([b36b719](https://github.com/ViniciusDev26/prunr/commit/b36b7190eb53c60ff9760a02a2fb30b061a98482))
+
 ## [0.2.1](https://github.com/ViniciusDev26/prunr/compare/v0.2.0...v0.2.1) (2026-11-25)
 
 
