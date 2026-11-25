@@ -19,6 +19,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 12. [`prunr fix` apaga a declaração que fica sem uso](12-fix-removes-declarations.md)
 - [x] 16. [Vite e React](16-vite-and-react.md)
 - [x] 17. [Os arquivos que os scripts rodam são entradas](17-script-entries.md)
+- [x] 19. [Playwright, Drizzle Kit, PostCSS e Vitest `projects`](19-tooling-plugins.md)
 
 ## Depois
 

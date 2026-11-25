@@ -1,0 +1,1 @@
+{ "entries": { "production": ["apps/web/src/index.js", "packages/core/src/index.js"] } }

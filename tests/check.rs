@@ -1135,3 +1135,45 @@ fn the_files_scripts_run_are_entries() {
          errors: 5, warnings: 0\n"
     );
 }
+
+#[test]
+fn playwright_runs_its_test_dir_setup_reporters_and_web_servers() {
+    let run = check("playwright");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/dead.js\n\nerrors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
+fn drizzle_kit_loads_its_config_and_schema() {
+    let run = check("drizzle");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/db/dead.ts\n\nerrors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
+fn postcss_loads_the_plugins_its_config_names() {
+    let run = check("postcss");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     unused-lib\n\nerrors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
+fn vitest_reads_the_config_of_each_project() {
+    let run = check("vitest-projects");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           apps/web/src/only-tests.js (only tests use it)\n\
+         \n\
+         errors: 1, warnings: 0\n"
+    );
+}

@@ -22,7 +22,7 @@ impl Plugin for Vite {
             serde_json::Value::Bool(false) => None,
             dir => Some(dir.as_str().unwrap_or("public")),
         };
-        let absolute_roots = public.map(|dir| normalize(&Path::new(vite_root).join(dir)));
+        let absolute_roots = public.map(|dir| super::normalize(&Path::new(vite_root).join(dir)));
         contribution.absolute_roots.extend(absolute_roots);
         contribution.absolute_roots.push(vite_root.to_string());
         let pages = ignore::WalkBuilder::new(context.root)
@@ -45,7 +45,7 @@ impl Plugin for Vite {
                     Some(path) => Path::new(vite_root).join(path),
                     None => dir.join(src),
                 };
-                let path = normalize(&path);
+                let path = super::normalize(&path);
                 contribution.production.push(globset::escape(&path));
             }
         }
@@ -103,21 +103,6 @@ fn attributes(tag: &str) -> Vec<(&str, &str)> {
         rest = next;
     }
     found
-}
-
-/// A relative path with `.` and `..` resolved and `/` separators.
-fn normalize(path: &Path) -> String {
-    let mut parts: Vec<String> = Vec::new();
-    for part in path.components() {
-        match part {
-            std::path::Component::ParentDir => {
-                parts.pop();
-            }
-            std::path::Component::Normal(part) => parts.push(part.to_string_lossy().into()),
-            _ => {}
-        }
-    }
-    parts.join("/")
 }
 
 #[cfg(test)]
