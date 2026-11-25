@@ -1,0 +1,6 @@
+{
+  "name": "fixture",
+  "private": true,
+  "dependencies": { "left-pad": "1.0.0" },
+  "devDependencies": { "jest": "30.0.0", "husky": "9.0.0" }
+}

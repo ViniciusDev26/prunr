@@ -38,12 +38,24 @@ Exemplo (ilustrativo):
 - `dependencies.ignore`: pacotes carregados por meios que o grafo não vê (plugins, tipos).
 - `baseline`: opcional (ver [ponto 3](03-shrinking-baseline.md)).
 
+### Decisões tomadas na implementação
+
+- **Sem a opção `ignore` de arquivos.** O `.gitignore` já tira arquivos do grafo e nenhum
+  critério precisa dela; ela entra quando um caso real pedir.
+- **`dependencies.ignore` entrou**, porque todo projeto real tem pacotes usados só pela linha de
+  comando (`jest`, `husky`), que nenhum arquivo importa.
+- **O schema é gerado do próprio código** (`prunr schema`) e publicado como `schema.json`. Um
+  teste falha se os dois divergirem.
+- **`prunr init`** propõe as entradas a partir do `main` e dos scripts `node <arquivo>` do
+  `package.json`, e os globs de teste comuns que casam com algum arquivo. Não sobrescreve um
+  `prunr.json` existente.
+
 ## Critérios de aceite
 
-- [ ] Sem `prunr.json` → erro claro e código de saída `2`.
-- [ ] JSON Schema publicado junto com o pacote; o config é validado contra ele.
-- [ ] Chave desconhecida → erro (um erro de digitação não pode passar em silêncio).
-- [ ] Glob de entrada que não casa com nenhum arquivo → erro, citando o glob.
-- [ ] `prunr init` gera um `prunr.json` inicial a partir do `main` e dos `scripts` do
+- [x] Sem `prunr.json` → erro claro e código de saída `2`.
+- [x] JSON Schema publicado junto com o pacote; o config é validado contra ele.
+- [x] Chave desconhecida → erro (um erro de digitação não pode passar em silêncio).
+- [x] Glob de entrada que não casa com nenhum arquivo → erro, citando o glob.
+- [x] `prunr init` gera um `prunr.json` inicial a partir do `main` e dos `scripts` do
       `package.json`, como ponto de partida. A partir daí o arquivo é editado à mão e nada é
       inferido em tempo de execução.
