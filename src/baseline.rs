@@ -8,12 +8,25 @@ use crate::checks::Finding;
 
 /// The findings in the baseline file at `path`; none when it does not exist yet.
 pub fn read(path: &Path) -> Result<Vec<Finding>, String> {
-    todo!()
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Ok(Vec::new());
+    };
+    serde_json::from_str(&text).map_err(|e| format!("invalid baseline {}: {e}", name(path)))
+}
+
+fn name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 /// Writes the findings that are errors, sorted, so the file is the same for the same findings.
 pub fn write(path: &Path, findings: &[Finding]) -> Result<usize, String> {
-    todo!()
+    let mut errors: Vec<&Finding> = findings.iter().filter(|f| !f.is_warning()).collect();
+    errors.sort();
+    let text = serde_json::to_string_pretty(&errors).expect("findings serialize") + "\n";
+    std::fs::write(path, text).map_err(|e| format!("cannot write {}: {e}", name(path)))?;
+    Ok(errors.len())
 }
 
 /// Findings split against the baseline.
@@ -26,7 +39,16 @@ pub struct Diff {
 }
 
 pub fn diff(findings: Vec<Finding>, known: &[Finding]) -> Diff {
-    todo!()
+    let stale = known
+        .iter()
+        .filter(|entry| !findings.contains(entry))
+        .cloned()
+        .collect();
+    let fresh = findings
+        .into_iter()
+        .filter(|finding| !known.contains(finding))
+        .collect();
+    Diff { fresh, stale }
 }
 
 #[cfg(test)]

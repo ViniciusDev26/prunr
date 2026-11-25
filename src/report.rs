@@ -5,8 +5,9 @@ use serde::Serialize;
 use crate::checks::Finding;
 
 /// One line per finding and a summary, for people.
-pub fn human(findings: &[Finding]) -> String {
-    if findings.is_empty() {
+/// `stale` are baseline entries no longer found.
+pub fn human(findings: &[Finding], stale: &[Finding]) -> String {
+    if findings.is_empty() && stale.is_empty() {
         return "No findings.\n".into();
     }
     let mut out = String::new();
@@ -24,8 +25,15 @@ pub fn human(findings: &[Finding]) -> String {
         };
         out.push_str(&format!("{kind:<22}{detail}{note}\n"));
     }
+    for finding in stale {
+        let (kind, detail) = describe(finding);
+        out.push_str(&format!(
+            "{:<22}{kind} {detail} (fixed: run `prunr baseline`)\n",
+            "stale-baseline"
+        ));
+    }
     let warnings = findings.iter().filter(|f| f.is_warning()).count();
-    let errors = findings.len() - warnings;
+    let errors = findings.len() - warnings + stale.len();
     out.push_str(&format!("\nerrors: {errors}, warnings: {warnings}\n"));
     out
 }
@@ -51,12 +59,15 @@ fn describe(finding: &Finding) -> (&'static str, String) {
     }
 }
 
-/// `{ "findings": [...] }`, for machines.
-pub fn json(findings: &[Finding]) -> String {
+/// `{ "findings": [...], "stale": [...] }`, for machines. `stale` is left out when empty.
+pub fn json(findings: &[Finding], stale: &[Finding]) -> String {
     #[derive(Serialize)]
     struct Report<'a> {
         findings: &'a [Finding],
+        #[serde(skip_serializing_if = "<[Finding]>::is_empty")]
+        stale: &'a [Finding],
     }
-    let text = serde_json::to_string_pretty(&Report { findings }).expect("findings serialize");
+    let report = Report { findings, stale };
+    let text = serde_json::to_string_pretty(&report).expect("findings serialize");
     text + "\n"
 }
