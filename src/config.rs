@@ -23,6 +23,9 @@ pub struct Config {
     pub entries: Entries,
     #[serde(default)]
     pub dependencies: Dependencies,
+    /// The baseline file, relative to the root: findings the project already had. They do not
+    /// fail the check, and `prunr baseline` rewrites the file.
+    pub baseline: Option<String>,
 }
 
 /// Paths or globs, relative to the project root. In a glob, `*` does not cross `/` and `**` does.

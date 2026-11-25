@@ -1,0 +1,4 @@
+[
+  { "kind": "unused-export", "file": "math.js", "symbol": "div" },
+  { "kind": "unused-export", "file": "math.js", "symbol": "sub" }
+]
