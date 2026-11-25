@@ -6,7 +6,7 @@ critérios de aceite:
 - [x] 1. [Um grafo só](01-single-graph.md)
 - [x] 2. [Teste não mantém código vivo](02-tests-dont-keep-code-alive.md)
 - [ ] 3. [Baseline que só diminui](03-shrinking-baseline.md)
-- [ ] 4. [Pontos de entrada num arquivo de configuração JSON](04-entry-points-config.md)
+- [x] 4. [Pontos de entrada num arquivo de configuração JSON](04-entry-points-config.md)
 - [ ] 5. [Variáveis locais delegadas ao Biome](05-locals-delegated-to-biome.md)
 - [ ] 6. [CI de testes e release automático](06-ci-and-auto-release.md)
 - [ ] 7. [Todo o MVP construído com TDD](07-tdd.md)

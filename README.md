@@ -28,20 +28,27 @@ cargo install --path .
 
 ## Uso
 
-Crie um `prunr.json` na raiz do projeto e rode `prunr check` nela:
+Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir do
+`package.json`) e rode `prunr check` nela:
 
 ```json
 {
+  "$schema": "https://unpkg.com/prunr/schema.json",
   "entries": {
     "production": ["src/index.js", "bin/cli.js"],
     "test": ["test/**", "**/*.test.js"]
+  },
+  "dependencies": {
+    "ignore": ["jest", "husky"]
   }
 }
 ```
 
 ```sh
+prunr init           # cria um prunr.json a partir do package.json
 prunr check          # saída para pessoas
 prunr check --json   # saída para máquinas
+prunr schema         # o JSON Schema do prunr.json
 ```
 
 ### `prunr.json`
@@ -49,7 +56,10 @@ prunr check --json   # saída para máquinas
 | Opção | Obrigatória | O que é |
 |---|---|---|
 | `entries.production` | sim | Caminhos ou globs dos arquivos por onde o programa começa. Tudo o que eles alcançam, direta ou indiretamente, está vivo. |
+| `$schema` | não | O JSON Schema do arquivo, para autocompletar e validar no editor. |
 | `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. |
+
+| `dependencies.ignore` | não | Pacotes que ficam de fora das verificações de dependência: os que só a linha de comando usa (`jest`, `husky`, `@biomejs/biome`) ou que são carregados de um jeito que o grafo não vê. |
 
 Caminhos e globs são relativos à raiz; num glob, `*` não atravessa `/` e `**` atravessa. Cada
 entrada precisa casar com pelo menos um arquivo `.js` ou `.cjs`.
@@ -101,13 +111,13 @@ errors: 7, warnings: 1
 |---|---|
 | `0` | Nenhum achado, ou só avisos. |
 | `1` | Há achados. |
-| `2` | O check não pôde rodar: `prunr.json` ausente ou inválido, `package.json` inválido, arquivo com erro de sintaxe ou argumento desconhecido. |
+| `2` | O comando não pôde rodar: `prunr.json` ausente ou inválido, `package.json` inválido, arquivo com erro de sintaxe ou argumento desconhecido. |
 
 ## Limitações atuais
 
 - **Só CommonJS** (`.js` e `.cjs`). ESM, TypeScript e `.mjs` ainda não são lidos.
 - **Dependências usadas só pela linha de comando** (`jest`, `@biomejs/biome`, `husky`...) aparecem
-  como `unused-dependency`, porque nenhum arquivo as importa.
+  como `unused-dependency`, porque nenhum arquivo as importa. Liste-as em `dependencies.ignore`.
 - **Ainda não há baseline** para adotar o prunr num código legado sem limpar tudo antes. Isso é o
   [ponto 3](docs/mvp/03-shrinking-baseline.md).
 - **Variáveis locais sem uso ficam com o Biome** (`noUnusedVariables`, `noUnusedImports`). Ver o
