@@ -82,6 +82,15 @@ pub fn check(
         findings.push(Finding::CircularImport { cycle });
     }
     for id in &all {
+        for require in &project.files[id].facts.requires {
+            for name in &require.unused {
+                findings.push(Finding::UnusedImport {
+                    file: id.clone(),
+                    name: name.clone(),
+                    specifier: require.specifier.clone(),
+                });
+            }
+        }
         for specifier in &project.files[id].unresolved {
             findings.push(Finding::UnresolvedRequire {
                 file: id.clone(),

@@ -154,8 +154,11 @@ impl<'a> Analyzer<'_, 'a> {
             return;
         };
         let mut uses = BTreeSet::new();
+        let mut unused = Vec::new();
         match self.semantic.nodes().parent_kind(node) {
-            AstKind::VariableDeclarator(declarator) => self.pattern_uses(&declarator.id, &mut uses),
+            AstKind::VariableDeclarator(declarator) => {
+                self.pattern_uses(&declarator.id, &mut uses, &mut unused);
+            }
             AstKind::StaticMemberExpression(member) => {
                 uses.insert(Use {
                     path: vec![member.property.name.to_string()],
@@ -177,20 +180,28 @@ impl<'a> Analyzer<'_, 'a> {
             }
         }
         self.facts.requires.push(Require {
-            unused: Vec::new(),
+            unused,
             specifier,
             uses: uses.into_iter().collect(),
         });
     }
 
-    fn pattern_uses(&self, pattern: &BindingPattern, uses: &mut BTreeSet<Use>) {
+    /// What a `const <pattern> = require(...)` uses; bindings never referenced go to `unused`.
+    fn pattern_uses(
+        &self,
+        pattern: &BindingPattern,
+        uses: &mut BTreeSet<Use>,
+        unused: &mut Vec<String>,
+    ) {
         let whole_module = Use {
             path: vec![],
             whole: true,
         };
         match pattern {
             BindingPattern::BindingIdentifier(ident) => {
-                self.binding_uses(ident.symbol_id(), &[], uses);
+                if !self.binding_uses(ident.symbol_id(), &[], uses) {
+                    unused.push(ident.name.to_string());
+                }
             }
             BindingPattern::ObjectPattern(object) => {
                 if object.rest.is_some() {
@@ -203,11 +214,11 @@ impl<'a> Analyzer<'_, 'a> {
                     };
                     let path = vec![name.display().to_string()];
                     if let BindingPattern::BindingIdentifier(ident) = &property.value {
-                        uses.insert(Use {
-                            path: path.clone(),
-                            whole: false,
-                        });
-                        self.binding_uses(ident.symbol_id(), &path, uses);
+                        if self.binding_uses(ident.symbol_id(), &path, uses) {
+                            uses.insert(Use { path, whole: false });
+                        } else {
+                            unused.push(ident.name.to_string());
+                        }
                     } else {
                         uses.insert(Use { path, whole: true });
                     }
@@ -219,10 +230,13 @@ impl<'a> Analyzer<'_, 'a> {
         }
     }
 
-    /// How the file uses a binding holding `prefix` of a required module.
-    fn binding_uses(&self, symbol: SymbolId, prefix: &[String], uses: &mut BTreeSet<Use>) {
+    /// How the file uses a binding holding `prefix` of a required module. False when the file
+    /// never references it.
+    fn binding_uses(&self, symbol: SymbolId, prefix: &[String], uses: &mut BTreeSet<Use>) -> bool {
         let nodes = self.semantic.nodes();
+        let mut referenced = false;
         for reference in self.semantic.symbol_references(symbol) {
+            referenced = true;
             let node = reference.node_id();
             let span = nodes.kind(node).span();
             let used = match nodes.parent_kind(node) {
@@ -246,6 +260,7 @@ impl<'a> Analyzer<'_, 'a> {
             };
             uses.insert(used);
         }
+        referenced
     }
 
     // ---- exports ----
