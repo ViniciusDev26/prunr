@@ -23,9 +23,24 @@ fazer merge do PR de release.
      `postinstall`.
   4. Publica com *trusted publishing* (OIDC) e *provenance*, sem token do npm guardado em secret.
 
+### Decisões tomadas na implementação
+
+- **Pacotes:** `prunr` (o que se instala) e `@prunr/linux-x64`, `@prunr/linux-arm64`,
+  `@prunr/darwin-x64`, `@prunr/darwin-arm64`, `@prunr/win32-x64`, um por binário.
+- **Só npm**; nada é publicado no crates.io (`publish = false`).
+- **Trusted publishing (OIDC) desde o primeiro release, sem token npm.** Como o npm só configura
+  OIDC num pacote que já existe, `scripts/bootstrap-npm.sh` publica um placeholder `0.0.0`
+  (depreciado) de cada pacote e liga cada um ao workflow `release.yml`. Roda uma vez, na máquina
+  de um mantenedor, com 2FA.
+- **`RELEASE_PLEASE_TOKEN`:** um token próprio para o release-please, porque PRs abertos com o
+  `GITHUB_TOKEN` não disparam workflows e o PR de release não passaria pelo ruleset.
+- **A versão vem do `Cargo.toml`**, que o release-please atualiza; os `package.json` recebem a
+  versão na hora de publicar.
+
 ## Critérios de aceite
 
-- [ ] Um PR com um teste quebrado fica vermelho no CI nos três sistemas.
+- [x] Um PR com um teste quebrado fica vermelho no CI nos três sistemas (aconteceu no PR #3:
+      o Windows expôs um bug de caminhos).
 - [ ] A versão `0.1.0` é publicada de ponta a ponta pelo pipeline, sem nenhum comando manual.
 - [ ] `npm i -D prunr && npx prunr --version` funciona num runner Linux limpo, num macOS e num Windows.
 - [ ] O binário Linux roda numa imagem `alpine` e numa `debian` (prova de que é estático).

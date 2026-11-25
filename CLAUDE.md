@@ -43,7 +43,7 @@ com falso positivo leva alguém a apagar código vivo, então isso não é negoc
 
 - **Unitários** junto de cada módulo (parser, resolver, grafo, baseline, config).
 - **Fixtures** em `tests/fixtures/<caso>/`: um mini projeto CommonJS por comportamento, com
-  `package.json`, `prunr.json` e a saída esperada comparada por snapshot (`insta`). Um
+  `package.json`, `prunr.json` e a saída esperada escrita no próprio teste. Um
   comportamento novo do grafo começa por uma fixture nova.
 - **Teste de aceite** contra um projeto CommonJS real de referência, rodado localmente (privado,
   fora do CI).
