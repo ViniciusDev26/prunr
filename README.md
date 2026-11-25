@@ -97,7 +97,7 @@ erro, para que um erro de digitação não passe em silêncio.
 | `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o importam: ele pertence a `devDependencies`. |
 | `missing-dependency` | O arquivo importa um pacote que o `package.json` não declara. |
 | `circular-import` | Há um ciclo de `require`. Cada grupo de arquivos em ciclo é reportado uma vez, pelo caminho mais curto. |
-| `unresolved-require` | **Aviso:** um `require` com caminho dinâmico (`require(nome)`) ou que aponta para um arquivo que não existe. Não falha o check. |
+| `unresolved-require` | **Aviso:** um `require` com caminho dinâmico (`require(nome)`), com um padrão que não alcança nenhum arquivo ou que aponta para um arquivo que não existe. Não falha o check. |
 
 Teste não mantém código vivo: o que só os testes usam está morto em produção. Um arquivo que
 nem produção nem testes alcançam não gera outros achados nem mantém nada vivo. No JSON, os
@@ -106,6 +106,11 @@ achados que só os testes usam têm `"testOnly": true`.
 Na dúvida, o prunr é conservador: quando o resultado de um `require` é passado adiante ou
 acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um
 export morto do que reportar um vivo.
+
+Um `require` montado em tempo de execução a partir de um caminho relativo vira um padrão:
+`` require(`./handlers/${nome}`) `` e `require("./handlers/" + nome)` usam, inteiros, todos os
+arquivos de `handlers/` (cada `${...}` vale um trecho sem `/`, e uma pasta vale pelo seu
+`index`).
 
 ### Adotando num código legado
 
