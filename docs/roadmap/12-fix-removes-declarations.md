@@ -22,6 +22,9 @@ declaração junto, com o comentário JSDoc dela, quando isso é seguro.
 
 ## Critérios de aceite
 
-- [ ] Uma fixture com cada forma, comparando o arquivo antes e depois.
-- [ ] Uma declaração com efeito colateral e uma compartilhada com um nome usado ficam.
-- [ ] Depois do fix, o Biome (`noUnusedVariables`) não acusa nada que o fix criou.
+- [x] Uma fixture com cada forma, comparando o arquivo antes e depois.
+- [x] Uma declaração com efeito colateral e uma compartilhada com um nome usado ficam.
+- [x] Depois do fix, o Biome (`noUnusedVariables`) só acusa as declarações que o fix manteve de
+      propósito por terem efeito colateral: apagá-las é decisão de quem revisa.
+- [x] As linhas em branco que as remoções deixam são arrumadas, sem mexer nas que o arquivo já
+      tinha.
