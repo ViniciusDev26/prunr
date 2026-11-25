@@ -92,6 +92,9 @@ pub struct Facts {
     pub dynamic_requires: Vec<String>,
     /// The line (from 1) where each export is made.
     pub export_lines: BTreeMap<Vec<String>, u32>,
+    /// The first line that requires, imports or reexports each specifier; for a specifier only
+    /// known at runtime, the key is the source text of the call.
+    pub require_lines: BTreeMap<String, u32>,
     /// Exports a comment says not to report.
     pub ignores: BTreeMap<Vec<String>, Ignore>,
     /// The line of a `prunr-ignore-file` comment: the file and its exports are not reported.
@@ -132,6 +135,7 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
         reads: BTreeSet::new(),
         sites: BTreeMap::new(),
         site: Span::default(),
+        require_sites: BTreeMap::new(),
     };
     for node in semantic.nodes().iter() {
         match node.kind() {
@@ -173,6 +177,8 @@ struct Analyzer<'s, 'a> {
     sites: BTreeMap<Path, Span>,
     /// The site of the exports being declared.
     site: Span,
+    /// Where each specifier is first required, imported or reexported.
+    require_sites: BTreeMap<String, u32>,
 }
 
 impl<'a> Analyzer<'_, 'a> {
@@ -188,6 +194,11 @@ impl<'a> Analyzer<'_, 'a> {
             .sites
             .iter()
             .map(|(path, site)| (path.clone(), line(site.start)))
+            .collect();
+        self.facts.require_lines = self
+            .require_sites
+            .iter()
+            .map(|(specifier, offset)| (specifier.clone(), line(*offset)))
             .collect();
         for comment in comments {
             let text = &self.source[comment.span.start as usize..comment.span.end as usize];
@@ -266,6 +277,7 @@ impl<'a> Analyzer<'_, 'a> {
             self.runtime_specifier(call.span, argument);
             return;
         };
+        self.required(&specifier, call.span);
         let mut uses = BTreeSet::new();
         let mut unused = Vec::new();
         match self.semantic.nodes().parent_kind(node) {
@@ -305,10 +317,18 @@ impl<'a> Analyzer<'_, 'a> {
     /// when it has a relative prefix, dynamic otherwise.
     fn runtime_specifier(&mut self, span: Span, argument: Option<&Expression>) {
         let source = self.source[span.start as usize..span.end as usize].to_string();
+        self.required(&source, span);
         match argument.and_then(pattern) {
             Some(glob) => self.facts.patterns.push(Pattern { source, glob }),
             None => self.facts.dynamic_requires.push(source),
         }
+    }
+
+    /// Records where `specifier` is first required.
+    fn required(&mut self, specifier: &str, site: Span) {
+        self.require_sites
+            .entry(specifier.to_string())
+            .or_insert(site.start);
     }
 
     /// A binding that holds `path` of a module: what the file uses through it, or unused.
@@ -358,6 +378,7 @@ impl<'a> Analyzer<'_, 'a> {
                 matches!(specifier, ImportDeclarationSpecifier::ImportSpecifier(named)
                     if named.import_kind.is_type())
             });
+        self.required(&import.source.value.display().to_string(), import.span);
         self.facts.requires.push(Require {
             specifier: import.source.value.display().to_string(),
             uses: uses.into_iter().collect(),
@@ -373,6 +394,7 @@ impl<'a> Analyzer<'_, 'a> {
             self.runtime_specifier(import.span, Some(&import.source));
             return;
         };
+        self.required(&specifier, import.span);
         self.facts.requires.push(Require {
             specifier,
             uses: vec![Use {
@@ -395,6 +417,10 @@ impl<'a> Analyzer<'_, 'a> {
         if !self.binding_uses(import.id.symbol_id(), &[], &mut uses) {
             unused.push(import.id.name.to_string());
         }
+        self.required(
+            &reference.expression.value.display().to_string(),
+            import.span,
+        );
         self.facts.requires.push(Require {
             specifier: reference.expression.value.display().to_string(),
             uses: uses.into_iter().collect(),
@@ -612,6 +638,7 @@ impl<'a> Analyzer<'_, 'a> {
     /// `export { a as b } from "./x"`.
     fn export_from(&mut self, export: &ExportFromDeclaration) {
         self.facts.esm = true;
+        self.required(&export.source.value.display().to_string(), export.span);
         for specifier in &export.specifiers {
             self.facts.reexports.push(Reexport {
                 specifier: export.source.value.display().to_string(),
@@ -676,6 +703,7 @@ impl<'a> Analyzer<'_, 'a> {
 
     fn export_all(&mut self, export: &ExportAllDeclaration) {
         self.facts.esm = true;
+        self.required(&export.source.value.display().to_string(), export.span);
         let kind = match &export.exported {
             Some(name) => ReexportKind::Namespace(name.name().to_string()),
             None => ReexportKind::All,
@@ -1482,6 +1510,34 @@ mod tests {
         assert_eq!(
             facts("// header\n/* prunr-ignore-file: loaded by name */\nexports.a = 1;").ignore_file,
             Some(2)
+        );
+    }
+
+    #[test]
+    fn each_specifier_knows_the_first_line_that_requires_it() {
+        let found = facts_at(
+            "a.ts",
+            "import a from './a';\nconst b = require('./b');\nrequire(x);\nrequire(`./p/${x}`);\n\
+             import('./c');\nimport d = require('./d');\nexport { e } from './e';\n\
+             export * from './f';\nrequire('./a');",
+        );
+        let lines: Vec<(&str, u32)> = found
+            .require_lines
+            .iter()
+            .map(|(specifier, line)| (specifier.as_str(), *line))
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                ("./a", 1),
+                ("./b", 2),
+                ("./c", 5),
+                ("./d", 6),
+                ("./e", 7),
+                ("./f", 8),
+                ("require(`./p/${x}`)", 4),
+                ("require(x)", 3),
+            ]
         );
     }
 

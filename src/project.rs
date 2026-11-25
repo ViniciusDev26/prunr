@@ -46,6 +46,8 @@ pub struct File {
     pub reexports: Vec<(FileId, ReexportKind)>,
     /// The file requires a Node.js builtin module.
     pub builtins: bool,
+    /// The first line that requires each project file this one depends on.
+    pub edge_lines: BTreeMap<FileId, u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -264,6 +266,9 @@ impl Project {
             for require in &facts.requires {
                 let target = resolver.resolve(path, &require.specifier);
                 if let Some(target) = file.link(target, &require.specifier, &paths) {
+                    file.edge_lines
+                        .entry(target.clone())
+                        .or_insert(facts.require_lines[&require.specifier]);
                     let uses = if require.esm && !esm.contains(&target) {
                         require.uses.iter().map(as_commonjs).collect()
                     } else {
@@ -279,6 +284,9 @@ impl Project {
             for reexport in &facts.reexports {
                 let target = resolver.resolve(path, &reexport.specifier);
                 if let Some(target) = file.link(target, &reexport.specifier, &paths) {
+                    file.edge_lines
+                        .entry(target.clone())
+                        .or_insert(facts.require_lines[&reexport.specifier]);
                     file.edges.push(Edge {
                         target: target.clone(),
                         uses: Vec::new(),
@@ -293,6 +301,9 @@ impl Project {
                     file.unresolved.push(pattern.source.clone());
                 }
                 for target in targets {
+                    file.edge_lines
+                        .entry(target.clone())
+                        .or_insert(facts.require_lines[&pattern.source]);
                     file.edges.push(Edge {
                         target,
                         uses: vec![Use {
