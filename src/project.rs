@@ -23,6 +23,8 @@ pub struct Project {
     pub dev_dependencies: BTreeSet<String>,
     /// Every package `package.json` declares, in any of its dependency fields.
     pub declared_packages: BTreeSet<String>,
+    /// Packages the `scripts` of `package.json` run or preload.
+    pub script_packages: BTreeSet<String>,
     /// How many files were parsed.
     pub parsed: usize,
 }
@@ -71,6 +73,8 @@ struct Manifest {
     peer_dependencies: BTreeMap<String, serde_json::Value>,
     #[serde(default)]
     optional_dependencies: BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
+    scripts: BTreeMap<String, String>,
 }
 
 impl Manifest {
@@ -82,6 +86,29 @@ impl Manifest {
         let text = std::fs::read_to_string(path).unwrap_or_default();
         serde_json::from_str(&text).map_err(|e| ProjectError::PackageJson(e.to_string()))
     }
+}
+
+/// The binaries each package declares, mapped to the package. An installed package declares
+/// those in the `bin` of its `package.json`; one that is not installed (or unreadable) is guessed
+/// to declare a binary named after it, without the scope.
+fn binaries(root: &Path, packages: &BTreeSet<String>) -> BTreeMap<String, String> {
+    let mut binaries = BTreeMap::new();
+    for package in packages {
+        let manifest = root.join("node_modules").join(package).join("package.json");
+        let installed: Option<serde_json::Value> = std::fs::read_to_string(manifest)
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok());
+        let unscoped = || package.rsplit('/').next().unwrap_or(package).to_string();
+        let names = match installed.as_ref().map(|manifest| manifest.get("bin")) {
+            Some(Some(serde_json::Value::Object(bins))) => bins.keys().cloned().collect(),
+            Some(Some(_)) | None => vec![unscoped()],
+            Some(None) => Vec::new(),
+        };
+        for name in names {
+            binaries.insert(name, package.clone());
+        }
+    }
+    binaries
 }
 
 /// `path` relative to `root`, with `/` separators.
@@ -201,6 +228,12 @@ impl Project {
             dependencies.union(&dev_dependencies).cloned().collect();
         declared_packages.extend(manifest.peer_dependencies.into_keys());
         declared_packages.extend(manifest.optional_dependencies.into_keys());
+        let binaries = binaries(&root, &declared_packages);
+        let script_packages = manifest
+            .scripts
+            .values()
+            .flat_map(|script| crate::scripts::packages(script, &binaries))
+            .collect();
         Ok(Self {
             root,
             parsed: files.len(),
@@ -208,6 +241,7 @@ impl Project {
             dependencies,
             dev_dependencies,
             declared_packages,
+            script_packages,
         })
     }
 
@@ -426,6 +460,52 @@ mod tests {
         assert_eq!(
             project.declared_packages,
             BTreeSet::from(["a".into(), "b".into(), "c".into(), "d".into()])
+        );
+    }
+
+    #[test]
+    fn the_scripts_use_the_packages_whose_binaries_they_run() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{
+                    "scripts": {
+                        "a": "tsc && tool && plain && solo && broken && missing",
+                        "b": "node -r undeclared/register x.js"
+                    },
+                    "devDependencies": {
+                        "typescript": "1", "@scope/tool": "1", "plain": "1",
+                        "solo-pkg": "1", "broken": "1", "missing": "1", "unused": "1"
+                    }
+                }"#,
+            ),
+            (
+                "node_modules/typescript/package.json",
+                r#"{ "bin": { "tsc": "bin/tsc" } }"#,
+            ),
+            (
+                "node_modules/@scope/tool/package.json",
+                r#"{ "bin": "cli.js" }"#,
+            ),
+            ("node_modules/plain/package.json", "{}"),
+            (
+                "node_modules/solo-pkg/package.json",
+                r#"{ "bin": { "solo": "cli.js" } }"#,
+            ),
+            ("node_modules/broken/package.json", "{ nope"),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.script_packages,
+            BTreeSet::from([
+                "@scope/tool".into(),
+                "broken".into(),
+                "missing".into(),
+                "solo-pkg".into(),
+                "typescript".into(),
+                "undeclared".into(),
+            ]),
+            "a package without a bin field runs nothing; one not installed is guessed by name"
         );
     }
 

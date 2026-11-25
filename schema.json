@@ -61,7 +61,7 @@
       "type": "object",
       "properties": {
         "ignore": {
-          "description": "Packages to leave out of the dependency checks: those only a command line uses (`jest`,\n`husky`), or that are loaded in ways the graph cannot see.",
+          "description": "Packages to leave out of the dependency checks: those loaded in ways neither the graph nor\nthe `scripts` of `package.json` show (a plugin named in another tool's config file).",
           "type": "array",
           "items": {
             "type": "string"

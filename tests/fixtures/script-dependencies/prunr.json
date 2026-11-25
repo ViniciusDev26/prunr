@@ -1,1 +1,1 @@
-{ "entries": { "production": ["index.js"] } }
+{ "entries": { "production": ["index.js"], "test": ["index.test.js"] } }
