@@ -122,8 +122,8 @@ def social():
         group("translate(250 190) scale(1.56)", mark(p) + "\n" + group("translate(164 34)",
                                                                        wordmark(p["ink"]))),
         f'<text x="640" y="490" text-anchor="middle" fill="{p["edge"]}" '
-        'font-family="JetBrains Mono, ui-monospace, monospace" font-size="34">'
-        "dead code detector for Node.js, CommonJS first</text>",
+        'font-family="JetBrains Mono, ui-monospace, monospace" font-size="40" letter-spacing="2">'
+        "Dead Code Detector</text>",
     ])
     return svg("0 0 1280 640", body)
 
