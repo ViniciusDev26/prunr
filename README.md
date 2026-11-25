@@ -76,7 +76,9 @@ que só os testes alcançam está morto em produção.
 }
 ```
 
-Com Jest, Vitest, Vite, Next.js ou NestJS, boa parte disso o prunr acha sozinho. Todas as opções estão
+Os arquivos que os `scripts` do `package.json` rodam (`node src/server.js`, `tsx watch
+src/index.ts`) já são entradas, e com Jest, Vitest, Vite, Next.js ou NestJS boa parte do resto o
+prunr acha sozinho. Todas as opções estão
 em [Configuração](docs/guide/configuration.md).
 
 ## Comandos

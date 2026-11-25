@@ -21,7 +21,7 @@ Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir
 
 | Opção | Obrigatória | O que é |
 |---|---|---|
-| `entries.production` | sim | Caminhos ou globs dos arquivos por onde o programa começa. Tudo o que eles alcançam, direta ou indiretamente, está vivo. Com Vite, Next.js ou NestJS, pode ficar vazio (`[]`): veja [Frameworks](frameworks.md). |
+| `entries.production` | sim | Caminhos ou globs dos arquivos por onde o programa começa. Tudo o que eles alcançam, direta ou indiretamente, está vivo. Os arquivos que os `scripts` rodam já são entradas, e os de Vite, Next.js e NestJS também ([Frameworks](frameworks.md)): liste só o resto, ou deixe vazio (`[]`). |
 | `$schema` | não | O JSON Schema do arquivo, para autocompletar e validar no editor. |
 | `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. Com Jest ou Vitest, liste só o que o runner não acha sozinho. |
 | `dependencies.ignore` | não | Pacotes que ficam de fora das verificações de dependência: os carregados de um jeito que nem o grafo nem os `scripts` mostram (um plugin citado no arquivo de configuração de outra ferramenta). |
@@ -35,6 +35,34 @@ Uma opção só entra no arquivo quando alguma funcionalidade precisa dela. Uma 
 erro, para que um erro de digitação não passe em silêncio.
 
 ## Os `scripts` do `package.json`
+
+### Os arquivos que eles rodam
+
+O arquivo que um script roda com `node`, `tsx`, `ts-node`, `bun`, `nodemon`, `babel-node`,
+`vite-node` ou `jiti` é uma entrada, sem listá-lo no `prunr.json`:
+
+```json
+{
+  "scripts": {
+    "start": "NODE_ENV=production node --env-file .env -r ./src/tracing.js src/server.js",
+    "dev": "tsx watch ./src/server.ts",
+    "seed": "cross-env SIZE=3 ts-node src/seed",
+    "gen": "pnpm --filter @app/tools exec tsx src/gen.ts",
+    "test:e2e": "node --test e2e/run.js"
+  }
+}
+```
+
+- O arquivo é o primeiro argumento que é um arquivo-fonte do projeto, com ou sem extensão; os
+  argumentos seguintes são do programa. Os arquivos carregados com `-r`/`--import ./x` também
+  contam.
+- Os scripts cujo nome começa com `test` rodam código de teste; os outros, código de produção.
+- `npx`, `pnpm exec`, `yarn`, `cross-env`, `env` e `dotenv --` são atravessados. `pnpm --filter
+  <pacote>`, `npm -w <pacote>` e `yarn workspace <pacote>` rodam o arquivo no diretório daquele
+  pacote do monorepo.
+- `node -e` e `node -p` não rodam arquivo.
+
+### Os pacotes que eles usam
 
 Os `scripts` também usam pacotes, e o prunr os lê:
 

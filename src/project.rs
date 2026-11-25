@@ -285,6 +285,21 @@ fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
     files
 }
 
+/// The source file of the project a script names, relative to `dir`, with or without its
+/// extension.
+fn script_file(dir: &Path, argument: &str, paths: &BTreeMap<PathBuf, FileId>) -> Option<FileId> {
+    let path = dir.join(argument);
+    let with_extension = EXTENSIONS.iter().map(|extension| {
+        let mut name = path.clone().into_os_string();
+        name.push(format!(".{extension}"));
+        PathBuf::from(name)
+    });
+    std::iter::once(path.clone())
+        .chain(with_extension)
+        .find(|path| path.is_file())
+        .and_then(|path| paths.get(&crate::resolve::canonical(&path)).cloned())
+}
+
 /// The files other than `from` that a require pattern in `from` can load: those the glob
 /// matches with or without their extension, and directories through their index file.
 fn matching<'f>(from: &FileId, glob: &str, files: impl Iterator<Item = &'f FileId>) -> Vec<FileId> {
@@ -328,17 +343,16 @@ fn plugin_files(patterns: &[String], files: &BTreeMap<FileId, File>) -> BTreeSet
 
 /// The index in `dirs` of the package `file` belongs to: the one whose directory is the longest
 /// prefix of its path (the root, `""`, when none is).
-fn workspace_index<S: AsRef<str>>(dirs: &[S], file: &str) -> usize {
+fn workspace_index(dirs: &[&str], file: &str) -> usize {
     dirs.iter()
         .enumerate()
         .filter(|(_, dir)| {
-            let dir = dir.as_ref();
             dir.is_empty()
                 || file
-                    .strip_prefix(dir)
+                    .strip_prefix(**dir)
                     .is_some_and(|rest| rest.starts_with('/'))
         })
-        .max_by_key(|(_, dir)| dir.as_ref().len())
+        .max_by_key(|(_, dir)| dir.len())
         .map_or(0, |(index, _)| index)
 }
 
@@ -369,6 +383,7 @@ impl Project {
             .skip(1)
             .filter_map(|(index, manifest)| Some((manifest.name.as_deref()?, index)))
             .collect();
+        let dir_names: Vec<&str> = dirs.iter().map(String::as_str).collect();
         let paths = source_files(&root);
         let resolver = Resolver::default();
         let root_declared = manifests[0].declared();
@@ -427,7 +442,7 @@ impl Project {
                     if target == Target::Unresolved && specifier.starts_with('/') {
                         // A bundler's absolute specifier: from its public directory or root.
                         let id = &paths[from];
-                        let index = workspace_index(&dirs, id);
+                        let index = workspace_index(&dir_names, id);
                         let package = root.join(&dirs[index]);
                         let roots = &contributions[index].absolute_roots;
                         if let Some(found) = roots
@@ -524,6 +539,26 @@ impl Project {
                     .collect()
             };
             production_files.extend(plugin_files(&in_package(&plugins.production), &files));
+            for (name, script) in &manifest.scripts {
+                let entries = if name.starts_with("test") {
+                    &mut test_files
+                } else {
+                    &mut production_files
+                };
+                for run in crate::scripts::files(script) {
+                    let dir = match &run.package {
+                        None => dir.as_str(),
+                        Some(name) => match names.get(name.as_str()) {
+                            Some(&index) => dirs[index].as_str(),
+                            None => continue,
+                        },
+                    };
+                    let base = root.join(dir);
+                    let file = |argument: &String| script_file(&base, argument, &paths);
+                    entries.extend(run.preloads.iter().filter_map(file));
+                    entries.extend(run.candidates.iter().find_map(file));
+                }
+            }
             test_files.extend(plugin_files(&in_package(&plugins.tests), &files));
             for file in &plugins.files {
                 if let Target::File(path) = resolver.resolve(&package.join("package.json"), file)
@@ -848,6 +883,53 @@ mod tests {
         );
         assert!(index.edges.iter().all(|edge| edge.uses == whole()));
         assert!(index.unresolved.is_empty(), "{:?}", index.unresolved);
+    }
+
+    #[test]
+    fn the_files_scripts_run_are_entries_of_their_kind_and_package() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{
+                    "workspaces": ["tools"],
+                    "scripts": {
+                        "start": "node -r ./setup.js server.js",
+                        "test:e2e": "node --test e2e.js",
+                        "gen": "pnpm --filter tools exec tsx gen",
+                        "other": "pnpm --filter elsewhere exec tsx x.js"
+                    }
+                }"#,
+            ),
+            ("tools/package.json", r#"{ "name": "tools" }"#),
+            ("tools/gen.ts", ""),
+            ("setup.js", ""),
+            ("server.js", ""),
+            ("e2e.js", ""),
+            ("x.js", ""),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.production_files.iter().collect::<Vec<_>>(),
+            ["server.js", "setup.js", "tools/gen.ts"]
+        );
+        assert_eq!(project.test_files.iter().collect::<Vec<_>>(), ["e2e.js"]);
+    }
+
+    #[test]
+    fn an_absolute_specifier_falls_back_to_the_roots_a_bundler_declares() {
+        let dir = project(&[
+            ("package.json", r#"{ "devDependencies": { "vite": "7" } }"#),
+            ("public/logo.svg", "<svg/>"),
+            ("lib.js", "export const a = 1;"),
+            (
+                "index.js",
+                r#"import "/logo.svg"; import "/lib.js"; import "/gone.svg";"#,
+            ),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        let index = &project.files["index.js"];
+        assert_eq!(index.unresolved, ["/gone.svg"]);
+        assert_eq!(index.edges.len(), 1);
     }
 
     #[test]

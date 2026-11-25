@@ -42,6 +42,161 @@ pub fn configs(script: &str, runner: &str) -> Vec<String> {
     found
 }
 
+/// A file a command of a script runs with Node.js or a runner like it (`node`, `tsx`,
+/// `ts-node`, `bun`...).
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Run {
+    /// The package of the repository it runs in (`pnpm --filter <name>`, `npm -w <name>`,
+    /// `yarn workspace <name>`), when not the script's own.
+    pub package: Option<String>,
+    /// The files it preloads (`-r ./setup.js`, `--import ./register.js`).
+    pub preloads: Vec<String>,
+    /// The arguments that can name the file, in order: the first that is a source file is it.
+    pub candidates: Vec<String>,
+}
+
+/// The files the commands of `script` run.
+pub fn files(script: &str) -> Vec<Run> {
+    commands(script)
+        .filter_map(|words| file_run(&words))
+        .collect()
+}
+
+/// Runners whose first argument that is a file is the file they run.
+const FILE_RUNNERS: &[&str] = &[
+    "node",
+    "tsx",
+    "ts-node",
+    "ts-node-esm",
+    "ts-node-dev",
+    "tsnd",
+    "babel-node",
+    "nodemon",
+    "vite-node",
+    "jiti",
+    "esno",
+    "bun",
+];
+/// Flags of those runners that take the next word as their value.
+const VALUE_FLAGS: &[&str] = &[
+    "--env-file",
+    "--env-file-if-exists",
+    "-C",
+    "--conditions",
+    "--tsconfig",
+    "--watch-path",
+    "--input-type",
+    "--title",
+];
+/// nodemon's flags that take a value; its `-e` is the extensions, not code to run.
+const NODEMON_VALUE_FLAGS: &[&str] = &[
+    "-e", "--ext", "-w", "--watch", "-x", "--exec", "-i", "--ignore", "-d", "--delay", "--signal",
+];
+/// Flags after which there is no file: the code comes in the command line.
+const EVAL: &[&str] = &["-e", "--eval", "-p", "--print"];
+/// Wrappers that run the rest of the command: `cross-env A=1 node x`, `dotenv -- node x`.
+const WRAPPERS: &[&str] = &["cross-env", "cross-env-shell", "env"];
+
+/// The file one command runs, through package managers, runners and wrappers.
+fn file_run(words: &[&str]) -> Option<Run> {
+    let mut words = words;
+    let mut package = None;
+    loop {
+        words = skip(words, is_assignment);
+        let (&first, rest) = words.split_first()?;
+        if RUNNERS.contains(&first) || WRAPPERS.contains(&first) {
+            words = skip(rest, |word| word.starts_with('-'));
+            continue;
+        }
+        if first == "dotenv" {
+            let end = rest.iter().position(|word| *word == "--")?;
+            words = &rest[end + 1..];
+            continue;
+        }
+        if MANAGERS.contains(&first) && !(first == "bun" && rest.first() != Some(&"x")) {
+            let rest = manager_options(first, rest, &mut package);
+            match rest.split_first() {
+                Some((&"workspace", [name, rest @ ..])) if first == "yarn" => {
+                    package = Some(name.to_string());
+                    words = rest;
+                }
+                Some((sub, rest)) if EXEC.contains(sub) => {
+                    words = manager_options(first, rest, &mut package);
+                }
+                Some(_) if first != "npm" => words = rest,
+                _ => return None,
+            }
+            continue;
+        }
+        if !FILE_RUNNERS.contains(&first) {
+            return None;
+        }
+        let mut run = Run {
+            package,
+            ..Run::default()
+        };
+        let mut index = 0;
+        while let Some(&word) = rest.get(index) {
+            index += 1;
+            if first != "nodemon" && EVAL.contains(&word) {
+                break;
+            }
+            if let Some((flag, value)) = word.split_once('=') {
+                if PRELOAD.contains(&flag) && value.starts_with(['.', '/']) {
+                    run.preloads.push(value.to_string());
+                }
+                continue;
+            }
+            let takes_value = PRELOAD.contains(&word)
+                || VALUE_FLAGS.contains(&word)
+                || (first == "nodemon" && NODEMON_VALUE_FLAGS.contains(&word));
+            if takes_value {
+                if let Some(value) = rest.get(index)
+                    && PRELOAD.contains(&word)
+                    && value.starts_with(['.', '/'])
+                {
+                    run.preloads.push(value.to_string());
+                }
+                index += 1;
+            } else if !word.starts_with('-') {
+                run.candidates.push(word.to_string());
+            }
+        }
+        return Some(run);
+    }
+}
+
+/// `words` after a package manager's leading options, noting the package one of them names
+/// (`pnpm --filter <name>`, `npm --workspace <name>`).
+fn manager_options<'w, 's>(
+    manager: &str,
+    words: &'w [&'s str],
+    package: &mut Option<String>,
+) -> &'w [&'s str] {
+    let names: &[&str] = match manager {
+        "pnpm" => &["--filter", "-F"],
+        "npm" => &["--workspace", "-w"],
+        _ => &[],
+    };
+    let mut words = words;
+    while let Some((&word, rest)) = words.split_first() {
+        if let Some((flag, value)) = word.split_once('=')
+            && names.contains(&flag)
+        {
+            *package = Some(value.to_string());
+            words = rest;
+        } else if names.contains(&word) {
+            *package = rest.first().map(|name| name.to_string());
+            words = rest.get(1..).unwrap_or_default();
+        } else if word.starts_with('-') {
+            words = rest;
+        } else {
+            break;
+        }
+    }
+    words
+}
+
 /// The words of each command of a script.
 fn commands(script: &str) -> impl Iterator<Item = Vec<&str>> {
     script.split([';', '|', '&', '\n']).map(|command| {
@@ -143,6 +298,83 @@ fn preloads(words: &[&str], used: &mut BTreeSet<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn run(package: Option<&str>, preloads: &[&str], candidates: &[&str]) -> Run {
+        Run {
+            package: package.map(str::to_string),
+            preloads: preloads.iter().map(|p| p.to_string()).collect(),
+            candidates: candidates.iter().map(|c| c.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn runners_name_the_file_they_run_after_their_flags() {
+        assert_eq!(
+            files(
+                "NODE_ENV=production node --env-file .env -r ./a.js --import=./b.js -r dotenv/config --inspect=0.0.0.0 src/server.js arg"
+            ),
+            [run(None, &["./a.js", "./b.js"], &["src/server.js", "arg"])]
+        );
+        assert_eq!(
+            files("tsx watch ./src/index.ts"),
+            [run(None, &[], &["watch", "./src/index.ts"])]
+        );
+        assert_eq!(
+            files("bun run src/job.ts"),
+            [run(None, &[], &["run", "src/job.ts"])]
+        );
+        assert_eq!(
+            files("nodemon -e ts,json --watch src -x tsx src/index.ts"),
+            [run(None, &[], &["src/index.ts"])]
+        );
+        assert_eq!(files("node -r"), [run(None, &[], &[])]);
+    }
+
+    #[test]
+    fn code_in_the_command_line_runs_no_file() {
+        assert_eq!(
+            files("node -e \"require('./x.js')\""),
+            [run(None, &[], &[])]
+        );
+        assert_eq!(files("node --print 1 x.js"), [run(None, &[], &[])]);
+    }
+
+    #[test]
+    fn wrappers_runners_and_managers_lead_to_the_file() {
+        for script in [
+            "cross-env A=1 tsx x.ts",
+            "env A=1 tsx x.ts",
+            "dotenv -e .env -- tsx x.ts",
+            "npx --yes tsx x.ts",
+            "pnpm exec tsx x.ts",
+            "yarn tsx x.ts",
+            "bun x tsx x.ts",
+            "npm exec -- tsx x.ts",
+        ] {
+            assert_eq!(files(script), [run(None, &[], &["x.ts"])], "{script}");
+        }
+        assert!(files("dotenv -e .env tsx x.ts").is_empty());
+        assert!(files("npm run build && jest && pnpm").is_empty());
+    }
+
+    #[test]
+    fn a_manager_can_run_the_file_in_another_package() {
+        for script in [
+            "pnpm --filter @app/tools exec tsx x.ts",
+            "pnpm -F=@app/tools exec tsx x.ts",
+            "pnpm --silent --filter @app/tools exec tsx x.ts",
+            "npm exec -w @app/tools -- tsx x.ts",
+            "npm --workspace=@app/tools exec tsx x.ts",
+            "yarn workspace @app/tools tsx x.ts",
+        ] {
+            assert_eq!(
+                files(script),
+                [run(Some("@app/tools"), &[], &["x.ts"])],
+                "{script}"
+            );
+        }
+        assert_eq!(files("pnpm --filter"), []);
+    }
 
     fn bins() -> BTreeMap<String, String> {
         [
