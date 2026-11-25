@@ -44,6 +44,7 @@ fn describe(finding: &Finding) -> (&'static str, String) {
         Finding::UnusedExport { file, symbol, .. } => {
             ("unused-export", format!("{file}: {symbol}"))
         }
+        Finding::UnusedImport { .. } => todo!(),
         Finding::UnusedDependency { package } => ("unused-dependency", package.clone()),
         Finding::MisplacedDependency { package } => (
             "misplaced-dependency",

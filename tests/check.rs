@@ -405,3 +405,18 @@ fn unused_locals_are_left_to_biome() {
     assert_eq!(run.code, 0);
     assert_eq!(run.stdout, "No findings.\n");
 }
+
+#[test]
+fn a_require_whose_binding_is_never_used_is_an_unused_import() {
+    let run = check("unused-import");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-export         math.js: sub\n\
+         unused-import         index.js: fs from node:fs\n\
+         unused-import         index.js: lodash from lodash\n\
+         unused-import         index.js: sub from ./math\n\
+         \n\
+         errors: 4, warnings: 0\n"
+    );
+}

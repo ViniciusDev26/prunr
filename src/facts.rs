@@ -22,6 +22,8 @@ use oxc_span::{GetSpan, SourceType, Span};
 pub struct Require {
     pub specifier: String,
     pub uses: Vec<Use>,
+    /// Bindings the require declares that the file never references.
+    pub unused: Vec<String>,
 }
 
 /// One use of a required module. With `whole`, everything under `path` is used too.
@@ -175,6 +177,7 @@ impl<'a> Analyzer<'_, 'a> {
             }
         }
         self.facts.requires.push(Require {
+            unused: Vec::new(),
             specifier,
             uses: uses.into_iter().collect(),
         });
@@ -378,6 +381,7 @@ mod tests {
     #[test]
     fn records_each_static_require_in_order() {
         let facts = facts(r#"require("./a"); require("pkg"); require(`./b`);"#);
+        assert!(facts.requires.iter().all(|r| r.unused.is_empty()));
         let specifiers: Vec<_> = facts
             .requires
             .iter()
@@ -418,11 +422,40 @@ mod tests {
     // ---- how a require is used ----
 
     #[test]
-    fn destructuring_uses_each_property() {
+    fn destructuring_uses_each_property_it_references() {
         assert_eq!(
-            uses_of(r#"const { a, b: c } = require("./x");"#),
-            [uses(&["a"], false), uses(&["b"], false)]
+            uses_of(r#"const { a, b: c } = require("./x"); use(a, c);"#),
+            [
+                uses(&["a"], false),
+                uses(&["a"], true),
+                uses(&["b"], false),
+                uses(&["b"], true)
+            ]
         );
+    }
+
+    fn unused_of(source: &str) -> Vec<String> {
+        let facts = facts(source);
+        assert_eq!(facts.requires.len(), 1, "{facts:?}");
+        facts.requires[0].unused.clone()
+    }
+
+    #[test]
+    fn a_destructured_binding_never_referenced_is_unused_and_uses_nothing() {
+        let source = r#"const { a, b: c, d } = require("./x"); d();"#;
+        assert_eq!(uses_of(source), [uses(&["d"], false)]);
+        assert_eq!(unused_of(source), ["a", "c"]);
+    }
+
+    #[test]
+    fn a_namespace_binding_never_referenced_is_unused() {
+        assert_eq!(unused_of(r#"const x = require("./x");"#), ["x"]);
+    }
+
+    #[test]
+    fn a_require_for_its_side_effect_declares_nothing_unused() {
+        assert!(unused_of(r#"require("./a");"#).is_empty());
+        assert!(unused_of(r#"const x = require("./a"); x.run();"#).is_empty());
     }
 
     #[test]
@@ -444,7 +477,7 @@ mod tests {
     #[test]
     fn a_rest_element_uses_the_whole_module() {
         assert_eq!(
-            uses_of(r#"const { a, ...rest } = require("./x");"#),
+            uses_of(r#"const { a, ...rest } = require("./x"); a();"#),
             [uses(&[], true), uses(&["a"], false)]
         );
     }

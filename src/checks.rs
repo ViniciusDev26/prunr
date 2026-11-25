@@ -28,6 +28,13 @@ pub enum Finding {
         #[serde(rename = "testOnly", default, skip_serializing_if = "is_false")]
         test_only: bool,
     },
+    /// A binding a require declares that its file never references. The require still runs the
+    /// module, so the edge stays until the import is deleted.
+    UnusedImport {
+        file: FileId,
+        name: String,
+        specifier: String,
+    },
     /// Declared in `dependencies` or `devDependencies`, required by no file.
     UnusedDependency { package: String },
     /// Declared in `dependencies`, but only tests require it: it belongs in `devDependencies`.
