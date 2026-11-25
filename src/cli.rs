@@ -42,12 +42,7 @@ pub fn run(args: &[String], root: &Path, out: &mut impl Write, err: &mut impl Wr
 fn findings(root: &Path) -> Result<Vec<crate::checks::Finding>, String> {
     let config = Config::load(root).map_err(|e| e.to_string())?;
     let project = Project::load(root).map_err(|e| e.to_string())?;
-    let mut entries = Vec::new();
-    for entry in &config.entries {
-        let Some(id) = project.id_of(entry) else {
-            return Err(format!("entry is not a .js or .cjs file: {entry}"));
-        };
-        entries.push(id);
-    }
-    Ok(check(&project, &entries))
+    let production = project.entries(&config.entries.production)?;
+    let tests = project.entries(&config.entries.test)?;
+    Ok(check(&project, &production, &tests))
 }

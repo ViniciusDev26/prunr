@@ -4,7 +4,7 @@ O MVP inicial só está pronto quando **os 7 pontos** abaixo forem atendidos, ca
 critérios de aceite:
 
 - [x] 1. [Um grafo só](01-single-graph.md)
-- [ ] 2. [Teste não mantém código vivo](02-tests-dont-keep-code-alive.md)
+- [x] 2. [Teste não mantém código vivo](02-tests-dont-keep-code-alive.md)
 - [ ] 3. [Baseline que só diminui](03-shrinking-baseline.md)
 - [ ] 4. [Pontos de entrada num arquivo de configuração JSON](04-entry-points-config.md)
 - [ ] 5. [Variáveis locais delegadas ao Biome](05-locals-delegated-to-biome.md)

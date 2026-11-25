@@ -35,7 +35,7 @@ fn a_file_no_entry_reaches_is_unused() {
     assert_eq!(run.code, 1);
     assert_eq!(
         run.stdout,
-        "unused-file         lib/unused.js\n\nerrors: 1, warnings: 0\n"
+        "unused-file           lib/unused.js\n\nerrors: 1, warnings: 0\n"
     );
 }
 
@@ -45,7 +45,7 @@ fn a_destructured_require_uses_only_its_properties() {
     assert_eq!(run.code, 1);
     assert_eq!(
         run.stdout,
-        "unused-export       math.js: sub\n\nerrors: 1, warnings: 0\n"
+        "unused-export         math.js: sub\n\nerrors: 1, warnings: 0\n"
     );
 }
 
@@ -55,7 +55,7 @@ fn a_namespace_require_uses_only_the_members_it_reads() {
     assert_eq!(run.code, 1);
     assert_eq!(
         run.stdout,
-        "unused-export       math.js: sub\n\nerrors: 1, warnings: 0\n"
+        "unused-export         math.js: sub\n\nerrors: 1, warnings: 0\n"
     );
 }
 
@@ -65,7 +65,7 @@ fn property_assignments_are_exports() {
     assert_eq!(run.code, 1);
     assert_eq!(
         run.stdout,
-        "unused-export       math.js: sub\n\nerrors: 1, warnings: 0\n"
+        "unused-export         math.js: sub\n\nerrors: 1, warnings: 0\n"
     );
 }
 
@@ -75,7 +75,7 @@ fn a_property_of_a_default_export_is_an_export() {
     assert_eq!(run.code, 1);
     assert_eq!(
         run.stdout,
-        "unused-export       greet.js: default.shout\n\nerrors: 1, warnings: 0\n"
+        "unused-export         greet.js: default.shout\n\nerrors: 1, warnings: 0\n"
     );
 }
 
@@ -85,8 +85,8 @@ fn an_unused_static_method_is_an_unused_export() {
     assert_eq!(run.code, 1);
     assert_eq!(
         run.stdout,
-        "unused-export       invoice.js: Invoice.legacyTotal\n\
-         unused-export       invoice.js: Invoice.unusedHelper\n\
+        "unused-export         invoice.js: Invoice.legacyTotal\n\
+         unused-export         invoice.js: Invoice.unusedHelper\n\
          \n\
          errors: 2, warnings: 0\n"
     );
@@ -98,8 +98,8 @@ fn a_require_that_cannot_be_followed_is_a_warning() {
     assert_eq!(run.code, 0, "warnings do not fail the check");
     assert_eq!(
         run.stdout,
-        "unresolved-require  index.js: ./missing (warning)\n\
-         unresolved-require  index.js: require(name) (warning)\n\
+        "unresolved-require    index.js: ./missing (warning)\n\
+         unresolved-require    index.js: require(name) (warning)\n\
          \n\
          errors: 0, warnings: 2\n"
     );
@@ -111,9 +111,9 @@ fn dependencies_are_compared_with_package_json() {
     assert_eq!(run.code, 1);
     assert_eq!(
         run.stdout,
-        "unused-dependency   jest\n\
-         unused-dependency   left-pad\n\
-         missing-dependency  index.js: axios\n\
+        "unused-dependency     jest\n\
+         unused-dependency     left-pad\n\
+         missing-dependency    index.js: axios\n\
          \n\
          errors: 3, warnings: 0\n"
     );
@@ -125,7 +125,7 @@ fn a_cycle_is_reported_once_from_its_first_file() {
     assert_eq!(run.code, 1);
     assert_eq!(
         run.stdout,
-        "circular-import     a.js -> b.js -> c.js -> a.js\n\nerrors: 1, warnings: 0\n"
+        "circular-import       a.js -> b.js -> c.js -> a.js\n\nerrors: 1, warnings: 0\n"
     );
 }
 
@@ -142,14 +142,14 @@ fn the_example_reports_every_kind_of_finding() {
     assert_eq!(run.code, 1);
     assert_eq!(
         run.stdout,
-        "unused-file         src/legacy-report.js\n\
-         unused-export       src/invoices.js: cancelInvoice\n\
-         unused-export       src/money.js: Money.fromCents\n\
-         unused-export       src/money.js: Money.invoiceFor\n\
-         unused-dependency   left-pad\n\
-         missing-dependency  src/index.js: dotenv\n\
-         circular-import     src/invoices.js -> src/money.js -> src/invoices.js\n\
-         unresolved-require  src/index.js: require(process.env.PLUGIN) (warning)\n\
+        "unused-file           src/legacy-report.js\n\
+         unused-export         src/invoices.js: cancelInvoice\n\
+         unused-export         src/money.js: Money.fromCents\n\
+         unused-export         src/money.js: Money.invoiceFor\n\
+         unused-dependency     left-pad\n\
+         missing-dependency    src/index.js: dotenv\n\
+         circular-import       src/invoices.js -> src/money.js -> src/invoices.js\n\
+         unresolved-require    src/index.js: require(process.env.PLUGIN) (warning)\n\
          \n\
          errors: 7, warnings: 1\n"
     );
@@ -223,6 +223,34 @@ fn an_entry_that_is_not_a_javascript_file_is_an_error() {
     assert_eq!(run.code, 2);
     assert_eq!(
         run.stderr,
-        "error: entry is not a .js or .cjs file: index.ts\n"
+        "error: entry matches no .js or .cjs file: index.ts\n"
     );
+}
+
+#[test]
+fn what_only_tests_use_is_dead_in_production() {
+    let run = check("test-only");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           lib/legacy.js (only tests use it)\n\
+         unused-export         lib/math.js: mul\n\
+         unused-export         lib/math.js: sub (only tests use it)\n\
+         misplaced-dependency  supertest: only tests use it, move it to devDependencies\n\
+         \n\
+         errors: 4, warnings: 0\n"
+    );
+}
+
+#[test]
+fn json_marks_what_only_tests_use() {
+    let run = prunr("test-only", &["check", "--json"]);
+    let actual: serde_json::Value = serde_json::from_str(&run.stdout).unwrap();
+    let expected = serde_json::json!({ "findings": [
+        { "kind": "unused-file", "file": "lib/legacy.js", "testOnly": true },
+        { "kind": "unused-export", "file": "lib/math.js", "symbol": "mul" },
+        { "kind": "unused-export", "file": "lib/math.js", "symbol": "sub", "testOnly": true },
+        { "kind": "misplaced-dependency", "package": "supertest" },
+    ]});
+    assert_eq!(actual, expected);
 }

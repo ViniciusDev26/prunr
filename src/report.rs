@@ -12,12 +12,17 @@ pub fn human(findings: &[Finding]) -> String {
     let mut out = String::new();
     for finding in findings {
         let (kind, detail) = describe(finding);
-        let warning = if finding.is_warning() {
-            " (warning)"
-        } else {
-            ""
+        let note = match finding {
+            Finding::UnresolvedRequire { .. } => " (warning)",
+            Finding::UnusedFile {
+                test_only: true, ..
+            }
+            | Finding::UnusedExport {
+                test_only: true, ..
+            } => " (only tests use it)",
+            _ => "",
         };
-        out.push_str(&format!("{kind:<20}{detail}{warning}\n"));
+        out.push_str(&format!("{kind:<22}{detail}{note}\n"));
     }
     let warnings = findings.iter().filter(|f| f.is_warning()).count();
     let errors = findings.len() - warnings;
@@ -27,9 +32,15 @@ pub fn human(findings: &[Finding]) -> String {
 
 fn describe(finding: &Finding) -> (&'static str, String) {
     match finding {
-        Finding::UnusedFile { file } => ("unused-file", file.clone()),
-        Finding::UnusedExport { file, symbol } => ("unused-export", format!("{file}: {symbol}")),
+        Finding::UnusedFile { file, .. } => ("unused-file", file.clone()),
+        Finding::UnusedExport { file, symbol, .. } => {
+            ("unused-export", format!("{file}: {symbol}"))
+        }
         Finding::UnusedDependency { package } => ("unused-dependency", package.clone()),
+        Finding::MisplacedDependency { package } => (
+            "misplaced-dependency",
+            format!("{package}: only tests use it, move it to devDependencies"),
+        ),
         Finding::MissingDependency { file, package } => {
             ("missing-dependency", format!("{file}: {package}"))
         }

@@ -17,8 +17,10 @@ pub struct Project {
     /// The canonical project root.
     pub root: PathBuf,
     pub files: BTreeMap<FileId, File>,
-    /// Packages in `dependencies` and `devDependencies`: they must be used.
-    pub required_packages: BTreeSet<String>,
+    /// Packages in `dependencies`: they must be used, and by production code.
+    pub dependencies: BTreeSet<String>,
+    /// Packages in `devDependencies`: they must be used.
+    pub dev_dependencies: BTreeSet<String>,
     /// Every package `package.json` declares, in any of its dependency fields.
     pub declared_packages: BTreeSet<String>,
     /// How many files were parsed.
@@ -147,28 +149,57 @@ impl Project {
             file.facts = facts;
             files.insert(id.clone(), file);
         }
-        let required_packages: BTreeSet<String> = manifest
-            .dependencies
-            .keys()
-            .chain(manifest.dev_dependencies.keys())
-            .cloned()
-            .collect();
-        let mut declared_packages = required_packages.clone();
+        let dependencies: BTreeSet<String> = manifest.dependencies.into_keys().collect();
+        let dev_dependencies: BTreeSet<String> = manifest.dev_dependencies.into_keys().collect();
+        let mut declared_packages: BTreeSet<String> =
+            dependencies.union(&dev_dependencies).cloned().collect();
         declared_packages.extend(manifest.peer_dependencies.into_keys());
         declared_packages.extend(manifest.optional_dependencies.into_keys());
         Ok(Self {
             root,
             parsed: files.len(),
             files,
-            required_packages,
+            dependencies,
+            dev_dependencies,
             declared_packages,
         })
     }
 
-    /// The id of `path`, relative to the root, if it is a project file.
-    pub fn id_of(&self, path: &str) -> Option<FileId> {
-        let path = dunce::canonicalize(self.root.join(path)).ok()?;
-        file_id(&self.root, &path).filter(|id| self.files.contains_key(id))
+    /// The files that entry paths or globs (relative to the root) name. Each must name at least
+    /// one project file.
+    pub fn entries(&self, patterns: &[String]) -> Result<BTreeSet<FileId>, String> {
+        let mut entries = BTreeSet::new();
+        for pattern in patterns {
+            let matched = self.entry(pattern)?;
+            if matched.is_empty() {
+                return Err(format!("entry matches no .js or .cjs file: {pattern}"));
+            }
+            entries.extend(matched);
+        }
+        Ok(entries)
+    }
+
+    fn entry(&self, pattern: &str) -> Result<Vec<FileId>, String> {
+        if !pattern.contains(['*', '?', '[', '{']) {
+            let id = dunce::canonicalize(self.root.join(pattern))
+                .ok()
+                .and_then(|path| file_id(&self.root, &path));
+            return Ok(id
+                .into_iter()
+                .filter(|id| self.files.contains_key(id))
+                .collect());
+        }
+        let glob = globset::GlobBuilder::new(pattern)
+            .literal_separator(true)
+            .build()
+            .map_err(|e| format!("invalid entry glob {pattern}: {e}"))?
+            .compile_matcher();
+        Ok(self
+            .files
+            .keys()
+            .filter(|id| glob.is_match(id))
+            .cloned()
+            .collect())
     }
 }
 
@@ -274,10 +305,8 @@ mod tests {
             }"#,
         )]);
         let project = Project::load(dir.path()).unwrap();
-        assert_eq!(
-            project.required_packages,
-            BTreeSet::from(["a".into(), "b".into()])
-        );
+        assert_eq!(project.dependencies, BTreeSet::from(["a".into()]));
+        assert_eq!(project.dev_dependencies, BTreeSet::from(["b".into()]));
         assert_eq!(
             project.declared_packages,
             BTreeSet::from(["a".into(), "b".into(), "c".into(), "d".into()])
@@ -313,12 +342,55 @@ mod tests {
         assert!(error.to_string().starts_with("lib/broken.js: "), "{error}");
     }
 
+    fn set(ids: &[&str]) -> BTreeSet<FileId> {
+        ids.iter().map(|id| id.to_string()).collect()
+    }
+
+    fn entries(project: &Project, pattern: &str) -> Result<BTreeSet<FileId>, String> {
+        project.entries(&[pattern.to_string()])
+    }
+
     #[test]
-    fn an_entry_maps_to_its_file_id() {
-        let dir = project(&[("index.js", ""), ("lib/a.js", "")]);
+    fn entries_are_paths_or_globs() {
+        let dir = project(&[
+            ("index.js", ""),
+            ("lib/a.js", ""),
+            ("lib/c.cjs", ""),
+            ("lib/deep/b.js", ""),
+        ]);
         let project = Project::load(dir.path()).unwrap();
-        assert_eq!(project.id_of("./lib/a.js"), Some("lib/a.js".into()));
-        assert_eq!(project.id_of("index.js"), Some("index.js".into()));
-        assert_eq!(project.id_of("nope.js"), None);
+        assert_eq!(entries(&project, "./index.js"), Ok(set(&["index.js"])));
+        assert_eq!(entries(&project, "lib/*.js"), Ok(set(&["lib/a.js"])));
+        assert_eq!(
+            entries(&project, "lib/**"),
+            Ok(set(&["lib/a.js", "lib/c.cjs", "lib/deep/b.js"]))
+        );
+        assert_eq!(
+            project.entries(&["index.js".into(), "lib/*.cjs".into()]),
+            Ok(set(&["index.js", "lib/c.cjs"]))
+        );
+    }
+
+    #[test]
+    fn an_entry_that_names_no_javascript_file_is_an_error() {
+        let dir = project(&[("index.js", ""), ("data.json", "{}")]);
+        let project = Project::load(dir.path()).unwrap();
+        for pattern in ["nope.js", "data.json", "src/**/*.js"] {
+            assert_eq!(
+                entries(&project, pattern),
+                Err(format!("entry matches no .js or .cjs file: {pattern}"))
+            );
+        }
+    }
+
+    #[test]
+    fn an_invalid_glob_is_an_error() {
+        let dir = project(&[("index.js", "")]);
+        let project = Project::load(dir.path()).unwrap();
+        let error = entries(&project, "lib/[a.js").unwrap_err();
+        assert!(
+            error.starts_with("invalid entry glob lib/[a.js: "),
+            "{error}"
+        );
     }
 }
