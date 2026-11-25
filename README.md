@@ -205,5 +205,9 @@ mantém um PR de release aberto com a próxima versão e o CHANGELOG. Ao fazer m
 3. publica `@prunr/<plataforma>` e `prunr` no npm com *trusted publishing* (OIDC, sem token);
 4. instala `prunr` do npm em Linux, macOS e Windows e roda `npx prunr --version`.
 
+Todo PR passa pela esteira inteira: testes nos três sistemas, cobertura de 100%, os 5 builds, a
+checagem de binário estático e o `npm pack` de cada pacote. A `main` só aceita PRs com tudo
+verde.
+
 Antes do primeiro release, um mantenedor roda `scripts/bootstrap-npm.sh` uma única vez: o npm
 só aceita configurar *trusted publishing* num pacote que já existe.

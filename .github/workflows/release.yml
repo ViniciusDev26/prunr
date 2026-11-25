@@ -6,15 +6,9 @@ name: release
 on:
   push:
     branches: [main]
-  # A pull request that touches the release only builds and packs, so cross-compiling and
-  # packaging break there instead of during a release.
+  # On a pull request it only builds, checks and packs, so cross-compiling and packaging break
+  # there instead of during a release.
   pull_request:
-    paths:
-      - .github/workflows/release.yml
-      - npm/**
-      - Cargo.toml
-      - Cargo.lock
-      - rust-toolchain.toml
 
 permissions:
   contents: read
@@ -32,12 +26,24 @@ jobs:
       tag: ${{ steps.release.outputs.tag_name }}
       version: ${{ steps.release.outputs.version }}
     steps:
+      # A token of its own, so the release PR runs the required checks: GitHub runs no
+      # workflow for a PR opened with GITHUB_TOKEN. Until the secret exists, there is no
+      # release PR, and main stays green.
+      - id: token
+        env:
+          TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::notice::RELEASE_PLEASE_TOKEN is not set: no release PR until it is."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
       - id: release
+        if: steps.token.outputs.present == 'true'
         uses: googleapis/release-please-action@v5
         with:
-          # A token of its own, so the release PR runs the required checks. Without the secret
-          # the PR still opens, but GitHub does not run workflows for it.
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
@@ -124,7 +130,7 @@ jobs:
           gh release upload "$TAG" ./* --clobber
 
   npm:
-    name: Publish to npm
+    name: npm packages
     needs: [release-please, static]
     if: ${{ !cancelled() && needs.static.result == 'success' }}
     runs-on: ubuntu-latest

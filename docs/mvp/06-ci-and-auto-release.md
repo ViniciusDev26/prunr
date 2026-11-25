@@ -34,6 +34,10 @@ fazer merge do PR de release.
   de um mantenedor, com 2FA.
 - **`RELEASE_PLEASE_TOKEN`:** um token próprio para o release-please, porque PRs abertos com o
   `GITHUB_TOKEN` não disparam workflows e o PR de release não passaria pelo ruleset.
+- **A esteira inteira roda em todo PR:** testes, cobertura, os 5 builds, a checagem de binário
+  estático e o `npm pack` de cada pacote. Todos são obrigatórios no ruleset da `main`.
+- **Sem o `RELEASE_PLEASE_TOKEN`, o job do release-please só avisa e não abre o PR**, para a
+  `main` não ficar vermelha enquanto o secret não existe.
 - **A versão vem do `Cargo.toml`**, que o release-please atualiza; os `package.json` recebem a
   versão na hora de publicar.
 
@@ -44,4 +48,4 @@ fazer merge do PR de release.
 - [ ] A versão `0.1.0` é publicada de ponta a ponta pelo pipeline, sem nenhum comando manual.
 - [ ] `npm i -D prunr && npx prunr --version` funciona num runner Linux limpo, num macOS e num Windows.
 - [x] O binário Linux roda numa imagem `alpine` e numa `debian` (prova de que é estático):
-      verificado nos PRs que mexem no release, para x64 e arm64.
+      verificado em todo PR, para x64 e arm64.
