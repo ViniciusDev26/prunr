@@ -66,7 +66,10 @@ mod tests {
 
     #[test]
     fn reads_the_entries() {
-        let dir = project(r#"{ "entries": ["index.js", "cli.js"] }"#, &["index.js", "cli.js"]);
+        let dir = project(
+            r#"{ "entries": ["index.js", "cli.js"] }"#,
+            &["index.js", "cli.js"],
+        );
         let config = Config::load(dir.path()).unwrap();
         assert_eq!(config.entries, ["index.js", "cli.js"]);
     }
@@ -87,21 +90,30 @@ mod tests {
         let dir = project("{ nope", &[]);
         let error = Config::load(dir.path()).unwrap_err();
         assert!(matches!(error, ConfigError::Invalid(_)), "{error:?}");
-        assert!(error.to_string().starts_with("invalid prunr.json: "), "{error}");
+        assert!(
+            error.to_string().starts_with("invalid prunr.json: "),
+            "{error}"
+        );
     }
 
     #[test]
     fn an_unknown_key_is_an_error() {
         let dir = project(r#"{ "entries": [], "entrys": [] }"#, &[]);
         let error = Config::load(dir.path()).unwrap_err();
-        assert!(error.to_string().contains("unknown field `entrys`"), "{error}");
+        assert!(
+            error.to_string().contains("unknown field `entrys`"),
+            "{error}"
+        );
     }
 
     #[test]
     fn entries_are_required() {
         let dir = project("{}", &[]);
         let error = Config::load(dir.path()).unwrap_err();
-        assert!(error.to_string().contains("missing field `entries`"), "{error}");
+        assert!(
+            error.to_string().contains("missing field `entries`"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -117,6 +129,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join(FILE_NAME)).unwrap();
         let error = Config::load(dir.path()).unwrap_err();
-        assert!(error.to_string().starts_with("invalid prunr.json: "), "{error}");
+        assert!(
+            error.to_string().starts_with("invalid prunr.json: "),
+            "{error}"
+        );
     }
 }
