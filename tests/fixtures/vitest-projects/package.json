@@ -1,0 +1,6 @@
+{
+  "name": "vitest-projects",
+  "private": true,
+  "scripts": { "test": "vitest --config vitest.front.config.ts" },
+  "devDependencies": { "vitest": "^3.0.0", "happy-dom": "^15.0.0", "jsdom": "^25.0.0" }
+}

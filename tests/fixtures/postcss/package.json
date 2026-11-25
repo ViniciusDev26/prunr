@@ -1,0 +1,5 @@
+{
+  "name": "postcss",
+  "private": true,
+  "dependencies": { "@tailwindcss/postcss": "^4.0.0", "autoprefixer": "^10.0.0", "unused-lib": "1.0.0" }
+}

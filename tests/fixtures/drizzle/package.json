@@ -1,0 +1,7 @@
+{
+  "name": "drizzle",
+  "private": true,
+  "scripts": { "db:generate": "drizzle-kit generate --config=db/drizzle.config.ts" },
+  "dependencies": { "drizzle-orm": "^0.40.0" },
+  "devDependencies": { "drizzle-kit": "^0.30.0" }
+}
