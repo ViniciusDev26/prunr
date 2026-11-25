@@ -5,6 +5,7 @@ pub mod config;
 pub mod edit;
 pub mod facts;
 pub mod init;
+pub mod package_json;
 pub mod plugins;
 pub mod project;
 pub mod report;
