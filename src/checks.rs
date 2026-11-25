@@ -256,7 +256,8 @@ fn dependencies(
             .collect()
     };
     let in_production = required(live);
-    let in_tests = required(tested);
+    let mut in_tests = required(tested);
+    in_tests.extend(&project.test_packages);
     let in_scripts = &project.script_packages;
     let used = |package: &String| {
         in_production.contains(package)

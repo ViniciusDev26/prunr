@@ -75,7 +75,7 @@ prunr schema         # o JSON Schema do prunr.json
 |---|---|---|
 | `entries.production` | sim | Caminhos ou globs dos arquivos por onde o programa começa. Tudo o que eles alcançam, direta ou indiretamente, está vivo. |
 | `$schema` | não | O JSON Schema do arquivo, para autocompletar e validar no editor. |
-| `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. |
+| `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. Com Jest ou Vitest, liste só o que o runner não acha sozinho (veja [Jest e Vitest](#jest-e-vitest)). |
 
 | `dependencies.ignore` | não | Pacotes que ficam de fora das verificações de dependência: os carregados de um jeito que nem o grafo nem os `scripts` mostram (um plugin citado no arquivo de configuração de outra ferramenta). |
 
@@ -129,6 +129,26 @@ Arquivos `.js`, `.cjs`, `.mjs`, `.jsx`, `.ts`, `.cts`, `.mts` e `.tsx` entram no
 - `@types/x` conta como usado quando `x` é usado; `@types/node`, quando o projeto tem TypeScript
   ou usa um módulo do Node. Importar `x` com só o `@types/x` declarado não é
   `missing-dependency`.
+
+### Jest e Vitest
+
+Quando `jest` ou `vitest` está declarado no `package.json`, o prunr lê a configuração do runner
+(`jest.config.*`, a chave `jest` do `package.json`, `vitest.config.*` ou `vite.config.*`) sem
+executá-la:
+
+- **Arquivos de teste:** os de `testMatch` (Jest) ou `test.include` (Vitest), ou os padrões de
+  cada runner quando a opção não existe. Eles se somam a `entries.test`.
+- **Arquivos carregados:** a própria configuração e os arquivos de `setupFiles`,
+  `setupFilesAfterEnv`, `globalSetup` e `globalTeardown` (Jest) ou `test.setupFiles` e
+  `test.globalSetup` (Vitest) são código de teste.
+- **Pacotes citados como texto** (`preset`, `testEnvironment`, `transform`, `reporters`,
+  `snapshotSerializers`, `watchPlugins`; no Vitest, `test.environment`, `test.reporters` e
+  `test.coverage.provider`) contam como uso de teste: não são `unused-dependency` e, se estiverem
+  em `dependencies`, são `misplaced-dependency`.
+
+Só valores literais são lidos. Uma configuração montada em tempo de execução (uma função, uma
+variável importada) cai nos padrões do runner; cubra o resto com `entries.test`. `testRegex`
+não é lido.
 
 Na dúvida, o prunr é conservador: quando o resultado de um `require` é passado adiante ou
 acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um
