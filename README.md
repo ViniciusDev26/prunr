@@ -209,5 +209,16 @@ Todo PR passa pela esteira inteira: testes nos três sistemas, cobertura de 100%
 checagem de binário estático e o `npm pack` de cada pacote. A `main` só aceita PRs com tudo
 verde.
 
-Antes do primeiro release, um mantenedor roda `scripts/bootstrap-npm.sh` uma única vez: o npm
-só aceita configurar *trusted publishing* num pacote que já existe.
+#### Um pacote npm novo
+
+O npm só aceita configurar *trusted publishing* num pacote que já existe. Por isso, um pacote
+novo (por exemplo, o de uma plataforma nova) é criado uma vez, à mão, por um dono da org
+`@prunr`, antes do release que o publica:
+
+1. Publicar um placeholder `0.0.0`: numa pasta vazia, um `package.json` com `name`,
+   `"version": "0.0.0"`, `license` e `repository`, e `npm publish --access public`.
+2. Esperar o npm processar o pacote novo (`npm view <pacote>@0.0.0` responde), o que leva alguns
+   minutos.
+3. Opcional: `npm deprecate <pacote>@0.0.0 "placeholder, install a real release"`.
+4. Ligar o pacote ao workflow de release:
+   `npm trust github <pacote> --file release.yml --repo ViniciusDev26/prunr --allow-publish --yes`.
