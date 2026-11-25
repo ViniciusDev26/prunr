@@ -1191,3 +1191,13 @@ fn a_package_another_used_package_needs_as_a_peer_is_used() {
          errors: 3, warnings: 0\n"
     );
 }
+
+#[test]
+fn the_stylesheets_a_file_imports_use_packages_too() {
+    let run = check("css-imports");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     unused-lib\n\nerrors: 1, warnings: 0\n"
+    );
+}
