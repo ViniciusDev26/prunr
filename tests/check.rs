@@ -839,11 +839,7 @@ fn fix_removes_what_check_reports_until_nothing_more_can_go() {
          \n\
          export function greet() {\n  return readFile;\n}\n\
          \n\
-         const unusedConst = 1;\n\
-         \n\
-         export const stillUsed = 2;\n\
-         \n\
-         const local = 3;\n"
+         export const stillUsed = 2;\n"
     );
     assert_eq!(
         read(root, "package.json"),
@@ -912,8 +908,8 @@ fn fix_leaves_what_it_cannot_remove_safely() {
          unused-import         cjs.cjs: z from ./other.js\n\
          \n\
          errors: 3, warnings: 0\n",
-        "an export keyword shared with a used name, an anonymous default and a require in a \
-         declaration of several names stay"
+        "an export keyword shared with a used name, a default with side effects and a require \
+         in a declaration of several names stay"
     );
     assert_eq!(
         read(dir.path(), "index.js"),
@@ -927,7 +923,7 @@ fn fix_leaves_what_it_cannot_remove_safely() {
     );
     assert_eq!(
         read(dir.path(), "lib.js"),
-        "export const a = 1, shared = 2;\nconst b = 3, c = 4, onlyUnused = 5;\nexport default 42;\n"
+        "export const a = 1, shared = 2;\nexport default 42;\n"
     );
 }
 
