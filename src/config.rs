@@ -25,14 +25,29 @@ pub enum ConfigError {
 
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        match self {
+            Self::Missing(path) => write!(f, "{} not found", path.display()),
+            Self::Invalid(reason) => write!(f, "invalid {FILE_NAME}: {reason}"),
+            Self::EntryNotFound(entry) => write!(f, "entry not found: {entry}"),
+        }
     }
 }
 
 impl Config {
     /// Reads and validates `prunr.json` at `root`.
     pub fn load(root: &Path) -> Result<Self, ConfigError> {
-        todo!()
+        let path = root.join(FILE_NAME);
+        if !path.exists() {
+            return Err(ConfigError::Missing(path));
+        }
+        let text =
+            std::fs::read_to_string(&path).map_err(|e| ConfigError::Invalid(e.to_string()))?;
+        let config: Self =
+            serde_json::from_str(&text).map_err(|e| ConfigError::Invalid(e.to_string()))?;
+        if let Some(entry) = config.entries.iter().find(|e| !root.join(e).is_file()) {
+            return Err(ConfigError::EntryNotFound(entry.clone()));
+        }
+        Ok(config)
     }
 }
 
