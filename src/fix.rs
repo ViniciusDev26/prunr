@@ -28,6 +28,7 @@ pub fn plan(project: &Project, findings: &[Finding], package_json: &str) -> Plan
     let mut plan = Plan::default();
     let mut removals: BTreeMap<&FileId, Vec<(&Finding, Removal)>> = BTreeMap::new();
     let mut manifest = package_json.to_string();
+    let mut removed: BTreeMap<&FileId, BTreeSet<Vec<String>>> = BTreeMap::new();
     for finding in findings {
         match finding {
             Finding::UnusedFile {
@@ -48,6 +49,7 @@ pub fn plan(project: &Project, findings: &[Finding], package_json: &str) -> Plan
                         .entry(file)
                         .or_default()
                         .push((finding, removal.clone()));
+                    removed.entry(file).or_default().insert(path);
                 }
             }
             Finding::UnusedImport {
@@ -99,18 +101,64 @@ pub fn plan(project: &Project, findings: &[Finding], package_json: &str) -> Plan
         .filter(|(file, _)| !plan.delete.contains(*file));
     for (file, removals) in removals {
         let source = std::fs::read_to_string(project.root.join(file)).unwrap_or_default();
-        let (edits, fixed) = edits(
-            &source,
-            &project.files[file].facts.export_removals,
-            &removals,
-        );
+        let facts = &project.files[file].facts;
+        let (mut edits, fixed) = edits(&source, &facts.export_removals, &removals);
+        let removed = removed.remove(file).unwrap_or_default();
+        edits.extend(declarations(&source, &facts.export_declarations, &removed));
         plan.fixed.extend(fixed);
-        plan.files
-            .insert(file.clone(), crate::edit::apply(&source, &edits));
+        plan.files.insert(
+            file.clone(),
+            tidy(&source, crate::edit::apply(&source, &edits)),
+        );
     }
     plan.fixed
         .sort_by_key(|finding| findings.iter().position(|f| f == finding));
     plan
+}
+
+/// The declarations left unused once the exports at `removed` go: those all of whose exports
+/// go.
+fn declarations(
+    source: &str,
+    declarations: &BTreeMap<Vec<String>, Span>,
+    removed: &BTreeSet<Vec<String>>,
+) -> Vec<Edit> {
+    let spans: BTreeSet<Span> = removed
+        .iter()
+        .filter_map(|path| declarations.get(path).copied())
+        .collect();
+    spans
+        .into_iter()
+        .filter(|span| {
+            declarations
+                .iter()
+                .filter(|(_, declaration)| *declaration == span)
+                .all(|(path, _)| removed.contains(path))
+        })
+        .map(|span| delete_lines(source, span))
+        .collect()
+}
+
+/// `edited` without the blank lines the deletions left behind: no run of blank lines, nor a
+/// blank line at the start or the end, that `original` did not have.
+fn tidy(original: &str, edited: String) -> String {
+    let mut text = edited;
+    for (run, shorter) in [("\r\n\r\n\r\n", "\r\n\r\n"), ("\n\n\n", "\n\n")] {
+        if !original.contains(run) {
+            while text.contains(run) {
+                text = text.replace(run, shorter);
+            }
+        }
+    }
+    if !original.ends_with("\n\n") {
+        while text.ends_with("\n\n") {
+            text.pop();
+        }
+    }
+    if !original.starts_with('\n') {
+        text = text.trim_start_matches(['\r', '\n']).to_string();
+    }
+    text
 }
 
 /// The edits that make `removals` in `source`, and the findings they fix. An `export` keyword
@@ -124,16 +172,16 @@ fn edits(
     let mut fixed = Vec::new();
     let mut lists: BTreeMap<Vec<Span>, (Option<Span>, BTreeSet<usize>)> = BTreeMap::new();
     let mut imports: BTreeMap<Span, (ImportParts, BTreeSet<usize>)> = BTreeMap::new();
+    // A declaration of several names goes only when all of them do.
+    let partly_removed = |removal: &Removal| {
+        let sharing = exports.values().filter(|r| *r == removal).count();
+        let removing = removals.iter().filter(|(_, r)| r == removal).count();
+        sharing > 0 && sharing != removing
+    };
     for (finding, removal) in removals {
         match removal {
-            Removal::Prefix(span) => {
-                let sharing = exports.values().filter(|r| *r == removal).count();
-                let removing = removals.iter().filter(|(_, r)| r == removal).count();
-                if sharing != removing {
-                    continue;
-                }
-                edits.push(Edit::delete(*span));
-            }
+            _ if partly_removed(removal) => continue,
+            Removal::Prefix(span) => edits.push(Edit::delete(*span)),
             Removal::Statement(span) => edits.push(delete_lines(source, *span)),
             Removal::Item { items, index, all } => {
                 let entry = lists
@@ -238,6 +286,20 @@ mod tests {
         assert_eq!(
             rebuild(&parts, &BTreeSet::from([1])),
             "import type D, { B as C } from './types'"
+        );
+    }
+
+    #[test]
+    fn tidying_removes_only_the_blank_lines_deletions_left() {
+        assert_eq!(tidy("a\n\nb\n", "\n\na\n\n\n\nb\n\n".into()), "a\n\nb\n");
+        assert_eq!(
+            tidy("\na\n\n\n\nb\n\n", "\na\n\n\n\nb\n\n".into()),
+            "\na\n\n\n\nb\n\n",
+            "blank lines the file already had stay"
+        );
+        assert_eq!(
+            tidy("a\r\n\r\nb\r\n", "a\r\n\r\n\r\nb\r\n".into()),
+            "a\r\n\r\nb\r\n"
         );
     }
 

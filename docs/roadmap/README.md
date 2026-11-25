@@ -14,13 +14,13 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 6. [Ignorar no código](06-ignore-in-code.md)
 - [x] 8. [`require` dinâmico com padrão](08-dynamic-require-patterns.md)
 - [x] 11. [Plugins internos](11-plugins.md)
+- [x] 12. [`prunr fix` apaga a declaração que fica sem uso](12-fix-removes-declarations.md)
 
 ## Depois
 
 - [ ] 7. [Workspaces e monorepo](07-workspaces.md)
 - [ ] 9. [Next.js e NestJS](09-next-and-nest.md)
 - [ ] 10. [Performance](10-performance.md)
-- [ ] 12. [`prunr fix` apaga a declaração que fica sem uso](12-fix-removes-declarations.md)
 - [ ] 13. [`prunr fix --test-only`](13-fix-test-only.md)
 - [ ] 14. [Ligar e desligar plugins no `prunr.json`](14-toggle-plugins.md)
 - [ ] 15. [Pacotes carregados pelo nome por outra lib](15-packages-loaded-by-name.md)

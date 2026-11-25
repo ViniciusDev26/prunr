@@ -23,7 +23,18 @@ impl Edit {
 /// `source` with `edits` applied. An edit that overlaps one already applied is skipped: it is
 /// left for the next round.
 pub fn apply(source: &str, edits: &[Edit]) -> String {
-    let mut edits = edits.to_vec();
+    // An edit inside a larger one is part of it.
+    let mut edits: Vec<Edit> = edits
+        .iter()
+        .filter(|edit| {
+            !edits.iter().any(|other| {
+                other.start <= edit.start
+                    && edit.end <= other.end
+                    && (other.end - other.start) > (edit.end - edit.start)
+            })
+        })
+        .cloned()
+        .collect();
     edits.sort_by(|a, b| b.cmp(a));
     let mut text = source.to_string();
     let mut limit = source.len() as u32;

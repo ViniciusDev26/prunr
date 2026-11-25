@@ -10,12 +10,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
-    AssignmentExpression, AssignmentTarget, BinaryOperator, BindingIdentifier, BindingPattern,
-    CallExpression, Class, ClassElement, Declaration, ExportAllDeclaration, ExportDeclaration,
-    ExportDefaultDeclaration, ExportDefaultDeclarationKind, ExportFromDeclaration,
-    ExportNamedDeclaration, Expression, IdentifierReference, ImportDeclaration,
-    ImportDeclarationSpecifier, ImportExpression, MethodDefinitionKind, ObjectPropertyKind,
-    StaticMemberExpression, TSImportEqualsDeclaration, TSModuleReference, TemplateLiteral,
+    ArrayExpressionElement, AssignmentExpression, AssignmentTarget, BinaryOperator,
+    BindingIdentifier, BindingPattern, CallExpression, Class, ClassElement, Declaration,
+    ExportAllDeclaration, ExportDeclaration, ExportDefaultDeclaration,
+    ExportDefaultDeclarationKind, ExportFromDeclaration, ExportNamedDeclaration, Expression,
+    IdentifierReference, ImportDeclaration, ImportDeclarationSpecifier, ImportExpression,
+    MethodDefinitionKind, ObjectPropertyKind, StaticMemberExpression, TSImportEqualsDeclaration,
+    TSModuleReference, TemplateLiteral, UnaryOperator,
 };
 use oxc_ast::{AstKind, Comment};
 use oxc_parser::Parser;
@@ -107,6 +108,10 @@ pub struct Facts {
     pub export_removals: BTreeMap<Vec<String>, Removal>,
     /// How to drop each import binding, by specifier and local name.
     pub import_removals: BTreeMap<(String, String), Removal>,
+    /// The declaration of the local an export refers to (`module.exports = { a }`), with the
+    /// comment right above it, when nothing else in the file reads it and it has no side
+    /// effects: removing every export of it leaves it unused.
+    pub export_declarations: BTreeMap<Vec<String>, Span>,
 }
 
 /// How `prunr fix` takes an export or an import binding out of the code.
@@ -184,6 +189,11 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
         site: Span::default(),
         require_sites: BTreeMap::new(),
         removal: None,
+        comments: program
+            .comments
+            .iter()
+            .map(|comment| comment.span)
+            .collect(),
     };
     for node in semantic.nodes().iter() {
         match node.kind() {
@@ -231,6 +241,8 @@ struct Analyzer<'s, 'a> {
     require_sites: BTreeMap<String, u32>,
     /// How to remove the exports being declared.
     removal: Option<Removal>,
+    /// Every comment, in source order.
+    comments: Vec<Span>,
 }
 
 impl<'a> Analyzer<'_, 'a> {
@@ -690,6 +702,23 @@ impl<'a> Analyzer<'_, 'a> {
 
     // ---- exports ----
 
+    /// `span` with the comments right above it: those with nothing but blanks and at most one
+    /// line break between them and what follows. A comment after a blank line stays.
+    fn with_leading_comments(&self, span: Span) -> Span {
+        let mut start = span.start;
+        for comment in self.comments.iter().rev() {
+            if comment.end > start {
+                continue;
+            }
+            let gap = &self.source[comment.end as usize..start as usize];
+            if !gap.trim().is_empty() || gap.matches('\n').count() > 1 {
+                break;
+            }
+            start = comment.start;
+        }
+        Span::new(start, span.end)
+    }
+
     /// Records an export made at the current site.
     fn declare(&mut self, path: &Path) {
         self.exports.entry(path.clone()).or_insert(false);
@@ -757,7 +786,49 @@ impl<'a> Analyzer<'_, 'a> {
     fn export_reference(&mut self, path: Path, ident: &IdentifierReference) {
         let reference = self.semantic.scoping().get_reference(ident.reference_id());
         if let Some(symbol) = reference.symbol_id() {
-            self.export_symbol(path, symbol, ident.span);
+            self.export_local(path, symbol, ident.span);
+        }
+    }
+
+    /// An export of a local declared elsewhere in the file (`exports.a = a`, `export { a }`):
+    /// its declaration goes with the export when nothing else reads it and it has no side
+    /// effects.
+    fn export_local(&mut self, path: Path, symbol: SymbolId, site: Span) {
+        self.export_symbol(path.clone(), symbol, site);
+        if self.exports.get(&path) == Some(&true) {
+            return;
+        }
+        let nodes = self.semantic.nodes();
+        let declaration = self.semantic.symbol_declaration(symbol);
+        let span = match declaration.kind() {
+            AstKind::Function(function) if function.is_declaration() => Some(function.span),
+            AstKind::Class(class) if class.is_declaration() => Some(class.span),
+            AstKind::VariableDeclarator(declarator)
+                if declarator.init.as_ref().is_none_or(is_pure) =>
+            {
+                match nodes.parent_kind(declaration.id()) {
+                    AstKind::VariableDeclaration(variables)
+                        if variables.declarations.len() == 1 =>
+                    {
+                        Some(variables.span)
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        let exported = matches!(
+            nodes.parent_kind(nodes.parent_id(declaration.id())),
+            AstKind::ExportDeclaration(_)
+        ) || matches!(
+            nodes.parent_kind(declaration.id()),
+            AstKind::ExportDeclaration(_)
+        );
+        if let Some(span) = span
+            && !exported
+        {
+            let span = self.with_leading_comments(span);
+            self.facts.export_declarations.insert(path, span);
         }
     }
 
@@ -841,7 +912,7 @@ impl<'a> Analyzer<'_, 'a> {
                 .scoping()
                 .get_root_binding(local.as_str().into())
             {
-                self.export_symbol(path, symbol, specifier.local.span());
+                self.export_local(path, symbol, specifier.local.span());
             }
         }
     }
@@ -866,10 +937,21 @@ impl<'a> Analyzer<'_, 'a> {
     fn export_declaration(&mut self, export: &ExportDeclaration<'a>) {
         self.facts.esm = true;
         self.site = export.span;
-        self.removal = Some(Removal::Prefix(Span::new(
-            export.span.start,
-            export.declaration.span().start,
-        )));
+        let pure = match &export.declaration {
+            Declaration::VariableDeclaration(variables) => variables
+                .declarations
+                .iter()
+                .all(|declarator| declarator.init.as_ref().is_none_or(is_pure)),
+            _ => true,
+        };
+        self.removal = Some(if pure {
+            Removal::Statement(self.with_leading_comments(export.span))
+        } else {
+            Removal::Prefix(Span::new(
+                export.span.start,
+                export.declaration.span().start,
+            ))
+        });
         let idents = match &export.declaration {
             Declaration::VariableDeclaration(variables) => variables
                 .declarations
@@ -893,21 +975,18 @@ impl<'a> Analyzer<'_, 'a> {
         self.facts.esm = true;
         self.site = export.span;
         let path = vec!["default".to_string()];
-        let prefix = Removal::Prefix(Span::new(
-            export.span.start,
-            export.declaration.span().start,
-        ));
+        let statement = Removal::Statement(self.with_leading_comments(export.span));
         self.removal = match &export.declaration {
-            ExportDefaultDeclarationKind::FunctionDeclaration(function)
-                if function.id.is_some() =>
+            ExportDefaultDeclarationKind::FunctionDeclaration(_)
+            | ExportDefaultDeclarationKind::ClassDeclaration(_)
+            | ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => Some(statement),
+            expression
+                if expression
+                    .as_expression()
+                    .is_some_and(|expression| is_pure(expression)) =>
             {
-                Some(prefix)
+                Some(statement)
             }
-            ExportDefaultDeclarationKind::ClassDeclaration(class) if class.id.is_some() => {
-                Some(prefix)
-            }
-            ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => Some(prefix),
-            ExportDefaultDeclarationKind::Identifier(_) => Some(Removal::Statement(export.span)),
             _ => None,
         };
         let id = match &export.declaration {
@@ -954,6 +1033,43 @@ impl<'a> Analyzer<'_, 'a> {
         if !written && self.is_exports_object(&member.object) {
             self.reads.insert(self.named(&member.property.name));
         }
+    }
+}
+
+/// Whether evaluating `expression` can have no side effect: a literal, a function, a class, or
+/// an array or object of those (`Object.freeze` of one too).
+fn is_pure(expression: &Expression) -> bool {
+    match expression.get_inner_expression() {
+        Expression::BooleanLiteral(_)
+        | Expression::NullLiteral(_)
+        | Expression::NumericLiteral(_)
+        | Expression::BigIntLiteral(_)
+        | Expression::StringLiteral(_)
+        | Expression::RegExpLiteral(_)
+        | Expression::Identifier(_)
+        | Expression::FunctionExpression(_)
+        | Expression::ArrowFunctionExpression(_)
+        | Expression::ClassExpression(_) => true,
+        Expression::TemplateLiteral(template) => template.expressions.is_empty(),
+        Expression::UnaryExpression(unary) => {
+            unary.operator != UnaryOperator::Delete && is_pure(&unary.argument)
+        }
+        Expression::ArrayExpression(array) => array.elements.iter().all(|element| {
+            element.as_expression().is_some_and(is_pure)
+                || matches!(element, ArrayExpressionElement::Elision(_))
+        }),
+        Expression::ObjectExpression(object) => object.properties.iter().all(|property| {
+            matches!(property, ObjectPropertyKind::ObjectProperty(property)
+                if !property.key.is_expression() && is_pure(&property.value))
+        }),
+        Expression::CallExpression(call) => {
+            matches!(&call.callee, Expression::StaticMemberExpression(member)
+                if member.property.name == "freeze"
+                    && matches!(&member.object, Expression::Identifier(id) if id.name == "Object"))
+                && call.arguments.len() == 1
+                && call.arguments[0].as_expression().is_some_and(is_pure)
+        }
+        _ => false,
     }
 }
 
@@ -1846,12 +1962,12 @@ mod tests {
             export_removals(
                 "a.ts",
                 "export const a = 1, b = 2;\nexport function f() {}\nexport interface I {}\n\
-                 const c = 1;\nexport { c, c as d };"
+                 const c = 1;\nexport { c, c as d };\nexport const z = make();"
             ),
             pairs(&[
-                ("I", "prefix \"export \""),
-                ("a", "prefix \"export \""),
-                ("b", "prefix \"export \""),
+                ("I", "statement \"export interface I {}\""),
+                ("a", "statement \"export const a = 1, b = 2;\""),
+                ("b", "statement \"export const a = 1, b = 2;\""),
                 (
                     "c",
                     "item 0 of [\"c\", \"c as d\"], all Some(\"export { c, c as d };\")"
@@ -1860,24 +1976,32 @@ mod tests {
                     "d",
                     "item 1 of [\"c\", \"c as d\"], all Some(\"export { c, c as d };\")"
                 ),
-                ("f", "prefix \"export \""),
+                ("f", "statement \"export function f() {}\""),
+                ("z", "prefix \"export \""),
             ])
         );
         for (source, expected) in [
             (
                 "export default function f() {}",
-                Some("prefix \"export default \""),
+                Some("statement \"export default function f() {}\""),
             ),
             (
                 "export default class C {}",
-                Some("prefix \"export default \""),
+                Some("statement \"export default class C {}\""),
             ),
             (
                 "const a = 1;\nexport default a;",
                 Some("statement \"export default a;\""),
             ),
-            ("export default function () {}", None),
-            ("export default 42;", None),
+            (
+                "export default function () {}",
+                Some("statement \"export default function () {}\""),
+            ),
+            (
+                "export default 42;",
+                Some("statement \"export default 42;\""),
+            ),
+            ("export default make();", None),
         ] {
             let found = export_removals("a.js", source);
             let expected: Vec<(String, String)> = expected
@@ -1991,6 +2115,43 @@ mod tests {
         );
         assert_eq!(found.require_lines["./types"], 2);
         assert!(found.requires.iter().all(|r| r.unused.is_empty()));
+    }
+
+    fn declarations(source: &str) -> Vec<(String, String)> {
+        let found = facts(source);
+        found
+            .export_declarations
+            .iter()
+            .map(|(path, span)| {
+                let text = &source[span.start as usize..span.end as usize];
+                (path.join("."), text.to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_export_of_a_local_knows_the_declaration_it_would_leave_unused() {
+        let source = "/** Doc. */\nconst a = `x`, b = 2;\n\n// Header.\n\nconst c = -1;\n\
+                      const d = [1, , 2];\nconst e = Object.freeze({ k: 'v' });\n\
+                      const f = Object.freeze(g());\nconst h = delete o.p;\nconst i = `${j}`;\n\
+                      const k = { [key]: 1 };\nfunction l() {}\nclass M {}\nconst n = 1;\nuse(n);\n\
+                      module.exports = { a, c, d, e, f, h, i, k, l, M, n };";
+        assert_eq!(
+            declarations(source),
+            pairs(&[
+                ("M", "class M {}"),
+                ("c", "const c = -1;"),
+                ("d", "const d = [1, , 2];"),
+                ("e", "const e = Object.freeze({ k: 'v' });"),
+                ("l", "function l() {}"),
+            ]),
+            "a declaration of several names, one with side effects and one read elsewhere stay"
+        );
+        let source = "/** Doc. */\nconst a = 1;\nexports.a = a;";
+        assert_eq!(
+            declarations(source),
+            pairs(&[("a", "/** Doc. */\nconst a = 1;")])
+        );
     }
 
     #[test]
