@@ -1,4 +1,4 @@
-//! Plugins: what a tool or framework (Jest, Vitest, and later Next.js, NestJS, Vue...) adds to
+//! Plugins: what a tool or framework (Jest, Vitest, Vite, React, Next.js, NestJS...) adds to
 //! the graph by convention or through its configuration, which no `import` shows.
 //!
 //! Each plugin is compiled in and enables itself when `package.json` declares its package. A
@@ -13,7 +13,9 @@ use serde_json::Value;
 mod jest;
 mod nest;
 mod next;
+mod react;
 mod static_config;
+mod vite;
 mod vitest;
 
 pub use static_config::static_config;
@@ -57,6 +59,9 @@ pub struct Contribution {
     pub production: Vec<String>,
     /// Packages a framework loads in production without an `import` (its peer dependencies).
     pub production_packages: BTreeSet<String>,
+    /// Directories, relative to the package, where a bundler looks up a specifier that starts
+    /// with `/` (Vite's public directory and root), tried in order when no such file exists.
+    pub absolute_roots: Vec<String>,
 }
 
 /// A tool or framework prunr knows.
@@ -74,7 +79,14 @@ pub trait Plugin {
 }
 
 /// Every plugin, in the order they contribute.
-pub const PLUGINS: &[&dyn Plugin] = &[&jest::Jest, &vitest::Vitest, &next::Next, &nest::Nest];
+pub const PLUGINS: &[&dyn Plugin] = &[
+    &jest::Jest,
+    &vitest::Vitest,
+    &vite::Vite,
+    &react::React,
+    &next::Next,
+    &nest::Nest,
+];
 
 /// What the plugins enabled in the project contribute.
 pub fn contribution(context: &Context) -> Contribution {
@@ -211,7 +223,10 @@ mod tests {
     #[test]
     fn every_plugin_is_named_after_its_package() {
         let names: Vec<&str> = PLUGINS.iter().map(|plugin| plugin.name()).collect();
-        assert_eq!(names, ["jest", "vitest", "next", "@nestjs/core"]);
+        assert_eq!(
+            names,
+            ["jest", "vitest", "vite", "react", "next", "@nestjs/core"]
+        );
     }
 
     #[test]
