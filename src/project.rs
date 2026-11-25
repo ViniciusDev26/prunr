@@ -113,7 +113,7 @@ impl Project {
     /// Reads every `.js` and `.cjs` file under `root`, skipping `node_modules` and what
     /// `.gitignore` ignores.
     pub fn load(root: &Path) -> Result<Self, ProjectError> {
-        let root = root.canonicalize().expect("the project root exists");
+        let root = crate::resolve::canonical(root);
         let manifest = Manifest::load(&root)?;
         let paths = source_files(&root);
         let resolver = Resolver::default();
@@ -167,7 +167,7 @@ impl Project {
 
     /// The id of `path`, relative to the root, if it is a project file.
     pub fn id_of(&self, path: &str) -> Option<FileId> {
-        let path = self.root.join(path).canonicalize().ok()?;
+        let path = dunce::canonicalize(self.root.join(path)).ok()?;
         file_id(&self.root, &path).filter(|id| self.files.contains_key(id))
     }
 }

@@ -27,10 +27,10 @@ impl Default for Resolver {
 impl Resolver {
     /// Resolves `specifier` as Node.js would from the file `from`.
     pub fn resolve(&self, from: &Path, specifier: &str) -> Target {
-        if specifier.starts_with('.') || specifier.starts_with('/') {
+        if specifier.starts_with('.') || Path::new(specifier).is_absolute() {
             let directory = from.parent().unwrap_or(from);
             return match self.inner.resolve(directory, specifier) {
-                Ok(resolution) => Target::File(resolution.into_path_buf()),
+                Ok(resolution) => Target::File(canonical(resolution.path())),
                 Err(_) => Target::Unresolved,
             };
         }
@@ -39,6 +39,11 @@ impl Resolver {
         }
         Target::Package(package_name(specifier).to_string())
     }
+}
+
+/// The canonical form of a path that exists, without the `\\?\` prefix Windows adds.
+pub fn canonical(path: &Path) -> PathBuf {
+    dunce::canonicalize(path).expect("the path exists")
 }
 
 /// `@scope/name/sub` → `@scope/name`, `name/sub` → `name`.
@@ -69,7 +74,7 @@ mod tests {
     }
 
     fn file(root: &Path, path: &str) -> Target {
-        Target::File(root.canonicalize().unwrap().join(path))
+        Target::File(dunce::canonicalize(root).unwrap().join(path))
     }
 
     #[test]
