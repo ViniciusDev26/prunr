@@ -169,10 +169,16 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ needs.release-please.outputs.version }}
+        # npm takes a few minutes to serve a new version, so this retries for up to ten minutes.
         run: |
           mkdir smoke && cd smoke && npm init -y > /dev/null
-          for attempt in 1 2 3 4 5 6; do
-            npm i -D "@prunr/prunr@$VERSION" && break
-            echo "not on the registry yet, retrying"; sleep 20
+          for attempt in $(seq 1 30); do
+            if npm i -D "@prunr/prunr@$VERSION" && test "$(npx --no-install prunr --version)" = "prunr $VERSION"; then
+              echo "installed and ran prunr $VERSION"
+              exit 0
+            fi
+            echo "not served by the registry yet, retrying in 20s"
+            rm -rf node_modules package-lock.json
+            sleep 20
           done
-          test "$(npx prunr --version)" = "prunr $VERSION"
+          exit 1
