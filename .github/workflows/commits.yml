@@ -1,7 +1,8 @@
 name: commits
 
-# Every commit and the PR title must follow Conventional Commits (committed.toml): release-please
-# reads them, and a squash merge turns the PR title into the commit on main.
+# The PR title must follow Conventional Commits (committed.toml): merges are squash only, so the
+# title becomes the commit on main that release-please reads. Commits inside the PR are not
+# checked, since they never reach main (and "Update branch" adds merge commits to them).
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
@@ -10,15 +11,15 @@ permissions:
   contents: read
 
 jobs:
-  messages:
-    name: Commit messages and PR title
+  title:
+    name: PR title
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Commit messages
-        uses: crate-ci/committed@v1.1.12
+      - name: Install committed
+        run: |
+          curl -sSfL https://github.com/crate-ci/committed/releases/download/v1.1.12/committed-v1.1.12-x86_64-unknown-linux-musl.tar.gz \
+            | tar -xz ./committed
       - name: PR title
         env:
           TITLE: ${{ github.event.pull_request.title }}

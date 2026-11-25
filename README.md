@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo-dark.svg">
+    <img src="assets/brand/logo.svg" alt="prunr" width="360">
+  </picture>
+</p>
+
 # prunr
 
 Detector de código morto para projetos Node.js, com **CommonJS como cidadão de primeira classe**.
@@ -175,6 +182,8 @@ errors: 7, warnings: 1
 - **Só CommonJS** (`.js` e `.cjs`). ESM, TypeScript e `.mjs` ainda não são lidos.
 - **Dependências usadas só pela linha de comando** (`jest`, `@biomejs/biome`, `husky`...) aparecem
   como `unused-dependency`, porque nenhum arquivo as importa. Liste-as em `dependencies.ignore`.
+
+O que vem depois está no [roadmap](docs/roadmap/).
 
 ## Licença
 
