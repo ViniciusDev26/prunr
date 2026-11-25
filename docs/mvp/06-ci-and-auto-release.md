@@ -43,4 +43,5 @@ fazer merge do PR de release.
       o Windows expôs um bug de caminhos).
 - [ ] A versão `0.1.0` é publicada de ponta a ponta pelo pipeline, sem nenhum comando manual.
 - [ ] `npm i -D prunr && npx prunr --version` funciona num runner Linux limpo, num macOS e num Windows.
-- [ ] O binário Linux roda numa imagem `alpine` e numa `debian` (prova de que é estático).
+- [x] O binário Linux roda numa imagem `alpine` e numa `debian` (prova de que é estático):
+      verificado nos PRs que mexem no release, para x64 e arm64.
