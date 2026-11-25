@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.0](https://github.com/ViniciusDev26/prunr/compare/v0.1.0...v0.2.0) (2026-11-25)
+
+
+### Features
+
+* a package the scripts of package.json run is used ([#19](https://github.com/ViniciusDev26/prunr/issues/19)) ([1662365](https://github.com/ViniciusDev26/prunr/commit/16623650469764cf7d945312daa52fefe7484b5c))
+* a require built from a relative prefix uses every file it can reach ([#18](https://github.com/ViniciusDev26/prunr/issues/18)) ([e12ca9f](https://github.com/ViniciusDev26/prunr/commit/e12ca9f83e238c864b2be17148ce57e305bacf14))
+* github annotations and findings new since a commit ([#25](https://github.com/ViniciusDev26/prunr/issues/25)) ([7254ee4](https://github.com/ViniciusDev26/prunr/commit/7254ee41a272b22cd988141036be6878ba1ac243))
+* ignore an export or a file with a comment, and report a comment that ignores nothing ([#24](https://github.com/ViniciusDev26/prunr/issues/24)) ([a84fbf8](https://github.com/ViniciusDev26/prunr/commit/a84fbf82eb75ca385458fa9625e9b4406f5c32a9))
+* jest and vitest find their own tests, config and setup files ([#22](https://github.com/ViniciusDev26/prunr/issues/22)) ([5011821](https://github.com/ViniciusDev26/prunr/commit/5011821677fd6e5a209814cc911c7fae53d93921))
+* prunr fix removes what check reports, round after round ([#26](https://github.com/ViniciusDev26/prunr/issues/26)) ([affda30](https://github.com/ViniciusDev26/prunr/commit/affda301467e3ea3f9cdaf759e470df736da8bc8))
+* read esm and typescript in the same graph as commonjs ([#21](https://github.com/ViniciusDev26/prunr/issues/21)) ([a1a0590](https://github.com/ViniciusDev26/prunr/commit/a1a059089095c26b162dbfaa6177ab5d022c0844))
+
+
+### Documentation
+
+* add brand identity and logo ([#15](https://github.com/ViniciusDev26/prunr/issues/15)) ([db6e26e](https://github.com/ViniciusDev26/prunr/commit/db6e26ea08ca2264d39824127fb1ebf8e86824bf))
+* add the roadmap after the mvp ([#16](https://github.com/ViniciusDev26/prunr/issues/16)) ([9bf1102](https://github.com/ViniciusDev26/prunr/commit/9bf11023b0478cafb9b94953c731a6e40d1452a5))
+
 ## 0.1.0 (2026-11-25)
 
 
