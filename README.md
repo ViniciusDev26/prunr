@@ -67,6 +67,8 @@ prunr check          # saída para pessoas
 prunr check --json   # saída para máquinas
 prunr check --github # anotações do GitHub Actions, na linha de cada achado
 prunr check --since origin/main   # só o que é novo desde esse commit
+prunr fix            # remove o código morto que o check reporta
+prunr fix --dry-run  # mostra o que o fix faria, sem mudar nada
 prunr baseline       # grava os achados atuais no arquivo de baseline
 prunr schema         # o JSON Schema do prunr.json
 ```
@@ -165,6 +167,28 @@ Um `require` montado em tempo de execução a partir de um caminho relativo vira
 `` require(`./handlers/${nome}`) `` e `require("./handlers/" + nome)` usam, inteiros, todos os
 arquivos de `handlers/` (cada `${...}` vale um trecho sem `/`, e uma pasta vale pelo seu
 `index`).
+
+### `prunr fix`
+
+`prunr fix` remove o que o `prunr check` reporta, e roda de novo até não sobrar nada a remover
+(apagar um import pode deixar um arquivo sem uso, que sai na rodada seguinte). No fim, imprime o
+que ainda resta, como o `check`.
+
+| Achado | O que o fix faz |
+|---|---|
+| `unused-file` | Apaga o arquivo. |
+| `unused-export` | Tira o `export` da declaração, o especificador de `export { }`, a chave de `module.exports = { }`, o `exports.x = ...` ou o método estático. O código local fica; se ficar sem uso, o Biome aponta. |
+| `unused-import` | Tira o binding do `import` ou da desestruturação; sem nenhum binding, tira a linha inteira. |
+| `unused-ignore` | Apaga o comentário. |
+| `unused-dependency` | Tira o pacote do `package.json`, sem reformatar o resto. |
+| `misplaced-dependency` | Move o pacote para `devDependencies`, em ordem alfabética. |
+
+O fix não toca no que exige uma decisão: achados do baseline, o que só os testes usam (apagar
+quebraria os testes), `missing-dependency`, `circular-import`, `unresolved-require` e exports
+que não dá para tirar sem mexer em outro código (`export const a = 1, b = 2` com só um dos nomes
+sem uso, um `export default` anônimo). Um import removido inteiro deixa de rodar o módulo: se ele
+era importado só pelo efeito colateral, reponha como `import "./x"`. Revise o diff antes de
+fazer commit.
 
 ### Ignorar no código
 

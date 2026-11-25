@@ -10,8 +10,8 @@ use crate::config::Config;
 use crate::project::Project;
 use crate::report;
 
-pub const USAGE: &str = "usage: prunr check [--json | --github] [--since <ref>] | prunr baseline \
-     | prunr init | prunr schema | prunr --version";
+pub const USAGE: &str = "usage: prunr check [--json | --github] [--since <ref>] \
+     | prunr fix [--dry-run] | prunr baseline | prunr init | prunr schema | prunr --version";
 
 /// How `prunr check` prints its findings.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -60,6 +60,8 @@ pub fn run(args: &[String], root: &Path, out: &mut impl Write, err: &mut impl Wr
         ["check", rest @ ..] if let Some(options) = check_options(rest) => {
             check_command(root, &options, out)
         }
+        ["fix"] => fix_command(root, false, out),
+        ["fix", "--dry-run"] => fix_command(root, true, out),
         ["baseline"] => baseline_command(root, out),
         ["init"] => crate::init::init(root).map(|_| {
             let _ = writeln!(out, "created {}", crate::config::FILE_NAME);
@@ -108,6 +110,60 @@ fn check_command(root: &Path, options: &CheckOptions, out: &mut impl Write) -> R
     let _ = out.write_all(text.as_bytes());
     let failed = !diff.stale.is_empty() || diff.fresh.iter().any(|f| !f.is_warning());
     Ok(u8::from(failed))
+}
+
+/// How many rounds `prunr fix` makes at most: removing code can leave more code unused.
+const FIX_ROUNDS: usize = 10;
+
+fn fix_command(root: &Path, dry_run: bool, out: &mut impl Write) -> Result<u8, String> {
+    let config = Config::load(root).map_err(|e| e.to_string())?;
+    let known = match &config.baseline {
+        Some(path) => baseline::read(&root.join(path))?,
+        None => Vec::new(),
+    };
+    let verb = if dry_run { "would fix" } else { "fixed" };
+    let mut fixed_any = false;
+    for _ in 0..FIX_ROUNDS {
+        let (project, findings) = analyze(root, &config)?;
+        let fresh = baseline::diff(findings, &known).fresh;
+        let package_json = std::fs::read_to_string(root.join("package.json")).unwrap_or_default();
+        let plan = crate::fix::plan(&project, &fresh, &package_json);
+        if plan.fixed.is_empty() {
+            break;
+        }
+        for finding in &plan.fixed {
+            let _ = writeln!(out, "{verb} {}", report::line(finding));
+        }
+        if dry_run {
+            return Ok(0);
+        }
+        for file in &plan.delete {
+            let path = root.join(file);
+            changed(&path, std::fs::remove_file(&path))?;
+        }
+        for (file, text) in &plan.files {
+            let path = root.join(file);
+            changed(&path, std::fs::write(&path, text))?;
+        }
+        if let Some(text) = &plan.package_json {
+            let path = root.join("package.json");
+            changed(&path, std::fs::write(&path, text))?;
+        }
+        fixed_any = true;
+    }
+    if fixed_any {
+        let _ = writeln!(out);
+    }
+    let (_, findings) = analyze(root, &config)?;
+    let diff = baseline::diff(findings, &known);
+    let _ = out.write_all(report::human(&diff.fresh, &diff.stale).as_bytes());
+    let failed = !diff.stale.is_empty() || diff.fresh.iter().any(|f| !f.is_warning());
+    Ok(u8::from(failed))
+}
+
+/// The result of changing the file at `path`, with the path in the error.
+fn changed(path: &Path, result: std::io::Result<()>) -> Result<(), String> {
+    result.map_err(|e| format!("{}: {e}", path.display()))
 }
 
 fn baseline_command(root: &Path, out: &mut impl Write) -> Result<u8, String> {
