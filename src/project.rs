@@ -17,24 +17,34 @@ pub struct Project {
     /// The canonical project root.
     pub root: PathBuf,
     pub files: BTreeMap<FileId, File>,
+    /// The packages of the repository: the root one first, then those a monorepo tool declares.
+    pub workspaces: Vec<Workspace>,
+    /// Test code the plugins name: test files, the tools' configuration and setup files.
+    pub test_files: BTreeSet<FileId>,
+    /// Production entries the frameworks start from by convention (Next.js routes, NestJS main),
+    /// and the entry of each package of the repository that is published.
+    pub production_files: BTreeSet<FileId>,
+    /// How many files were parsed.
+    pub parsed: usize,
+}
+
+/// One package of the repository and what it declares and uses outside its files.
+#[derive(Debug, Default)]
+pub struct Workspace {
+    /// Its directory, relative to the root, with `/` separators: empty for the root package.
+    pub dir: String,
     /// Packages in `dependencies`: they must be used, and by production code.
     pub dependencies: BTreeSet<String>,
     /// Packages in `devDependencies`: they must be used.
     pub dev_dependencies: BTreeSet<String>,
-    /// Every package `package.json` declares, in any of its dependency fields.
+    /// Every package its `package.json` declares, in any of its dependency fields.
     pub declared_packages: BTreeSet<String>,
-    /// Packages the `scripts` of `package.json` run or preload.
+    /// Packages its `scripts` run or preload.
     pub script_packages: BTreeSet<String>,
-    /// Test code the plugins name: test files, the tools' configuration and setup files.
-    pub test_files: BTreeSet<FileId>,
     /// Packages the plugins say the tools load by name (presets, environments, reporters).
     pub test_packages: BTreeSet<String>,
-    /// Production entries the frameworks start from by convention (Next.js routes, NestJS main).
-    pub production_files: BTreeSet<FileId>,
     /// Packages the frameworks load in production without an import.
     pub production_packages: BTreeSet<String>,
-    /// How many files were parsed.
-    pub parsed: usize,
 }
 
 #[derive(Debug, Default)]
@@ -116,6 +126,12 @@ impl std::fmt::Display for ProjectError {
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Manifest {
+    name: Option<String>,
+    #[serde(default)]
+    private: bool,
+    main: Option<String>,
+    module: Option<String>,
+    exports: Option<serde_json::Value>,
     #[serde(default)]
     dependencies: BTreeMap<String, serde_json::Value>,
     #[serde(default)]
@@ -131,26 +147,93 @@ struct Manifest {
 }
 
 impl Manifest {
-    fn load(root: &Path) -> Result<Self, ProjectError> {
-        let path = root.join("package.json");
+    /// The `package.json` in `dir` (relative to `root`), or an empty one.
+    fn load(root: &Path, dir: &str) -> Result<Self, ProjectError> {
+        let path = root.join(dir).join("package.json");
         if !path.is_file() {
             return Ok(Self::default());
         }
         let text = std::fs::read_to_string(path).unwrap_or_default();
-        serde_json::from_str(&text).map_err(|e| ProjectError::PackageJson(e.to_string()))
+        serde_json::from_str(&text).map_err(|e| {
+            let at = if dir.is_empty() {
+                String::new()
+            } else {
+                format!("{dir}/package.json: ")
+            };
+            ProjectError::PackageJson(format!("{at}{e}"))
+        })
     }
+
+    /// Every package it declares, in any dependency field.
+    fn declared(&self) -> BTreeSet<String> {
+        [
+            &self.dependencies,
+            &self.dev_dependencies,
+            &self.peer_dependencies,
+            &self.optional_dependencies,
+        ]
+        .into_iter()
+        .flat_map(|field| field.keys().cloned())
+        .collect()
+    }
+
+    /// Where its entry may be, relative to its directory: what `exports` and `main` say, then
+    /// the source a build would compile it from.
+    fn entry_candidates(&self) -> Vec<String> {
+        let mut candidates = Vec::new();
+        let mut exports = self.exports.as_ref();
+        if let Some(serde_json::Value::Object(map)) = exports
+            && let Some(dot) = map.get(".")
+        {
+            exports = Some(dot);
+        }
+        match exports {
+            Some(serde_json::Value::String(entry)) => candidates.push(entry.clone()),
+            Some(serde_json::Value::Object(conditions)) => {
+                for condition in ["require", "import", "node", "default"] {
+                    if let Some(serde_json::Value::String(entry)) = conditions.get(condition) {
+                        candidates.push(entry.clone());
+                    }
+                }
+            }
+            _ => {}
+        }
+        candidates.extend(self.main.iter().chain(&self.module).cloned());
+        candidates.extend(["src/index".to_string(), "index".to_string()]);
+        candidates
+    }
+}
+
+/// The file `candidates` (relative to the package at `dir`) point to: the first that exists.
+fn package_file(
+    resolver: &Resolver,
+    root: &Path,
+    dir: &str,
+    candidates: &[String],
+    files: &BTreeMap<PathBuf, FileId>,
+) -> Option<FileId> {
+    let manifest = root.join(dir).join("package.json");
+    candidates.iter().find_map(|candidate| {
+        let relative = format!("./{}", candidate.trim_start_matches("./"));
+        match resolver.resolve(&manifest, &relative) {
+            Target::File(path) => files.get(&path).cloned(),
+            _ => None,
+        }
+    })
 }
 
 /// The binaries each package declares, mapped to the package. An installed package declares
 /// those in the `bin` of its `package.json`; one that is not installed (or unreadable) is guessed
 /// to declare a binary named after it, without the scope.
-fn binaries(root: &Path, packages: &BTreeSet<String>) -> BTreeMap<String, String> {
+fn binaries(dirs: &[PathBuf], packages: &BTreeSet<String>) -> BTreeMap<String, String> {
     let mut binaries = BTreeMap::new();
     for package in packages {
-        let manifest = root.join("node_modules").join(package).join("package.json");
-        let installed: Option<serde_json::Value> = std::fs::read_to_string(manifest)
-            .ok()
-            .and_then(|text| serde_json::from_str(&text).ok());
+        let installed: Option<serde_json::Value> = dirs.iter().find_map(|dir| {
+            let manifest = dir.join("node_modules").join(package).join("package.json");
+            std::fs::read_to_string(manifest)
+                .ok()
+                .and_then(|text| serde_json::from_str(&text).ok())
+        });
         let unscoped = || package.rsplit('/').next().unwrap_or(package).to_string();
         let names = match installed.as_ref().map(|manifest| manifest.get("bin")) {
             Some(Some(serde_json::Value::Object(bins))) => bins.keys().cloned().collect(),
@@ -256,7 +339,20 @@ impl Project {
     /// `.gitignore` ignores.
     pub fn load(root: &Path) -> Result<Self, ProjectError> {
         let root = crate::resolve::canonical(root);
-        let manifest = Manifest::load(&root)?;
+        let dirs: Vec<String> = std::iter::once(String::new())
+            .chain(crate::workspaces::discover(&root))
+            .collect();
+        let manifests = dirs
+            .iter()
+            .map(|dir| Manifest::load(&root, dir))
+            .collect::<Result<Vec<_>, _>>()?;
+        // A package of the repository imported by its name: `@app/shared` or `@app/shared/x`.
+        let names: BTreeMap<&str, usize> = manifests
+            .iter()
+            .enumerate()
+            .skip(1)
+            .filter_map(|(index, manifest)| Some((manifest.name.as_deref()?, index)))
+            .collect();
         let paths = source_files(&root);
         let resolver = Resolver::default();
         let mut analyzed = BTreeMap::new();
@@ -273,13 +369,33 @@ impl Project {
             .filter(|(_, facts)| facts.esm)
             .map(|(id, _)| id.clone())
             .collect();
+        let workspace_file = |specifier: &str| -> Option<(String, FileId)> {
+            let name = crate::resolve::package_name(specifier);
+            let &index = names.get(name)?;
+            let subpath = &specifier[name.len()..];
+            let candidates = if subpath.is_empty() {
+                manifests[index].entry_candidates()
+            } else {
+                vec![format!(".{subpath}"), format!("src{subpath}")]
+            };
+            let file = package_file(&resolver, &root, &dirs[index], &candidates, &paths)?;
+            Some((name.to_string(), file))
+        };
+        // Where a specifier points: a project file, else what `link` records.
+        let target_of =
+            |file: &mut File, from: &Path, specifier: &str| match workspace_file(specifier) {
+                Some((package, target)) => {
+                    file.packages.insert(package);
+                    Some(target)
+                }
+                None => file.link(resolver.resolve(from, specifier), specifier, &paths),
+            };
         let mut files = BTreeMap::new();
         for (path, id) in &paths {
             let facts = analyzed.remove(id).expect("every file was analyzed");
             let mut file = File::default();
             for require in &facts.requires {
-                let target = resolver.resolve(path, &require.specifier);
-                if let Some(target) = file.link(target, &require.specifier, &paths) {
+                if let Some(target) = target_of(&mut file, path, &require.specifier) {
                     file.edge_lines
                         .entry(target.clone())
                         .or_insert(facts.require_lines[&require.specifier]);
@@ -296,8 +412,7 @@ impl Project {
                 }
             }
             for reexport in &facts.reexports {
-                let target = resolver.resolve(path, &reexport.specifier);
-                if let Some(target) = file.link(target, &reexport.specifier, &paths) {
+                if let Some(target) = target_of(&mut file, path, &reexport.specifier) {
                     file.edge_lines
                         .entry(target.clone())
                         .or_insert(facts.require_lines[&reexport.specifier]);
@@ -333,53 +448,94 @@ impl Project {
             file.facts = facts;
             files.insert(id.clone(), file);
         }
-        let dependencies: BTreeSet<String> = manifest.dependencies.into_keys().collect();
-        let dev_dependencies: BTreeSet<String> = manifest.dev_dependencies.into_keys().collect();
-        let mut declared_packages: BTreeSet<String> =
-            dependencies.union(&dev_dependencies).cloned().collect();
-        declared_packages.extend(manifest.peer_dependencies.into_keys());
-        declared_packages.extend(manifest.optional_dependencies.into_keys());
-        let binaries = binaries(&root, &declared_packages);
-        let script_packages = manifest
-            .scripts
-            .values()
-            .flat_map(|script| crate::scripts::packages(script, &binaries))
-            .collect();
-        let plugins = crate::plugins::contribution(&crate::plugins::Context {
-            root: &root,
-            declared: &declared_packages,
-            manifest: &serde_json::json!({ "jest": manifest.jest, "scripts": manifest.scripts }),
-        });
-        let production_files = plugin_files(&plugins.production, &files);
-        let mut test_files = plugin_files(&plugins.tests, &files);
-        for file in &plugins.files {
-            if let Target::File(path) = resolver.resolve(&root.join("package.json"), file)
-                && let Some(id) = paths.get(&path)
-            {
-                test_files.insert(id.clone());
+        let root_declared = manifests[0].declared();
+        let mut workspaces = Vec::new();
+        let mut production_files = BTreeSet::new();
+        let mut test_files = BTreeSet::new();
+        for (index, (dir, manifest)) in dirs.iter().zip(&manifests).enumerate() {
+            let package = root.join(dir);
+            let declared_packages = manifest.declared();
+            // What the root declares is available to every package (hoisting, shared tools).
+            let visible: BTreeSet<String> =
+                declared_packages.union(&root_declared).cloned().collect();
+            let binaries = binaries(&[package.clone(), root.clone()], &visible);
+            let script_packages = manifest
+                .scripts
+                .values()
+                .flat_map(|script| crate::scripts::packages(script, &binaries))
+                .collect();
+            let plugins = crate::plugins::contribution(&crate::plugins::Context {
+                root: &package,
+                declared: &visible,
+                manifest: &serde_json::json!({ "jest": manifest.jest, "scripts": manifest.scripts }),
+            });
+            let in_package = |globs: &[String]| -> Vec<String> {
+                globs
+                    .iter()
+                    .map(|glob| match dir.as_str() {
+                        "" => glob.clone(),
+                        dir => format!("{dir}/{glob}"),
+                    })
+                    .collect()
+            };
+            production_files.extend(plugin_files(&in_package(&plugins.production), &files));
+            test_files.extend(plugin_files(&in_package(&plugins.tests), &files));
+            for file in &plugins.files {
+                if let Target::File(path) = resolver.resolve(&package.join("package.json"), file)
+                    && let Some(id) = paths.get(&path)
+                {
+                    test_files.insert(id.clone());
+                }
             }
+            // A published package's entry is its interface to whoever installs it.
+            if index > 0 && !manifest.private {
+                let candidates = manifest.entry_candidates();
+                production_files.extend(package_file(&resolver, &root, dir, &candidates, &paths));
+            }
+            workspaces.push(Workspace {
+                dir: dir.clone(),
+                dependencies: manifest.dependencies.keys().cloned().collect(),
+                dev_dependencies: manifest.dev_dependencies.keys().cloned().collect(),
+                declared_packages,
+                script_packages,
+                test_packages: plugins.packages,
+                production_packages: plugins.production_packages,
+            });
         }
         Ok(Self {
             root,
             parsed: files.len(),
             files,
-            dependencies,
-            dev_dependencies,
-            declared_packages,
-            script_packages,
+            workspaces,
             test_files,
-            test_packages: plugins.packages,
             production_files,
-            production_packages: plugins.production_packages,
         })
+    }
+
+    /// The index in `workspaces` of the package `file` belongs to: the one whose directory is
+    /// the longest prefix of its path.
+    pub fn workspace_of(&self, file: &str) -> usize {
+        self.workspaces
+            .iter()
+            .enumerate()
+            .filter(|(_, workspace)| {
+                workspace.dir.is_empty()
+                    || file
+                        .strip_prefix(&workspace.dir)
+                        .is_some_and(|rest| rest.starts_with('/'))
+            })
+            .max_by_key(|(_, workspace)| workspace.dir.len())
+            .map_or(0, |(index, _)| index)
     }
 
     /// Leaves `packages` out of every dependency check.
     pub fn ignore_packages(&mut self, packages: &[String]) {
         for package in packages {
-            self.dependencies.remove(package);
-            self.dev_dependencies.remove(package);
-            self.declared_packages.remove(package);
+            for workspace in &mut self.workspaces {
+                workspace.dependencies.remove(package);
+                workspace.dev_dependencies.remove(package);
+                workspace.declared_packages.remove(package);
+            }
             for file in self.files.values_mut() {
                 file.packages.remove(package);
             }
@@ -687,10 +843,16 @@ mod tests {
             }"#,
         )]);
         let project = Project::load(dir.path()).unwrap();
-        assert_eq!(project.dependencies, BTreeSet::from(["a".into()]));
-        assert_eq!(project.dev_dependencies, BTreeSet::from(["b".into()]));
         assert_eq!(
-            project.declared_packages,
+            project.workspaces[0].dependencies,
+            BTreeSet::from(["a".into()])
+        );
+        assert_eq!(
+            project.workspaces[0].dev_dependencies,
+            BTreeSet::from(["b".into()])
+        );
+        assert_eq!(
+            project.workspaces[0].declared_packages,
             BTreeSet::from(["a".into(), "b".into(), "c".into(), "d".into()])
         );
     }
@@ -728,7 +890,7 @@ mod tests {
         ]);
         let project = Project::load(dir.path()).unwrap();
         assert_eq!(
-            project.script_packages,
+            project.workspaces[0].script_packages,
             BTreeSet::from([
                 "@scope/tool".into(),
                 "broken".into(),
@@ -765,8 +927,102 @@ mod tests {
             "an invalid glob or a missing file is left out"
         );
         assert_eq!(
-            project.test_packages,
+            project.workspaces[0].test_packages,
             BTreeSet::from(["jest-plugin".into()])
+        );
+    }
+
+    #[test]
+    fn packages_of_the_repository_resolve_by_name_and_run_their_own_plugins() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{ "workspaces": ["apps/*", "packages/*"] }"#,
+            ),
+            (
+                "apps/web/package.json",
+                r#"{ "name": "web", "private": true, "dependencies": { "next": "15", "@x/ui": "*" } }"#,
+            ),
+            (
+                "apps/web/app/page.tsx",
+                r#"import { Button } from "@x/ui"; import { icon } from "@x/ui/icon"; export default () => [Button, icon];"#,
+            ),
+            (
+                "packages/ui/package.json",
+                r#"{ "name": "@x/ui", "private": true, "exports": { ".": { "types": "./x.d.ts", "import": "./src/index.mjs" } } }"#,
+            ),
+            ("packages/ui/src/index.mjs", "export const Button = 1;"),
+            ("packages/ui/src/icon.mjs", "export const icon = 1;"),
+            (
+                "packages/pub/package.json",
+                r#"{ "name": "pub", "exports": "./lib.js" }"#,
+            ),
+            ("packages/pub/lib.js", "exports.api = 1;"),
+            (
+                "packages/cond/package.json",
+                r#"{ "name": "cond", "exports": { "require": "./main.cjs" } }"#,
+            ),
+            ("packages/cond/main.cjs", ""),
+            (
+                "packages/plain/package.json",
+                r#"{ "name": "plain", "main": "lib/main.js" }"#,
+            ),
+            ("packages/plain/lib/main.js", ""),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        let dirs: Vec<&str> = project
+            .workspaces
+            .iter()
+            .map(|workspace| workspace.dir.as_str())
+            .collect();
+        assert_eq!(
+            dirs,
+            [
+                "",
+                "apps/web",
+                "packages/cond",
+                "packages/plain",
+                "packages/pub",
+                "packages/ui"
+            ]
+        );
+        assert_eq!(
+            project.production_files,
+            BTreeSet::from([
+                "apps/web/app/page.tsx".into(),
+                "packages/cond/main.cjs".into(),
+                "packages/plain/lib/main.js".into(),
+                "packages/pub/lib.js".into()
+            ]),
+            "the plugins of apps/web and the published packages' entries"
+        );
+        let page = &project.files["apps/web/app/page.tsx"];
+        let targets: Vec<&str> = page.edges.iter().map(|edge| edge.target.as_str()).collect();
+        assert_eq!(
+            targets,
+            ["packages/ui/src/index.mjs", "packages/ui/src/icon.mjs"]
+        );
+        assert_eq!(page.packages, BTreeSet::from(["@x/ui".to_string()]));
+        assert_eq!(project.workspace_of("apps/web/app/page.tsx"), 1);
+        assert_eq!(project.workspace_of("apps/website/x.js"), 0);
+        assert_eq!(
+            project.workspaces[1].production_packages,
+            BTreeSet::from(["react".into(), "react-dom".into()])
+        );
+    }
+
+    #[test]
+    fn an_invalid_package_json_of_a_package_names_it() {
+        let dir = project(&[
+            ("package.json", r#"{ "workspaces": ["packages/*"] }"#),
+            ("packages/a/package.json", "{ nope"),
+        ]);
+        let error = Project::load(dir.path()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .starts_with("invalid package.json: packages/a/package.json: "),
+            "{error}"
         );
     }
 
@@ -774,7 +1030,7 @@ mod tests {
     fn without_package_json_nothing_is_declared() {
         let dir = project(&[("index.js", "")]);
         let project = Project::load(dir.path()).unwrap();
-        assert!(project.declared_packages.is_empty());
+        assert!(project.workspaces[0].declared_packages.is_empty());
     }
 
     #[test]

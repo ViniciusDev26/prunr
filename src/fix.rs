@@ -16,18 +16,19 @@ pub struct Plan {
     pub delete: BTreeSet<FileId>,
     /// The new text of each file to edit.
     pub files: BTreeMap<FileId, String>,
-    /// The new text of `package.json`, when it changes.
-    pub package_json: Option<String>,
+    /// The new text of each `package.json` that changes, by its path relative to the root.
+    pub manifests: BTreeMap<String, String>,
     /// The findings the changes fix, in the order they were reported.
     pub fixed: Vec<Finding>,
 }
 
 /// What fixing `findings` takes. Findings it cannot fix by itself (a missing dependency, a
 /// cycle, what only tests use) are left out.
-pub fn plan(project: &Project, findings: &[Finding], package_json: &str) -> Plan {
+pub fn plan(project: &Project, findings: &[Finding]) -> Plan {
     let mut plan = Plan::default();
     let mut removals: BTreeMap<&FileId, Vec<(&Finding, Removal)>> = BTreeMap::new();
-    let mut manifest = package_json.to_string();
+    // Each `package.json` as it was, and as the fixes leave it.
+    let mut manifests: BTreeMap<String, (String, String)> = BTreeMap::new();
     let mut removed: BTreeMap<&FileId, BTreeSet<Vec<String>>> = BTreeMap::new();
     for finding in findings {
         match finding {
@@ -72,29 +73,33 @@ pub fn plan(project: &Project, findings: &[Finding], package_json: &str) -> Plan
                     .or_default()
                     .push((finding, Removal::Statement(span)));
             }
-            Finding::UnusedDependency { package } => {
+            Finding::UnusedDependency { package, workspace } => {
+                let text = manifest(&mut manifests, project, workspace);
                 let removed = ["dependencies", "devDependencies"].iter().fold(
                     None,
                     |changed: Option<String>, field| {
-                        let text = changed.as_deref().unwrap_or(&manifest);
-                        crate::package_json::remove(text, field, package).or(changed)
+                        let current = changed.as_deref().unwrap_or(text);
+                        crate::package_json::remove(current, field, package).or(changed)
                     },
                 );
                 plan.fixed
                     .extend(removed.is_some().then(|| finding.clone()));
-                manifest = removed.unwrap_or(manifest);
+                *text = removed.unwrap_or_else(|| std::mem::take(text));
             }
-            Finding::MisplacedDependency { package } => {
-                let moved = crate::package_json::move_to_dev(&manifest, package);
+            Finding::MisplacedDependency { package, workspace } => {
+                let text = manifest(&mut manifests, project, workspace);
+                let moved = crate::package_json::move_to_dev(text, package);
                 plan.fixed.extend(moved.is_some().then(|| finding.clone()));
-                manifest = moved.unwrap_or(manifest);
+                *text = moved.unwrap_or_else(|| std::mem::take(text));
             }
             _ => {}
         }
     }
-    if manifest != package_json {
-        plan.package_json = Some(manifest);
-    }
+    plan.manifests = manifests
+        .into_iter()
+        .filter(|(_, (before, after))| before != after)
+        .map(|(path, (_, after))| (path, after))
+        .collect();
     // A file being deleted is not edited.
     let removals = removals
         .into_iter()
@@ -114,6 +119,21 @@ pub fn plan(project: &Project, findings: &[Finding], package_json: &str) -> Plan
     plan.fixed
         .sort_by_key(|finding| findings.iter().position(|f| f == finding));
     plan
+}
+
+/// The text of the `package.json` of `workspace` as the fixes so far leave it, read the first
+/// time it is needed.
+fn manifest<'m>(
+    manifests: &'m mut BTreeMap<String, (String, String)>,
+    project: &Project,
+    workspace: &Option<String>,
+) -> &'m mut String {
+    let path = crate::report::manifest_path(workspace);
+    let entry = manifests.entry(path).or_insert_with_key(|path| {
+        let text = std::fs::read_to_string(project.root.join(path)).unwrap_or_default();
+        (text.clone(), text)
+    });
+    &mut entry.1
 }
 
 /// The declarations left unused once the exports at `removed` go: those all of whose exports
@@ -143,22 +163,26 @@ fn declarations(
 /// blank line at the start or the end, that `original` did not have.
 fn tidy(original: &str, edited: String) -> String {
     let mut text = edited;
-    for (run, shorter) in [("\r\n\r\n\r\n", "\r\n\r\n"), ("\n\n\n", "\n\n")] {
-        if !original.contains(run) {
-            while text.contains(run) {
-                text = text.replace(run, shorter);
-            }
+    let runs = [("\r\n\r\n\r\n", "\r\n\r\n"), ("\n\n\n", "\n\n")];
+    for (run, shorter) in runs.into_iter().filter(|(run, _)| !original.contains(run)) {
+        while text.contains(run) {
+            text = text.replace(run, shorter);
         }
     }
-    if !original.ends_with("\n\n") {
-        while text.ends_with("\n\n") {
-            text.pop();
-        }
-    }
-    if !original.starts_with('\n') {
-        text = text.trim_start_matches(['\r', '\n']).to_string();
-    }
-    text
+    // Where the text would end with one line break, and where it starts after the blank ones.
+    let end = (text.trim_end_matches('\n').len() + 1).min(text.len());
+    let end = if original.ends_with("\n\n") {
+        text.len()
+    } else {
+        end
+    };
+    let start = text.len() - text.trim_start_matches(['\r', '\n']).len();
+    let start = if original.starts_with('\n') {
+        0
+    } else {
+        start.min(end)
+    };
+    text[start..end].to_string()
 }
 
 /// The edits that make `removals` in `source`, and the findings they fix. An `export` keyword
@@ -309,14 +333,16 @@ mod tests {
         let findings = [
             Finding::UnusedDependency {
                 package: "x".into(),
+                workspace: None,
             },
             Finding::MisplacedDependency {
                 package: "y".into(),
+                workspace: None,
             },
         ];
-        let plan = plan(&project, &findings, "{}");
+        let plan = plan(&project, &findings);
         assert!(plan.fixed.is_empty());
-        assert_eq!(plan.package_json, None);
+        assert!(plan.manifests.is_empty());
     }
 
     #[test]
@@ -333,7 +359,7 @@ mod tests {
                 test_only: false,
             },
         ];
-        let plan = plan(&project, &findings, "{}");
+        let plan = plan(&project, &findings);
         assert_eq!(plan.delete, BTreeSet::from(["a.js".to_string()]));
         assert!(plan.files.is_empty());
         assert_eq!(plan.fixed, findings[..1]);
@@ -356,7 +382,7 @@ mod tests {
                 cycle: vec!["a.js".into(), "a.js".into()],
             },
         ];
-        let plan = plan(&project, &findings, "{}");
+        let plan = plan(&project, &findings);
         assert!(plan.fixed.is_empty());
         assert!(plan.delete.is_empty() && plan.files.is_empty());
     }

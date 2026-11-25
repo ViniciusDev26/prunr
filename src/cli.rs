@@ -101,11 +101,7 @@ fn check_command(root: &Path, options: &CheckOptions, out: &mut impl Write) -> R
     let text = match options.format {
         Format::Human => report::human(&diff.fresh, &diff.stale),
         Format::Json => report::json(&diff.fresh, &diff.stale),
-        Format::Github => {
-            let package_json =
-                std::fs::read_to_string(root.join("package.json")).unwrap_or_default();
-            report::github(&diff.fresh, &diff.stale, &project, &package_json)
-        }
+        Format::Github => report::github(&diff.fresh, &diff.stale, &project),
     };
     let _ = out.write_all(text.as_bytes());
     let failed = !diff.stale.is_empty() || diff.fresh.iter().any(|f| !f.is_warning());
@@ -126,8 +122,7 @@ fn fix_command(root: &Path, dry_run: bool, out: &mut impl Write) -> Result<u8, S
     for _ in 0..FIX_ROUNDS {
         let (project, findings) = analyze(root, &config)?;
         let fresh = baseline::diff(findings, &known).fresh;
-        let package_json = std::fs::read_to_string(root.join("package.json")).unwrap_or_default();
-        let plan = crate::fix::plan(&project, &fresh, &package_json);
+        let plan = crate::fix::plan(&project, &fresh);
         if plan.fixed.is_empty() {
             break;
         }
@@ -145,8 +140,8 @@ fn fix_command(root: &Path, dry_run: bool, out: &mut impl Write) -> Result<u8, S
             let path = root.join(file);
             changed(&path, std::fs::write(&path, text))?;
         }
-        if let Some(text) = &plan.package_json {
-            let path = root.join("package.json");
+        for (manifest, text) in &plan.manifests {
+            let path = root.join(manifest);
             changed(&path, std::fs::write(&path, text))?;
         }
         fixed_any = true;

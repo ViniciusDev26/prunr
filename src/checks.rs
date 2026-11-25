@@ -39,10 +39,20 @@ pub enum Finding {
     /// reported: what it ignored is used now, or it is before no export.
     UnusedIgnore { file: FileId, line: u32 },
     /// Declared in `dependencies` or `devDependencies`, required by no file and run by no script.
-    UnusedDependency { package: String },
+    UnusedDependency {
+        package: String,
+        /// The directory of the package of the repository that declares it, in a monorepo; none
+        /// for the root `package.json`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace: Option<String>,
+    },
     /// Declared in `dependencies`, but only tests require it (and no script runs it): it belongs
     /// in `devDependencies`.
-    MisplacedDependency { package: String },
+    MisplacedDependency {
+        package: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace: Option<String>,
+    },
     /// Required, but declared in no dependency field of `package.json`.
     MissingDependency { file: FileId, package: String },
     /// A cycle, from its first file back to it.
@@ -268,47 +278,35 @@ fn covers(used: &Use, export: &[String], default_export: bool) -> bool {
     path.starts_with(export) || (used.whole && export.starts_with(&path))
 }
 
+/// The dependency checks, per package of the repository. The root package is the whole
+/// repository's: what it declares is available to every package, and every file, script and
+/// tool counts as using it. Any other package only counts its own.
 fn dependencies(
     project: &Project,
     live: &BTreeSet<FileId>,
     tested: &BTreeSet<FileId>,
     findings: &mut Vec<Finding>,
 ) {
-    let required = |files: &BTreeSet<FileId>| -> BTreeSet<&String> {
-        files
-            .iter()
-            .flat_map(|id| &project.files[id].packages)
-            .collect()
-    };
-    let mut in_production = required(live);
-    in_production.extend(&project.production_packages);
-    let mut in_tests = required(tested);
-    in_tests.extend(&project.test_packages);
-    let in_scripts = &project.script_packages;
-    let used = |package: &String| {
-        in_production.contains(package)
-            || in_tests.contains(package)
-            || in_scripts.contains(package)
-    };
     let typescript = project
         .files
         .keys()
         .any(|id| id.ends_with("ts") || id.ends_with("tsx"));
     let builtins = live.union(tested).any(|id| project.files[id].builtins);
-    let types_used = |package: &String| match package.strip_prefix("@types/") {
-        Some("node") => typescript || builtins,
-        Some(typed) => used(&typed_package(typed)),
-        None => false,
+    let types_of = |package: &String| {
+        format!(
+            "@types/{}",
+            package.trim_start_matches('@').replace('/', "__")
+        )
     };
+    let root = &project.workspaces[0];
     for id in live.union(tested) {
+        let workspace = &project.workspaces[project.workspace_of(id)];
+        let declared = |package: &String| {
+            workspace.declared_packages.contains(package)
+                || root.declared_packages.contains(package)
+        };
         for package in &project.files[id].packages {
-            let types = format!(
-                "@types/{}",
-                package.trim_start_matches('@').replace('/', "__")
-            );
-            if !project.declared_packages.contains(package)
-                && !project.declared_packages.contains(&types)
-            {
+            if !declared(package) && !declared(&types_of(package)) {
                 findings.push(Finding::MissingDependency {
                     file: id.clone(),
                     package: package.clone(),
@@ -316,21 +314,56 @@ fn dependencies(
             }
         }
     }
-    for package in project.dependencies.union(&project.dev_dependencies) {
-        if !used(package) && !types_used(package) {
-            findings.push(Finding::UnusedDependency {
-                package: package.clone(),
-            });
+    for (index, workspace) in project.workspaces.iter().enumerate() {
+        let scope: Vec<&crate::project::Workspace> = if index == 0 {
+            project.workspaces.iter().collect()
+        } else {
+            vec![workspace]
+        };
+        let required = |files: &BTreeSet<FileId>| -> BTreeSet<&String> {
+            files
+                .iter()
+                .filter(|id| index == 0 || project.workspace_of(id) == index)
+                .flat_map(|id| &project.files[id].packages)
+                .collect()
+        };
+        let mut in_production = required(live);
+        let mut in_tests = required(tested);
+        let mut in_scripts = BTreeSet::new();
+        for member in &scope {
+            in_production.extend(&member.production_packages);
+            in_tests.extend(&member.test_packages);
+            in_scripts.extend(&member.script_packages);
         }
-    }
-    for package in &project.dependencies {
-        if !in_production.contains(package)
-            && in_tests.contains(package)
-            && !in_scripts.contains(package)
-        {
-            findings.push(Finding::MisplacedDependency {
-                package: package.clone(),
-            });
+        let used = |package: &String| {
+            in_production.contains(package)
+                || in_tests.contains(package)
+                || in_scripts.contains(package)
+        };
+        let types_used = |package: &String| match package.strip_prefix("@types/") {
+            Some("node") => typescript || builtins,
+            Some(typed) => used(&typed_package(typed)),
+            None => false,
+        };
+        let at = (index > 0).then(|| workspace.dir.clone());
+        for package in workspace.dependencies.union(&workspace.dev_dependencies) {
+            if !used(package) && !types_used(package) {
+                findings.push(Finding::UnusedDependency {
+                    package: package.clone(),
+                    workspace: at.clone(),
+                });
+            }
+        }
+        for package in &workspace.dependencies {
+            if !in_production.contains(package)
+                && in_tests.contains(package)
+                && !in_scripts.contains(package)
+            {
+                findings.push(Finding::MisplacedDependency {
+                    package: package.clone(),
+                    workspace: at.clone(),
+                });
+            }
         }
     }
 }

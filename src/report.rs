@@ -38,12 +38,7 @@ pub fn line(finding: &Finding) -> String {
 }
 
 /// GitHub Actions annotations: one per finding, at its file and line, and the summary.
-pub fn github(
-    findings: &[Finding],
-    stale: &[Finding],
-    project: &Project,
-    package_json: &str,
-) -> String {
+pub fn github(findings: &[Finding], stale: &[Finding], project: &Project) -> String {
     if findings.is_empty() && stale.is_empty() {
         return "No findings.\n".into();
     }
@@ -55,7 +50,7 @@ pub fn github(
         } else {
             "error"
         };
-        let (file, line) = position(finding, project, package_json);
+        let (file, line) = position(finding, project);
         let mut properties = format!("file={}", property(&file));
         if let Some(line) = line {
             properties.push_str(&format!(",line={line}"));
@@ -75,15 +70,17 @@ pub fn github(
 }
 
 /// Where a finding is: its file and, when it has one, its line.
-fn position(finding: &Finding, project: &Project, package_json: &str) -> (String, Option<u32>) {
+fn position(finding: &Finding, project: &Project) -> (String, Option<u32>) {
     let facts = |file: &String| &project.files[file].facts;
-    let manifest = |package: &str| {
+    let manifest = |package: &str, workspace: &Option<String>| {
+        let file = manifest_path(workspace);
         let key = format!("\"{package}\"");
-        let line = package_json
+        let line = std::fs::read_to_string(project.root.join(&file))
+            .unwrap_or_default()
             .lines()
             .position(|line| line.contains(&key))
             .map(|index| index as u32 + 1);
-        ("package.json".to_string(), line)
+        (file, line)
     };
     match finding {
         Finding::UnusedFile { file, .. } => (file.clone(), None),
@@ -99,9 +96,8 @@ fn position(finding: &Finding, project: &Project, package_json: &str) -> (String
             facts(file).require_lines.get(specifier).copied(),
         ),
         Finding::UnusedIgnore { file, line } => (file.clone(), Some(*line)),
-        Finding::UnusedDependency { package } | Finding::MisplacedDependency { package } => {
-            manifest(package)
-        }
+        Finding::UnusedDependency { package, workspace }
+        | Finding::MisplacedDependency { package, workspace } => manifest(package, workspace),
         Finding::MissingDependency { file, package } => {
             let line = facts(file)
                 .require_lines
@@ -115,6 +111,22 @@ fn position(finding: &Finding, project: &Project, package_json: &str) -> (String
             let lines = &project.files[&cycle[0]].edge_lines;
             (cycle[0].clone(), lines.get(&cycle[1]).copied())
         }
+    }
+}
+
+/// The `package.json` of a package of the repository, relative to the root.
+pub fn manifest_path(workspace: &Option<String>) -> String {
+    match workspace {
+        Some(dir) => format!("{dir}/package.json"),
+        None => "package.json".to_string(),
+    }
+}
+
+/// A package name, with the package of the repository that declares it, in a monorepo.
+fn in_workspace(package: &str, workspace: &Option<String>) -> String {
+    match workspace {
+        Some(dir) => format!("{package} ({dir})"),
+        None => package.to_string(),
     }
 }
 
@@ -168,10 +180,15 @@ fn describe(finding: &Finding) -> (&'static str, String) {
         Finding::UnusedIgnore { file, line } => {
             ("unused-ignore", format!("{file}:{line}: ignores nothing"))
         }
-        Finding::UnusedDependency { package } => ("unused-dependency", package.clone()),
-        Finding::MisplacedDependency { package } => (
+        Finding::UnusedDependency { package, workspace } => {
+            ("unused-dependency", in_workspace(package, workspace))
+        }
+        Finding::MisplacedDependency { package, workspace } => (
             "misplaced-dependency",
-            format!("{package}: only tests use it, move it to devDependencies"),
+            format!(
+                "{}: only tests use it, move it to devDependencies",
+                in_workspace(package, workspace)
+            ),
         ),
         Finding::MissingDependency { file, package } => {
             ("missing-dependency", format!("{file}: {package}"))
