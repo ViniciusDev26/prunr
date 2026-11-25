@@ -136,6 +136,11 @@ mod tests {
         let span = Span::new(5, 17);
         assert_eq!(&source[5..17], "const x = 1;");
         assert_eq!(apply(source, &[delete_lines(source, span)]), "a;\nb;");
+        let source = "a;\nconst x = 1;  \nb;";
+        assert_eq!(
+            apply(source, &[delete_lines(source, Span::new(3, 15))]),
+            "a;\nb;"
+        );
         let source = "a; const x = 1;\nb;";
         let span = Span::new(3, 15);
         assert_eq!(apply(source, &[delete_lines(source, span)]), "a; \nb;");

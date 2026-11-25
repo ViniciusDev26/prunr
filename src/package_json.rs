@@ -272,6 +272,34 @@ mod tests {
     }
 
     #[test]
+    fn moving_within_one_line_objects_keeps_them_on_one_line() {
+        assert_eq!(
+            move_to_dev(r#"{ "dependencies": { "a": "1" } }"#, "a").unwrap(),
+            "{ \"dependencies\": {},\n  \"devDependencies\": {\n    \"a\": \"1\"\n  } }"
+        );
+        assert_eq!(
+            move_to_dev(
+                r#"{ "dependencies": { "a": "1" }, "devDependencies": { "b": "1" } }"#,
+                "a"
+            )
+            .unwrap(),
+            r#"{ "dependencies": {}, "devDependencies": { "a": "1", "b": "1" } }"#
+        );
+    }
+
+    #[test]
+    fn malformed_json_is_left_alone() {
+        assert_eq!(
+            remove(r#"{ "dependencies": { "a"#, "dependencies", "a"),
+            None
+        );
+        assert_eq!(
+            remove(r#"{ "dependencies" { } }"#, "dependencies", "a"),
+            None
+        );
+    }
+
+    #[test]
     fn moving_creates_dev_dependencies_when_there_are_none() {
         let text = "{\n  \"dependencies\": {\n    \"a\": \"1\"\n  }\n}\n";
         assert_eq!(

@@ -4,6 +4,7 @@ pub mod cli;
 pub mod config;
 pub mod edit;
 pub mod facts;
+pub mod fix;
 pub mod init;
 pub mod package_json;
 pub mod plugins;

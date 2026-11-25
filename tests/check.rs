@@ -796,16 +796,19 @@ fn fix_removes_what_check_reports_until_nothing_more_can_go() {
     assert_eq!(
         run.stdout,
         "fixed unused-file           src/dead.js\n\
+         fixed unused-file           src/only-dead.js\n\
          fixed unused-export         src/greet.mjs: local\n\
          fixed unused-export         src/greet.mjs: unusedConst\n\
+         fixed unused-export         src/legacy.js: default\n\
          fixed unused-export         src/math.js: sub\n\
          fixed unused-import         src/greet.mjs: writeFile from node:fs/promises\n\
          fixed unused-import         src/index.js: fs from fs\n\
+         fixed unused-import         src/index.js: legacy from ./legacy\n\
          fixed unused-import         src/index.js: unusedHelper from ./math\n\
          fixed unused-ignore         src/greet.mjs:9: ignores nothing\n\
          fixed unused-dependency     left-pad\n\
          fixed misplaced-dependency  supertest: only tests use it, move it to devDependencies\n\
-         fixed unused-file           src/only-dead.js\n\
+         fixed unused-file           src/legacy.js\n\
          \n\
          unused-export         src/math.js: mul (only tests use it)\n\
          \n\
@@ -814,6 +817,10 @@ fn fix_removes_what_check_reports_until_nothing_more_can_go() {
     let root = dir.path();
     assert!(!root.join("src/dead.js").exists());
     assert!(!root.join("src/only-dead.js").exists());
+    assert!(
+        !root.join("src/legacy.js").exists(),
+        "the second round removes it"
+    );
     assert_eq!(
         read(root, "src/index.js"),
         "const { add } = require(\"./math\");\n\
@@ -862,7 +869,11 @@ fn fix_dry_run_says_what_it_would_do_and_changes_nothing() {
         "{}",
         run.stdout
     );
-    assert!(!run.stdout.contains("only-dead"), "{}", run.stdout);
+    assert!(
+        !run.stdout.contains("unused-file           src/legacy.js"),
+        "the dry run stops at the first round: {}",
+        run.stdout
+    );
     assert_eq!(read(dir.path(), "src/index.js"), before);
     assert!(dir.path().join("src/dead.js").exists());
 }
@@ -880,4 +891,70 @@ fn fix_leaves_baseline_findings_alone() {
     );
     assert!(read(dir.path(), "math.js").contains("exports.sub"));
     assert_ne!(read(dir.path(), "math.js"), math);
+}
+
+#[test]
+fn fix_leaves_what_it_cannot_remove_safely() {
+    let dir = copy_tree("fix-partial");
+    let run = run_in(dir.path(), &["fix"]);
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "fixed unused-export         lib.js: b\n\
+         fixed unused-export         lib.js: c\n\
+         fixed unused-export         lib.js: onlyUnused\n\
+         fixed unused-import         index.js: b from ./lib.js\n\
+         fixed unused-import         index.js: c from ./lib.js\n\
+         fixed unused-import         index.js: onlyUnused from ./lib.js\n\
+         \n\
+         unused-export         anon.js: default\n\
+         unused-export         lib.js: shared\n\
+         unused-import         cjs.cjs: z from ./other.js\n\
+         \n\
+         errors: 3, warnings: 0\n",
+        "an export keyword shared with a used name, an anonymous default and a require in a \
+         declaration of several names stay"
+    );
+    assert_eq!(
+        read(dir.path(), "index.js"),
+        "import def, { a } from \"./lib.js\";\n\
+         import whole from \"./lib.js\";\n\
+         import * as ns from \"./other.js\";\n\
+         import \"./anon.js\";\n\
+         import \"./cjs.cjs\";\n\
+         \n\
+         console.log(def, a, whole, ns.x);\n"
+    );
+    assert_eq!(
+        read(dir.path(), "lib.js"),
+        "export const a = 1, shared = 2;\nconst b = 3, c = 4, onlyUnused = 5;\nexport default 42;\n"
+    );
+}
+
+#[test]
+fn fix_without_a_config_is_an_error() {
+    let run = prunr("missing-config", &["fix"]);
+    assert_eq!(run.code, 2);
+    assert!(
+        run.stderr.contains("prunr.json not found"),
+        "{}",
+        run.stderr
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn fix_says_which_file_it_could_not_change() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = copy_tree("require-static");
+    let lib = dir.path().join("lib");
+    std::fs::set_permissions(&lib, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let run = run_in(dir.path(), &["fix"]);
+    std::fs::set_permissions(&lib, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(run.code, 2);
+    assert!(
+        run.stderr.starts_with("error: ") && run.stderr.contains("lib/unused.js: "),
+        "{}",
+        run.stderr
+    );
 }

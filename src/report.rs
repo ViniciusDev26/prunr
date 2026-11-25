@@ -31,6 +31,12 @@ pub fn human(findings: &[Finding], stale: &[Finding]) -> String {
     out + &summary(findings, stale)
 }
 
+/// A finding on one line, as the human report prints it, without the warning mark.
+pub fn line(finding: &Finding) -> String {
+    let (kind, detail) = describe(finding);
+    format!("{kind:<22}{detail}{}", note(finding))
+}
+
 /// GitHub Actions annotations: one per finding, at its file and line, and the summary.
 pub fn github(
     findings: &[Finding],
