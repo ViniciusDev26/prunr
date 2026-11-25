@@ -1,0 +1,5 @@
+{
+  "name": "example",
+  "private": true,
+  "dependencies": { "express": "5.0.0", "left-pad": "1.0.0" }
+}
