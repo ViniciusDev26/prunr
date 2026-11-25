@@ -208,6 +208,7 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
             _ => {}
         }
     }
+    analyzer.jsdoc_imports(&program.comments);
     Ok(analyzer.finish(&program.comments))
 }
 
@@ -395,6 +396,52 @@ impl<'a> Analyzer<'_, 'a> {
         match argument.and_then(pattern) {
             Some(glob) => self.facts.patterns.push(Pattern { source, glob }),
             None => self.facts.dynamic_requires.push(source),
+        }
+    }
+
+    /// `import("./x").Name` in JSDoc comments: a require of `./x` that only types use, and so
+    /// can form no cycle. Without a member, the whole module is used.
+    fn jsdoc_imports(&mut self, comments: &[Comment]) {
+        for comment in comments.iter().filter(|comment| comment.is_jsdoc()) {
+            let start = comment.span.start as usize;
+            let text = &self.source[start..comment.span.end as usize];
+            for (at, _) in text.match_indices("import(") {
+                let inner = text[at + "import(".len()..].trim_start();
+                let Some(quote) = inner
+                    .chars()
+                    .next()
+                    .filter(|c| matches!(c, '"' | '\'' | '`'))
+                else {
+                    continue;
+                };
+                let Some(length) = inner[1..].find(quote) else {
+                    continue;
+                };
+                let specifier = &inner[1..1 + length];
+                let Some(after) = inner[length + 2..].trim_start().strip_prefix(')') else {
+                    continue;
+                };
+                let member: String = after
+                    .strip_prefix('.')
+                    .unwrap_or_default()
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
+                    .collect();
+                let path = if member.is_empty() {
+                    vec![]
+                } else {
+                    vec![member]
+                };
+                let offset = (start + at) as u32;
+                self.required(specifier, Span::new(offset, offset));
+                self.facts.requires.push(Require {
+                    specifier: specifier.to_string(),
+                    uses: vec![Use { path, whole: true }],
+                    unused: Vec::new(),
+                    esm: false,
+                    type_only: true,
+                });
+            }
         }
     }
 
@@ -1919,6 +1966,31 @@ mod tests {
                 (3, "/* prunr-ignore-file */")
             ]
         );
+    }
+
+    #[test]
+    fn a_jsdoc_import_type_is_a_type_only_require() {
+        let found = facts(
+            "/**\n * @param {import(\"./types\").Invoice[]} a\n * @param {import( './flags' )} b\n \
+             * @param {typeof import(`./c`).default} c\n * @type {import(x)} d\n \
+             * @type {import(\"./a\" + b)} e\n * @type {import(\"./open} f\n */\n\
+             /* import(\"./block\") */\n// import(\"./line\")\nfunction f(a, b, c, d) {}",
+        );
+        let requires: Vec<(&str, &[Use], bool, bool)> = found
+            .requires
+            .iter()
+            .map(|r| (r.specifier.as_str(), r.uses.as_slice(), r.type_only, r.esm))
+            .collect();
+        assert_eq!(
+            requires,
+            [
+                ("./types", &[uses(&["Invoice"], true)][..], true, false),
+                ("./flags", &[uses(&[], true)][..], true, false),
+                ("./c", &[uses(&["default"], true)][..], true, false),
+            ]
+        );
+        assert_eq!(found.require_lines["./types"], 2);
+        assert!(found.requires.iter().all(|r| r.unused.is_empty()));
     }
 
     #[test]

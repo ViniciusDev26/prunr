@@ -130,6 +130,9 @@ Arquivos `.js`, `.cjs`, `.mjs`, `.jsx`, `.ts`, `.cts`, `.mts` e `.tsx` entram no
 - `export { a } from`, `export * from` e `export * as ns from` repassam o uso para o arquivo de
   origem, e o export morto é reportado onde é definido, não no barrel. Os reexports de uma
   entrada de produção contam como usados: são a interface dela.
+- Um tipo JSDoc `import("./x").Nome` (em `@param`, `@type`, `@typedef`...) usa `Nome` de `./x`,
+  e `import("./x")` sem membro usa o módulo inteiro: um arquivo só de tipos JSDoc não é
+  `unused-file`. Como imports só de tipo, eles não formam `circular-import`.
 - A resolução segue o TypeScript: `./a.js` acha o `a.ts`, e valem os `paths` do `tsconfig.json`
   e os `imports` (`#interno`) do `package.json`.
 - `@types/x` conta como usado quando `x` é usado; `@types/node`, quando o projeto tem TypeScript
