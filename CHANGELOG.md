@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.0](https://github.com/ViniciusDev26/prunr/compare/v0.3.0...v0.4.0) (2026-11-25)
+
+
+### Features
+
+* a package a used package needs as a peer is used ([#38](https://github.com/ViniciusDev26/prunr/issues/38)) ([94bb118](https://github.com/ViniciusDev26/prunr/commit/94bb1189897b9a2d0e082dfbb77b44565d429942))
+* playwright, drizzle kit and postcss plugins, and vitest projects ([#39](https://github.com/ViniciusDev26/prunr/issues/39)) ([e984ef6](https://github.com/ViniciusDev26/prunr/commit/e984ef67de77d2a5528438ef05874d4efc5c4d83))
+* the files the scripts run are entries ([#37](https://github.com/ViniciusDev26/prunr/issues/37)) ([3e5765a](https://github.com/ViniciusDev26/prunr/commit/3e5765a8e8b342b35d58fd50c4eda18c25035a57))
+* the stylesheets a file imports use packages ([#40](https://github.com/ViniciusDev26/prunr/issues/40)) ([1fc6eda](https://github.com/ViniciusDev26/prunr/commit/1fc6edaa4528b0443f544e77eaaa591512caa792))
+* vite and react plugins, with absolute imports from the public dir ([#36](https://github.com/ViniciusDev26/prunr/issues/36)) ([0a65c48](https://github.com/ViniciusDev26/prunr/commit/0a65c48cbf1fed10b44e1b38e64860aa5e4bed58))
+
+
+### Documentation
+
+* rewrite the readme and move the reference into docs/guide ([#34](https://github.com/ViniciusDev26/prunr/issues/34)) ([d84b0ac](https://github.com/ViniciusDev26/prunr/commit/d84b0ac6026b86d554f009d943a8810b0a9b8d55))
+
 ## [0.3.0](https://github.com/ViniciusDev26/prunr/compare/v0.2.1...v0.3.0) (2026-11-25)
 
 
