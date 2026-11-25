@@ -49,6 +49,9 @@ fn describe(finding: &Finding) -> (&'static str, String) {
             name,
             specifier,
         } => ("unused-import", format!("{file}: {name} from {specifier}")),
+        Finding::UnusedIgnore { file, line } => {
+            ("unused-ignore", format!("{file}:{line}: ignores nothing"))
+        }
         Finding::UnusedDependency { package } => ("unused-dependency", package.clone()),
         Finding::MisplacedDependency { package } => (
             "misplaced-dependency",

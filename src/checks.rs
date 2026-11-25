@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
-use crate::facts::{ReexportKind, Use};
+use crate::facts::{Ignore, ReexportKind, Use};
 use crate::project::{FileId, Project, as_commonjs};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -35,6 +35,9 @@ pub enum Finding {
         name: String,
         specifier: String,
     },
+    /// A `prunr-ignore-next-line` or `prunr-ignore-file` comment that keeps nothing from being
+    /// reported: what it ignored is used now, or it is before no export.
+    UnusedIgnore { file: FileId, line: u32 },
     /// Declared in `dependencies` or `devDependencies`, required by no file and run by no script.
     UnusedDependency { package: String },
     /// Declared in `dependencies`, but only tests require it (and no script runs it): it belongs
@@ -69,8 +72,8 @@ pub fn check(
     let tested = reachable(project, tests);
     let all: BTreeSet<FileId> = live.union(&tested).cloned().collect();
     let mut findings = Vec::new();
-    for file in project.files.keys() {
-        if !live.contains(file) && !tests.contains(file) {
+    for (file, facts) in project.files.iter().map(|(id, file)| (id, &file.facts)) {
+        if !live.contains(file) && !tests.contains(file) && facts.ignore_file.is_none() {
             findings.push(Finding::UnusedFile {
                 file: file.clone(),
                 test_only: tested.contains(file),
@@ -211,17 +214,33 @@ fn unused_exports(
     let live_uses = uses(project, live, production);
     let none = BTreeSet::new();
     let test_uses = uses(project, &tested.difference(live).cloned().collect(), &none);
-    for id in live.difference(production) {
+    for id in live {
         let file = &project.files[id];
+        let facts = &file.facts;
         let used_by = |uses: &Uses, path: &[String]| {
             uses.get(id).is_some_and(|incoming| {
                 incoming
                     .iter()
-                    .any(|u| covers(u, path, file.facts.default_export))
+                    .any(|u| covers(u, path, facts.default_export))
             })
         };
-        for export in &file.facts.exports {
-            if !export.used_internally && !used_by(&live_uses, &export.path) {
+        let unused_ignore = |line: u32| Finding::UnusedIgnore {
+            file: id.clone(),
+            line,
+        };
+        // An entry's exports are its interface: they are never reported, so nothing is ignored.
+        let entry = production.contains(id);
+        let mut file_ignored = false;
+        for export in &facts.exports {
+            let alive = entry || export.used_internally || used_by(&live_uses, &export.path);
+            let ignore = facts.ignores.get(&export.path);
+            if alive {
+                if let Some(Ignore::NextLine(line)) = ignore {
+                    findings.push(unused_ignore(*line));
+                }
+            } else if facts.ignore_file.is_some() {
+                file_ignored = true;
+            } else if ignore.is_none() {
                 findings.push(Finding::UnusedExport {
                     file: id.clone(),
                     symbol: export.path.join("."),
@@ -229,6 +248,12 @@ fn unused_exports(
                 });
             }
         }
+        if let Some(line) = facts.ignore_file
+            && !file_ignored
+        {
+            findings.push(unused_ignore(line));
+        }
+        findings.extend(facts.stray_ignores.iter().map(|line| unused_ignore(*line)));
     }
 }
 

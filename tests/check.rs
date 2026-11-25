@@ -546,10 +546,11 @@ fn a_comment_ignores_an_export_or_a_file_and_must_ignore_something() {
         run.stdout,
         "unused-export         src/legacy.cjs: gone\n\
          unused-export         src/lib.js: dead\n\
+         unused-ignore         src/index.js:8: ignores nothing\n\
          unused-ignore         src/lib.js:12: ignores nothing\n\
          unused-ignore         src/lib.js:17: ignores nothing\n\
          unused-ignore         src/used-file.js:1: ignores nothing\n\
          \n\
-         errors: 5, warnings: 0\n"
+         errors: 6, warnings: 0\n"
     );
 }
