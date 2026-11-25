@@ -971,3 +971,35 @@ fn a_jsdoc_import_type_uses_its_module() {
          errors: 2, warnings: 0\n"
     );
 }
+
+#[test]
+fn fix_deletes_the_declaration_an_export_leaves_unused() {
+    let dir = copy_tree("fix-declarations");
+    let run = run_in(dir.path(), &["fix"]);
+    assert_eq!(run.code, 1, "{}{}", run.stdout, run.stderr);
+    assert!(
+        run.stdout
+            .ends_with("\nunused-export         esm.js: notUsed\n\nerrors: 1, warnings: 0\n"),
+        "an export keyword shared with a used name stays: {}",
+        run.stdout
+    );
+    assert_eq!(
+        read(dir.path(), "esm.js"),
+        "/**\n * The header of the file stays.\n */\n\
+         \n\
+         export function used() {\n  return 1;\n}\n\
+         \n\
+         const sideEffect = Math.random();\n\
+         \n\
+         export const usedToo = 5, notUsed = 6;\n"
+    );
+    assert_eq!(
+        read(dir.path(), "cjs.cjs"),
+        "const kept = 1;\n\
+         const also = kept;\n\
+         \n\
+         const computed = Date.now();\n\
+         \n\
+         module.exports = { kept, also };\n"
+    );
+}
