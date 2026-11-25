@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo-dark.svg">
+    <img src="assets/brand/logo.svg" alt="prunr" width="360">
+  </picture>
+</p>
+
 # prunr
 
 Detector de código morto para projetos Node.js, com **CommonJS como cidadão de primeira classe**.
