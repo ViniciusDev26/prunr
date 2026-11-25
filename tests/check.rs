@@ -452,3 +452,38 @@ fn a_package_the_scripts_run_is_used() {
         "unused-dependency     left-pad\n\nerrors: 1, warnings: 0\n"
     );
 }
+
+#[test]
+fn esm_and_commonjs_share_one_graph() {
+    let run = check("esm");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/unused.js\n\
+         unused-export         src/greet.js: whisper\n\
+         unused-export         src/legacy-named.cjs: other\n\
+         unused-export         src/legacy.cjs: stop\n\
+         unused-export         src/math.mjs: sub\n\
+         unused-export         src/math.mjs: unusedBinding\n\
+         unused-import         src/index.js: unusedBinding from ./math.mjs\n\
+         \n\
+         errors: 7, warnings: 0\n"
+    );
+}
+
+#[test]
+fn a_typescript_project_is_read_like_the_compiler_resolves_it() {
+    let run = check("typescript");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-export         src/format.ts: unusedFormat\n\
+         unused-export         src/math.ts: sub\n\
+         unused-export         src/types.ts: Unused\n\
+         unused-export         src/ui/button.tsx: IconButton\n\
+         unused-export         src/ui/card.tsx: Card\n\
+         unused-dependency     @types/express\n\
+         \n\
+         errors: 6, warnings: 0\n"
+    );
+}
