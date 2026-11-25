@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
-use crate::facts::Use;
-use crate::project::{FileId, Project};
+use crate::facts::{ReexportKind, Use};
+use crate::project::{FileId, Project, as_commonjs};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -117,16 +117,86 @@ fn reachable(project: &Project, entries: &BTreeSet<FileId>) -> BTreeSet<FileId> 
     seen
 }
 
-/// What `files` use of each file they require.
-fn uses<'p>(project: &'p Project, files: &BTreeSet<FileId>) -> BTreeMap<&'p FileId, Vec<&'p Use>> {
-    let mut uses: BTreeMap<&FileId, Vec<&Use>> = BTreeMap::new();
+type Uses<'p> = BTreeMap<&'p FileId, BTreeSet<Use>>;
+
+/// What `files` use of each file they require. An entry is used whole: its exports are its
+/// interface. Uses of a file that reexports others are forwarded to them.
+fn uses<'p>(
+    project: &'p Project,
+    files: &BTreeSet<FileId>,
+    entries: &'p BTreeSet<FileId>,
+) -> Uses<'p> {
+    let mut uses: Uses = BTreeMap::new();
     for id in files {
+        for edge in &project.files[id].edges {
+            uses.entry(&edge.target)
+                .or_default()
+                .extend(edge.uses.iter().cloned());
+        }
+    }
+    for id in entries {
+        uses.entry(id).or_default().insert(Use {
+            path: vec![],
+            whole: true,
+        });
+    }
+    let mut queue: Vec<&FileId> = uses.keys().copied().collect();
+    while let Some(id) = queue.pop() {
         let file = &project.files[id];
-        for edge in &file.edges {
-            uses.entry(&edge.target).or_default().extend(&edge.uses);
+        let mut shadowed: BTreeSet<&str> = file
+            .facts
+            .exports
+            .iter()
+            .map(|export| export.path[0].as_str())
+            .collect();
+        shadowed.insert("default");
+        for (_, kind) in &file.reexports {
+            if let ReexportKind::Named { exported, .. } = kind {
+                shadowed.insert(exported);
+            }
+        }
+        let incoming = uses[id].clone();
+        for (target, kind) in &file.reexports {
+            let commonjs = !project.files[target].facts.esm;
+            let forwarded: Vec<Use> = incoming
+                .iter()
+                .filter_map(|used| forward(used, kind, &shadowed))
+                .map(|used| if commonjs { as_commonjs(&used) } else { used })
+                .collect();
+            let known = uses.entry(target).or_default();
+            let before = known.len();
+            known.extend(forwarded);
+            if known.len() > before {
+                queue.push(target);
+            }
         }
     }
     uses
+}
+
+/// The use of a reexported module that a use of the reexporting one makes. `shadowed` are the
+/// names `export *` does not cover: the module's own exports, its named reexports and `default`.
+fn forward(used: &Use, kind: &ReexportKind, shadowed: &BTreeSet<&str>) -> Option<Use> {
+    let whole = |path: Vec<String>| Some(Use { path, whole: true });
+    let Some((first, rest)) = used.path.split_first() else {
+        return match kind {
+            _ if !used.whole => None,
+            ReexportKind::Named { imported, .. } => whole(vec![imported.clone()]),
+            ReexportKind::All | ReexportKind::Namespace(_) => whole(vec![]),
+        };
+    };
+    let path = match kind {
+        ReexportKind::Named { imported, exported } if first == exported => {
+            [vec![imported.clone()], rest.to_vec()].concat()
+        }
+        ReexportKind::Namespace(name) if first == name => rest.to_vec(),
+        ReexportKind::All if !shadowed.contains(first.as_str()) => used.path.clone(),
+        _ => return None,
+    };
+    Some(Use {
+        path,
+        whole: used.whole,
+    })
 }
 
 /// Exports of live files that no live file uses. A production entry's exports are its interface
@@ -138,15 +208,17 @@ fn unused_exports(
     tested: &BTreeSet<FileId>,
     findings: &mut Vec<Finding>,
 ) {
-    let live_uses = uses(project, live);
-    let test_uses = uses(project, &tested.difference(live).cloned().collect());
+    let live_uses = uses(project, live, production);
+    let none = BTreeSet::new();
+    let test_uses = uses(project, &tested.difference(live).cloned().collect(), &none);
     for id in live.difference(production) {
         let file = &project.files[id];
-        let used_by = |uses: &BTreeMap<&FileId, Vec<&Use>>, path: &[String]| {
-            let incoming = uses.get(id).map(Vec::as_slice).unwrap_or_default();
-            incoming
-                .iter()
-                .any(|u| covers(u, path, file.facts.default_export))
+        let used_by = |uses: &Uses, path: &[String]| {
+            uses.get(id).is_some_and(|incoming| {
+                incoming
+                    .iter()
+                    .any(|u| covers(u, path, file.facts.default_export))
+            })
         };
         for export in &file.facts.exports {
             if !export.used_internally && !used_by(&live_uses, &export.path) {
