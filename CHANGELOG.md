@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/ViniciusDev26/prunr/compare/v0.2.0...v0.2.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* a jsdoc import type uses its module ([#27](https://github.com/ViniciusDev26/prunr/issues/27)) ([6faa4fd](https://github.com/ViniciusDev26/prunr/commit/6faa4fd57e9156e9055c6fa80fdc70005f539162))
+
 ## [0.2.0](https://github.com/ViniciusDev26/prunr/compare/v0.1.0...v0.2.0) (2026-11-25)
 
 
