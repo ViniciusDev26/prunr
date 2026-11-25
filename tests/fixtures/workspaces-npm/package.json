@@ -1,0 +1,7 @@
+{
+  "name": "demo",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": { "fmt": "prettier --write ." },
+  "devDependencies": { "prettier": "^3.0.0" }
+}

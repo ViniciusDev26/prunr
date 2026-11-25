@@ -1022,3 +1022,41 @@ fn nest_starts_at_its_main_and_tests_end_to_end() {
         "unused-file           src/orphan.service.ts\n\nerrors: 1, warnings: 0\n"
     );
 }
+
+const WORKSPACES_FINDINGS: &str = "unused-file           packages/lib/internal.js\n\
+     unused-export         packages/shared/src/index.js: unused\n\
+     unused-dependency     left-pad (packages/shared)\n\
+     missing-dependency    packages/app/src/index.js: lodash\n\
+     \n\
+     errors: 4, warnings: 0\n";
+
+#[test]
+fn npm_workspaces_are_one_graph_with_dependencies_per_package() {
+    let run = check("workspaces-npm");
+    assert_eq!(run.code, 1);
+    assert_eq!(run.stdout, WORKSPACES_FINDINGS);
+}
+
+#[test]
+fn pnpm_workspaces_are_one_graph_with_dependencies_per_package() {
+    let run = check("workspaces-pnpm");
+    assert_eq!(run.code, 1);
+    assert_eq!(run.stdout, WORKSPACES_FINDINGS);
+}
+
+#[test]
+fn json_names_the_package_of_a_dependency_finding() {
+    let run = prunr("workspaces-npm", &["check", "--json"]);
+    let actual: serde_json::Value = serde_json::from_str(&run.stdout).unwrap();
+    assert!(
+        actual["findings"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!({
+                "kind": "unused-dependency",
+                "package": "left-pad",
+                "workspace": "packages/shared"
+            })),
+        "{actual}"
+    );
+}

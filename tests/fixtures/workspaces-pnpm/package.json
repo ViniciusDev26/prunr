@@ -1,0 +1,10 @@
+{
+  "name": "demo-pnpm",
+  "private": true,
+  "scripts": {
+    "fmt": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.0.0"
+  }
+}
