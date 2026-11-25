@@ -1177,3 +1177,17 @@ fn vitest_reads_the_config_of_each_project() {
          errors: 1, warnings: 0\n"
     );
 }
+
+#[test]
+fn a_package_another_used_package_needs_as_a_peer_is_used() {
+    let run = check("peer-dependencies");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     orphan-peer\n\
+         unused-dependency     unused-host\n\
+         misplaced-dependency  test-helper-peer: only tests use it, move it to devDependencies\n\
+         \n\
+         errors: 3, warnings: 0\n"
+    );
+}

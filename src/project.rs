@@ -45,6 +45,9 @@ pub struct Workspace {
     pub test_packages: BTreeSet<String>,
     /// Packages the frameworks load in production without an import.
     pub production_packages: BTreeSet<String>,
+    /// The `peerDependencies` of each installed package it can use: whoever uses the package
+    /// uses them too.
+    pub peers: BTreeMap<String, BTreeSet<String>>,
 }
 
 #[derive(Debug, Default)]
@@ -225,15 +228,9 @@ fn package_file(
 /// The binaries each package declares, mapped to the package. An installed package declares
 /// those in the `bin` of its `package.json`; one that is not installed (or unreadable) is guessed
 /// to declare a binary named after it, without the scope.
-fn binaries(dirs: &[PathBuf], packages: &BTreeSet<String>) -> BTreeMap<String, String> {
+fn binaries(installed: &BTreeMap<String, Option<serde_json::Value>>) -> BTreeMap<String, String> {
     let mut binaries = BTreeMap::new();
-    for package in packages {
-        let installed: Option<serde_json::Value> = dirs.iter().find_map(|dir| {
-            let manifest = dir.join("node_modules").join(package).join("package.json");
-            std::fs::read_to_string(manifest)
-                .ok()
-                .and_then(|text| serde_json::from_str(&text).ok())
-        });
+    for (package, installed) in installed {
         let unscoped = || package.rsplit('/').next().unwrap_or(package).to_string();
         let names = match installed.as_ref().map(|manifest| manifest.get("bin")) {
             Some(Some(serde_json::Value::Object(bins))) => bins.keys().cloned().collect(),
@@ -245,6 +242,41 @@ fn binaries(dirs: &[PathBuf], packages: &BTreeSet<String>) -> BTreeMap<String, S
         }
     }
     binaries
+}
+
+/// The `package.json` of each package as installed in the `node_modules` of the first of `dirs`
+/// that has it; `None` when it is not installed or cannot be read.
+fn installed(
+    dirs: &[PathBuf],
+    packages: &BTreeSet<String>,
+) -> BTreeMap<String, Option<serde_json::Value>> {
+    packages
+        .iter()
+        .map(|package| {
+            let manifest = dirs.iter().find_map(|dir| {
+                let manifest = dir.join("node_modules").join(package).join("package.json");
+                std::fs::read_to_string(manifest)
+                    .ok()
+                    .and_then(|text| serde_json::from_str(&text).ok())
+            });
+            (package.clone(), manifest)
+        })
+        .collect()
+}
+
+/// The `peerDependencies` of each installed package that has any.
+fn peers(
+    installed: &BTreeMap<String, Option<serde_json::Value>>,
+) -> BTreeMap<String, BTreeSet<String>> {
+    installed
+        .iter()
+        .filter_map(|(package, manifest)| {
+            let serde_json::Value::Object(peers) = &manifest.as_ref()?["peerDependencies"] else {
+                return None;
+            };
+            Some((package.clone(), peers.keys().cloned().collect()))
+        })
+        .collect()
 }
 
 /// `path` relative to `root`, with `/` separators.
@@ -523,7 +555,8 @@ impl Project {
         {
             let package = root.join(dir);
             let declared_packages = manifest.declared();
-            let binaries = binaries(&[package.clone(), root.clone()], &visible[index]);
+            let installed = installed(&[package.clone(), root.clone()], &visible[index]);
+            let binaries = binaries(&installed);
             // The scripts of `package.json`, and the commands the tools run (Playwright's web
             // servers), which run test code.
             let scripts: Vec<(bool, &String)> = manifest
@@ -587,6 +620,7 @@ impl Project {
                 script_packages,
                 test_packages: plugins.packages,
                 production_packages: plugins.production_packages,
+                peers: peers(&installed),
             });
         }
         Ok(Self {
@@ -937,6 +971,44 @@ mod tests {
         let index = &project.files["index.js"];
         assert_eq!(index.unresolved, ["/gone.svg"]);
         assert_eq!(index.edges.len(), 1);
+    }
+
+    #[test]
+    fn whoever_uses_a_package_uses_its_peers() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{ "dependencies": { "host": "1", "peer": "1", "deep": "1", "plain": "1" } }"#,
+            ),
+            (
+                "node_modules/host/package.json",
+                r#"{ "peerDependencies": { "peer": "1" } }"#,
+            ),
+            (
+                "node_modules/peer/package.json",
+                r#"{ "peerDependencies": { "deep": "1" } }"#,
+            ),
+            (
+                "node_modules/deep/package.json",
+                r#"{ "peerDependencies": { "host": "1" } }"#,
+            ),
+            ("node_modules/plain/package.json", "{}"),
+            ("index.js", r#"require("host");"#),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.workspaces[0].peers.keys().collect::<Vec<_>>(),
+            ["deep", "host", "peer"]
+        );
+        let entries = project.entries(&["index.js".to_string()]).unwrap();
+        let findings = crate::checks::check(&project, &entries, &BTreeSet::new());
+        assert_eq!(
+            findings,
+            [crate::checks::Finding::UnusedDependency {
+                package: "plain".into(),
+                workspace: None
+            }]
+        );
     }
 
     #[test]

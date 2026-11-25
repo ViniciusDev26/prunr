@@ -335,6 +335,10 @@ fn dependencies(
             in_tests.extend(&member.test_packages);
             in_scripts.extend(&member.script_packages);
         }
+        // A package needs its peers: whoever uses it uses them, the same way.
+        for used in [&mut in_production, &mut in_tests, &mut in_scripts] {
+            with_peers(used, &scope);
+        }
         let used = |package: &String| {
             in_production.contains(package)
                 || in_tests.contains(package)
@@ -363,6 +367,20 @@ fn dependencies(
                     package: package.clone(),
                     workspace: at.clone(),
                 });
+            }
+        }
+    }
+}
+
+/// `used` with the peers of each package in it, and theirs, as the packages of `scope` see them.
+fn with_peers<'p>(used: &mut BTreeSet<&'p String>, scope: &[&'p crate::project::Workspace]) {
+    let mut pending: Vec<&String> = used.iter().copied().collect();
+    while let Some(package) = pending.pop() {
+        for member in scope {
+            for peer in member.peers.get(package).into_iter().flatten() {
+                if used.insert(peer) {
+                    pending.push(peer);
+                }
             }
         }
     }
