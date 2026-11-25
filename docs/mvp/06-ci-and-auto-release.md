@@ -19,13 +19,13 @@ fazer merge do PR de release.
 - **Merge do PR de release** → tag → workflow de release:
   1. Compila os binários: Linux x64/arm64 (musl, estático), macOS x64/arm64, Windows x64.
   2. Anexa os binários e os `.sha256` ao GitHub Release.
-  3. Publica no npm o pacote `prunr` e um pacote por plataforma em `optionalDependencies`, sem
+  3. Publica no npm o pacote `@prunr/prunr` e um pacote por plataforma em `optionalDependencies`, sem
      `postinstall`.
   4. Publica com *trusted publishing* (OIDC) e *provenance*, sem token do npm guardado em secret.
 
 ### Decisões tomadas na implementação
 
-- **Pacotes:** `prunr` (o que se instala) e `@prunr/linux-x64`, `@prunr/linux-arm64`,
+- **Pacotes:** `@prunr/prunr` (o que se instala; o npm recusou `prunr` sem escopo por ser parecido demais com `lunr` e `grunt`) e `@prunr/linux-x64`, `@prunr/linux-arm64`,
   `@prunr/darwin-x64`, `@prunr/darwin-arm64`, `@prunr/win32-x64`, um por binário.
 - **Só npm**; nada é publicado no crates.io (`publish = false`).
 - **Trusted publishing (OIDC) desde o primeiro release, sem token npm.** Como o npm só configura
@@ -46,6 +46,6 @@ fazer merge do PR de release.
 - [x] Um PR com um teste quebrado fica vermelho no CI nos três sistemas (aconteceu no PR #3:
       o Windows expôs um bug de caminhos).
 - [ ] A versão `0.1.0` é publicada de ponta a ponta pelo pipeline, sem nenhum comando manual.
-- [ ] `npm i -D prunr && npx prunr --version` funciona num runner Linux limpo, num macOS e num Windows.
+- [ ] `npm i -D @prunr/prunr && npx prunr --version` funciona num runner Linux limpo, num macOS e num Windows.
 - [x] O binário Linux roda numa imagem `alpine` e numa `debian` (prova de que é estático):
       verificado em todo PR, para x64 e arm64.

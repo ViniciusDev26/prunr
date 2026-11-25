@@ -1,5 +1,5 @@
 // Publishes the npm packages of one release: a @prunr/<platform> package per binary, then
-// prunr, which depends on them. Run by .github/workflows/release.yml with npm trusted
+// @prunr/prunr, which depends on them. Run by .github/workflows/release.yml with npm trusted
 // publishing (OIDC), so no token is involved.
 //
 // usage: node npm/publish.mjs <version> <artifacts dir>
@@ -85,4 +85,4 @@ for (const dependency of Object.keys(manifest.optionalDependencies)) {
   manifest.optionalDependencies[dependency] = version;
 }
 fs.writeFileSync(path.join(directory, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-publish(directory, "prunr");
+publish(directory, main.name);

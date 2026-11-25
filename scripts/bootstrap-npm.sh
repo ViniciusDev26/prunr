@@ -8,7 +8,7 @@
 set -euo pipefail
 
 REPO="ViniciusDev26/prunr"
-PACKAGES=(prunr @prunr/linux-x64 @prunr/linux-arm64 @prunr/darwin-x64 @prunr/darwin-arm64 @prunr/win32-x64)
+PACKAGES=(@prunr/prunr @prunr/linux-x64 @prunr/linux-arm64 @prunr/darwin-x64 @prunr/darwin-arm64 @prunr/win32-x64)
 
 npm whoami > /dev/null
 
