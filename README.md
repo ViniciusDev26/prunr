@@ -5,308 +5,44 @@
   </picture>
 </p>
 
-# prunr
+<p align="center">
+  Detector de código morto para Node.js, com CommonJS como cidadão de primeira classe.
+</p>
 
-Detector de código morto para projetos Node.js, com **CommonJS como cidadão de primeira classe**,
-e ESM e TypeScript no mesmo grafo.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@prunr/prunr"><img src="https://img.shields.io/npm/v/@prunr/prunr" alt="npm"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/@prunr/prunr" alt="licença MIT"></a>
+</p>
 
-O prunr lê cada arquivo uma única vez, monta um grafo de módulos a partir dos pontos de entrada
-do projeto e roda todas as verificações sobre esse mesmo grafo: arquivos e exports sem uso,
-dependências sem uso ou não declaradas, imports circulares e `require` que não dá para seguir.
-Ele substitui a composição comum de dependency-cruiser + depcheck + madge + scripts próprios por
-uma ferramenta, um arquivo de configuração e um comando.
+---
 
-> **Estado:** MVP publicado (`0.1.0`). O que entrou nele está em [`docs/mvp/`](docs/mvp/README.md).
+O prunr monta um grafo de módulos a partir dos pontos de entrada do projeto e encontra o que
+nada usa: arquivos, exports, imports e dependências. No mesmo grafo, ele aponta dependências não
+declaradas, imports circulares e `require` que não dá para seguir.
 
-## Por que não o Knip
+É um binário em Rust, um arquivo de configuração e um comando, no lugar da combinação de
+depcheck + madge + scripts próprios.
 
-O Knip não lida bem com CommonJS, e a comunidade considera que não vale o esforço de dar suporte.
-O prunr parte do caminho oposto: começa por Node puro em CommonJS e depois expande para ESM,
-Vitest, Next, Nest etc.
+- **CommonJS de verdade:** `module.exports`, `exports.x`, desestruturação de `require`, métodos
+  estáticos e `require` com caminho montado (`` require(`./handlers/${nome}`) ``).
+- **ESM e TypeScript no mesmo grafo**, com `paths` do `tsconfig.json` e interop CJS/ESM como no
+  Node.
+- **Entende o seu stack** sem configuração: Jest, Vitest, Next.js, NestJS e monorepos (npm, yarn,
+  pnpm, bun, lerna, rush, nx, turbo).
+- **Conserta sozinho:** `prunr fix` apaga o que está morto e limpa o `package.json`.
+- **Feito para CI:** anotações no diff do PR, só os achados novos com `--since`, e um baseline
+  para adotar em código legado.
 
-## Instalação
-
-Como dependência de desenvolvimento, fixada por projeto:
+## Início rápido
 
 ```sh
-npm i -D @prunr/prunr      # ou: pnpm add -D @prunr/prunr / yarn add -D @prunr/prunr
+npm i -D @prunr/prunr   # ou pnpm add -D / yarn add -D / bun add -d
+npx prunr init          # cria um prunr.json a partir do package.json
 npx prunr check
 ```
 
-O pacote `@prunr/prunr` não tem binário próprio nem script de instalação: ele declara um pacote por
-plataforma (`@prunr/linux-x64`, `@prunr/linux-arm64`, `@prunr/darwin-x64`,
-`@prunr/darwin-arm64`, `@prunr/win32-x64`) como dependência opcional, e o gerenciador de pacotes
-baixa só o da sua máquina. Os binários de Linux são estáticos (musl), então rodam em qualquer
-distribuição.
-
-Os binários também ficam anexados a cada [release](https://github.com/ViniciusDev26/prunr/releases),
-com um `.sha256` ao lado. Para compilar do código: `cargo install --path .`.
-
-## Uso
-
-Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir do
-`package.json`) e rode `prunr check` nela:
-
-```json
-{
-  "$schema": "https://unpkg.com/@prunr/prunr/schema.json",
-  "entries": {
-    "production": ["src/index.js", "bin/cli.js"],
-    "test": ["test/**", "**/*.test.js"]
-  },
-  "dependencies": {
-    "ignore": ["eslint-plugin-import"]
-  },
-  "baseline": ".prunr-baseline.json"
-}
-```
-
-```sh
-prunr init           # cria um prunr.json a partir do package.json
-prunr check          # saída para pessoas
-prunr check --json   # saída para máquinas
-prunr check --github # anotações do GitHub Actions, na linha de cada achado
-prunr check --since origin/main   # só o que é novo desde esse commit
-prunr fix            # remove o código morto que o check reporta
-prunr fix --dry-run  # mostra o que o fix faria, sem mudar nada
-prunr baseline       # grava os achados atuais no arquivo de baseline
-prunr schema         # o JSON Schema do prunr.json
-```
-
-### `prunr.json`
-
-| Opção | Obrigatória | O que é |
-|---|---|---|
-| `entries.production` | sim | Caminhos ou globs dos arquivos por onde o programa começa. Tudo o que eles alcançam, direta ou indiretamente, está vivo. |
-| `$schema` | não | O JSON Schema do arquivo, para autocompletar e validar no editor. |
-| `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. Com Jest ou Vitest, liste só o que o runner não acha sozinho (veja [Jest e Vitest](#jest-e-vitest)). |
-
-| `dependencies.ignore` | não | Pacotes que ficam de fora das verificações de dependência: os carregados de um jeito que nem o grafo nem os `scripts` mostram (um plugin citado no arquivo de configuração de outra ferramenta). |
-
-| `baseline` | não | Arquivo de baseline, relativo à raiz. Veja [Adotando num código legado](#adotando-num-código-legado). |
-
-Caminhos e globs são relativos à raiz; num glob, `*` não atravessa `/` e `**` atravessa. Cada
-entrada precisa casar com pelo menos um arquivo-fonte (`.js`, `.cjs`, `.mjs`, `.jsx`, `.ts`, `.cts`,
-`.mts` ou `.tsx`).
-
-Uma opção só entra no arquivo quando alguma funcionalidade precisa dela. Uma chave desconhecida é
-erro, para que um erro de digitação não passe em silêncio.
-
-### O que o prunr verifica
-
-| Achado | Quando |
-|---|---|
-| `unused-file` | Nenhuma entrada de produção alcança o arquivo. Se só os testes o alcançam, a linha diz `(only tests use it)`: apague-o junto com os testes. |
-| `unused-export` | Nenhum arquivo de produção usa o export, nem o próprio arquivo onde ele está. Métodos estáticos de uma classe exportada contam como exports (`Invoice.total`). Também marca `(only tests use it)`. |
-| `unused-import` | Um `require` ou `import` declara um binding que o arquivo nunca usa (`const x = require("./x")`, uma propriedade desestruturada, `import { a } from "./x"`). Um `require("./x");` ou `import "./x";` sozinho, por efeito colateral, não conta. |
-| `unused-ignore` | Um comentário `prunr-ignore-next-line` ou `prunr-ignore-file` não impede nenhum achado: o que ele ignorava passou a ser usado, ou ele não está antes de um export. Veja [Ignorar no código](#ignorar-no-código). |
-| `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa e nenhum script do `package.json` o roda. |
-| `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o importam: ele pertence a `devDependencies`. |
-| `missing-dependency` | O arquivo importa um pacote que o `package.json` não declara. |
-| `circular-import` | Há um ciclo de `require` ou `import`. Cada grupo de arquivos em ciclo é reportado uma vez, pelo caminho mais curto. Imports só de tipo (`import type`) não contam: somem na compilação. |
-| `unresolved-require` | **Aviso:** um `require` com caminho dinâmico (`require(nome)`), com um padrão que não alcança nenhum arquivo ou que aponta para um arquivo que não existe. Não falha o check. |
-
-Teste não mantém código vivo: o que só os testes usam está morto em produção. Um arquivo que
-nem produção nem testes alcançam não gera outros achados nem mantém nada vivo. No JSON, os
-achados que só os testes usam têm `"testOnly": true`.
-
-Os `scripts` do `package.json` também usam pacotes: o binário de cada comando (`jest`,
-`tsc`, `npx nodemon`, `cross-env NODE_ENV=test jest`, `dotenv -- jest`) conta como uso do pacote
-que o declara no campo `bin` (lido em `node_modules`; sem ele, vale o nome do pacote),
-`node -r dotenv/config` ou `--import tsx` conta como uso do pacote carregado, e um caminho
-dentro de `node_modules` (`node node_modules/jest/bin/jest.js`) conta como uso do pacote dele. Um pacote usado por
-script não é `unused-dependency` nem `misplaced-dependency`, e um binário sem pacote declarado
-(`docker`, `git`) não é `missing-dependency`.
-
-### ESM e TypeScript
-
-Arquivos `.js`, `.cjs`, `.mjs`, `.jsx`, `.ts`, `.cts`, `.mts` e `.tsx` entram no mesmo grafo
-(arquivos `.d.ts` ficam de fora). Um arquivo ESM pode importar um CommonJS e vice-versa:
-
-- O `default` importado de um arquivo CommonJS é o `module.exports`, como no Node.
-- `import`, `import type`, `import()` com caminho estático, `import x = require()`, `export`,
-  `export default`, `export =` e os métodos estáticos de classes exportadas são lidos como no
-  CommonJS. Tipos, interfaces e enums exportados sem uso são `unused-export`.
-- `export { a } from`, `export * from` e `export * as ns from` repassam o uso para o arquivo de
-  origem, e o export morto é reportado onde é definido, não no barrel. Os reexports de uma
-  entrada de produção contam como usados: são a interface dela.
-- Um tipo JSDoc `import("./x").Nome` (em `@param`, `@type`, `@typedef`...) usa `Nome` de `./x`,
-  e `import("./x")` sem membro usa o módulo inteiro: um arquivo só de tipos JSDoc não é
-  `unused-file`. Como imports só de tipo, eles não formam `circular-import`.
-- A resolução segue o TypeScript: `./a.js` acha o `a.ts`, e valem os `paths` do `tsconfig.json`
-  e os `imports` (`#interno`) do `package.json`.
-- `@types/x` conta como usado quando `x` é usado; `@types/node`, quando o projeto tem TypeScript
-  ou usa um módulo do Node. Importar `x` com só o `@types/x` declarado não é
-  `missing-dependency`.
-
-### Jest e Vitest
-
-Quando `jest` ou `vitest` está declarado no `package.json`, o prunr lê a configuração do runner
-(`jest.config.*`, a chave `jest` do `package.json`, `vitest.config.*` ou `vite.config.*`) sem
-executá-la:
-
-- **Arquivos de teste:** os de `testMatch` (Jest) ou `test.include` (Vitest), ou os padrões de
-  cada runner quando a opção não existe, mais as pastas `__mocks__` do Jest. Eles se somam a
-  `entries.test`.
-- **Configurações passadas por script:** `jest --config jest.e2e.config.js` (ou `-c`, também
-  com `node node_modules/jest/bin/jest.js`) é lida como as outras.
-- **Arquivos carregados:** a própria configuração e os arquivos de `setupFiles`,
-  `setupFilesAfterEnv`, `globalSetup` e `globalTeardown` (Jest) ou `test.setupFiles` e
-  `test.globalSetup` (Vitest) são código de teste.
-- **Pacotes citados como texto** (`preset`, `testEnvironment`, `transform`, `reporters`,
-  `snapshotSerializers`, `watchPlugins`; no Vitest, `test.environment`, `test.reporters` e
-  `test.coverage.provider`) contam como uso de teste: não são `unused-dependency` e, se estiverem
-  em `dependencies`, são `misplaced-dependency`.
-
-Só valores literais são lidos. Uma configuração montada em tempo de execução (uma função, uma
-variável importada) cai nos padrões do runner; cubra o resto com `entries.test`. `testRegex`
-não é lido.
-
-Na dúvida, o prunr é conservador: quando o resultado de um `require` é passado adiante ou
-acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um
-export morto do que reportar um vivo.
-
-Um `require` montado em tempo de execução a partir de um caminho relativo vira um padrão:
-`` require(`./handlers/${nome}`) `` e `require("./handlers/" + nome)` usam, inteiros, todos os
-arquivos de `handlers/` (cada `${...}` vale um trecho sem `/`, e uma pasta vale pelo seu
-`index`).
-
-### `prunr fix`
-
-`prunr fix` remove o que o `prunr check` reporta, e roda de novo até não sobrar nada a remover
-(apagar um import pode deixar um arquivo sem uso, que sai na rodada seguinte). No fim, imprime o
-que ainda resta, como o `check`.
-
-| Achado | O que o fix faz |
-|---|---|
-| `unused-file` | Apaga o arquivo. |
-| `unused-export` | Tira o export e, quando nada mais no arquivo a usa, a declaração por trás dele (função, classe, constante, tipo), com o comentário colado em cima. Uma declaração com efeito colateral (`const x = criar()`) perde só o export: apagá-la mudaria o que o módulo faz ao carregar, então o Biome a aponta para você decidir. |
-| `unused-import` | Tira o binding do `import` ou da desestruturação; sem nenhum binding, tira a linha inteira. |
-| `unused-ignore` | Apaga o comentário. |
-| `unused-dependency` | Tira o pacote do `package.json`, sem reformatar o resto. |
-| `misplaced-dependency` | Move o pacote para `devDependencies`, em ordem alfabética. |
-
-O fix não toca no que exige uma decisão: achados do baseline, o que só os testes usam (apagar
-quebraria os testes), `missing-dependency`, `circular-import`, `unresolved-require` e exports
-que não dá para tirar sem mexer em outro código (`export const a = 1, b = 2` com só um dos nomes
-sem uso, um `export default` com efeito colateral). Um import removido inteiro deixa de rodar o módulo: se ele
-era importado só pelo efeito colateral, reponha como `import "./x"`. Revise o diff antes de
-fazer commit.
-
-### Monorepos
-
-Num repositório com vários pacotes, o prunr monta um grafo só e checa as dependências de cada
-pacote. Ele acha os pacotes pela declaração de cada ferramenta, somando o que encontrar:
-
-| Ferramenta | Onde declara os pacotes |
-|---|---|
-| npm, yarn, bun | `workspaces` do `package.json` raiz (lista ou `{ "packages": [...] }`) |
-| pnpm | `packages` do `pnpm-workspace.yaml`, com exclusões `!` |
-| lerna | `packages` do `lerna.json` |
-| rush | `projects[].projectFolder` do `rush.json` (aceita comentários) |
-| nx | as pastas com `project.json` |
-| turbo | usa os workspaces do gerenciador de pacotes |
-
-- Um import de outro pacote do repositório pelo nome (`@app/shared`, `@app/shared/x`) vira
-  aresta para os arquivos dele, mesmo sem `node_modules`: pelo `exports`, `main` ou `module`, ou
-  pelo fonte (`src/index`) quando eles apontam para um build que não existe. Quem importa precisa
-  declarar o pacote (`workspace:*` vale).
-- As dependências de cada pacote são checadas nele: `unused-dependency` e `misplaced-dependency`
-  dizem o pacote (`left-pad (packages/shared)`), e o `prunr fix` edita o `package.json` dele. O
-  que o `package.json` raiz declara vale para todos os pacotes (dependências içadas e
-  ferramentas), e conta como usado por qualquer arquivo ou script do repositório.
-- Os scripts e os plugins (Jest, Vitest, Next.js, NestJS) de cada pacote são lidos no diretório
-  dele.
-- A entrada de um pacote publicado (sem `"private": true`) é a interface dele: seus exports não
-  são reportados. A de um pacote privado é checada pelos usos reais dos outros pacotes.
-
-### Next.js e NestJS
-
-Com `next` declarado no `package.json`, as rotas são entradas de produção por convenção, sem
-listá-las no `prunr.json`: `pages/**`, os arquivos do app router (`page`, `layout`, `route`,
-`loading`, `error`, `not-found`, `template`, `default`, `sitemap`, `robots`...), `middleware`,
-`instrumentation` e `next.config`, também dentro de `src/`. Os exports de uma entrada são a
-interface dela, então o que o Next.js lê (`default`, `getServerSideProps`, `metadata`,
-`generateStaticParams`, `GET`...) nunca é reportado. `react` e `react-dom` contam como usados,
-mesmo sem `import React`.
-
-Com `@nestjs/core` declarado, a entrada é o `main` que o CLI do Nest inicia (`src/main.ts`, ou o
-`sourceRoot`/`entryFile` de cada projeto do `nest-cli.json`). As classes que um `@Module`
-registra já estão no grafo pelos `import` do módulo. Os testes e2e (`test/**`, `*.e2e-spec.*`)
-são código de teste; `@nestjs/cli` e a coleção de schematics contam como usados, e
-`reflect-metadata` e `rxjs` também, porque o Nest os exige sem que o código os importe.
-
-Num projeto assim, `entries.production` pode ficar vazio (`[]`).
-
-### Ignorar no código
-
-Para um export que é API pública de propósito (usado por quem instala o pacote, carregado por
-nome por um sistema de plugins), marque-o no próprio código:
-
-```js
-// prunr-ignore-next-line
-export const register = () => {};
-
-/**
- * Parte da API pública.
- * @public
- */
-export function createClient() {}
-
-module.exports = {
-  // prunr-ignore-next-line: chamado pelo agendador
-  hook() {},
-};
-```
-
-- `// prunr-ignore-next-line` (ou `/* ... */`, com um motivo depois, se quiser) ignora os exports
-  feitos na linha seguinte: uma declaração `export`, um `exports.x =`, uma chave de
-  `module.exports = { ... }` ou um método estático.
-- A tag `@public` num comentário JSDoc faz o mesmo para o export que ele documenta.
-- `/* prunr-ignore-file */` em qualquer lugar do arquivo o deixa fora de `unused-file` e de
-  `unused-export`.
-
-Um comentário de ignorar que não impede nenhum achado é `unused-ignore`, para não acumular: o
-export voltou a ser usado, o comentário não está antes de um export, ou o arquivo ignorado não
-tem nada a esconder. A tag `@public` é documentação e nunca é reportada.
-
-### No pull request
-
-No GitHub Actions, `--github` transforma cada achado numa anotação no diff do PR, na linha do
-export, do import, do `require` ou da dependência no `package.json`. `--since <ref>` mostra só os
-achados que o commit `<ref>` não tinha: o prunr analisa também esse commit, num worktree
-temporário do git, e compara. Um export que ficou sem uso porque o PR apagou o único consumidor
-aparece mesmo num arquivo que o PR não tocou.
-
-```yaml
-- uses: actions/checkout@v4
-  with:
-    fetch-depth: 0 # --since precisa do commit base
-- run: npm ci
-- run: npx prunr check --github --since origin/${{ github.base_ref }}
-```
-
-Rode a partir da raiz do repositório: os caminhos das anotações são relativos à raiz do projeto.
-
-### Adotando num código legado
-
-Com `"baseline": ".prunr-baseline.json"` no config, `prunr baseline` grava os achados atuais
-nesse arquivo (versione-o). A partir daí:
-
-- os achados listados no baseline não falham o check;
-- um achado **novo** falha;
-- uma entrada do baseline que deixou de ser achada aparece como `stale-baseline` e também falha,
-  até você rodar `prunr baseline` de novo. Assim a lista só diminui.
-
-Cada entrada é identificada pelo tipo, arquivo e símbolo (ou pacote, ou ciclo), sem número de
-linha: mover código não invalida o baseline. No JSON, as entradas obsoletas vêm em `"stale"`.
-
-### Exemplo
-
-[`tests/fixtures/example/`](tests/fixtures/example/) tem todos os tipos de achado de uma vez:
-
 ```console
-$ cd tests/fixtures/example && prunr check
+$ npx prunr check
 unused-file           src/legacy-report.js
 unused-export         src/invoices.js: cancelInvoice
 unused-export         src/money.js: Money.fromCents
@@ -319,98 +55,105 @@ unresolved-require    src/index.js: require(process.env.PLUGIN) (warning)
 errors: 7, warnings: 1
 ```
 
-### Códigos de saída
+(É a saída do projeto em [`tests/fixtures/example/`](tests/fixtures/example/).)
 
-| Código | Significado |
-|---|---|
-| `0` | Nenhum achado, ou só avisos. |
-| `1` | Há achados novos, ou entradas obsoletas no baseline. |
-| `2` | O comando não pôde rodar: `prunr.json` ausente ou inválido, `package.json` inválido, arquivo com erro de sintaxe ou argumento desconhecido. |
+O pacote baixa só o binário da sua plataforma (Linux x64/arm64, macOS x64/arm64, Windows x64),
+sem script de instalação. Os binários também estão em cada
+[release](https://github.com/ViniciusDev26/prunr/releases), com `.sha256`.
 
-## O que o prunr não faz
+## Configuração
 
-- **Variáveis, funções e membros privados sem uso dentro de um arquivo.** Isso é trabalho de
-  linter, e o [Biome](https://biomejs.dev/) já faz. Ative estas regras no `biome.json`:
+O `prunr.json` diz por onde o programa começa. Tudo o que essas entradas alcançam está vivo; o
+que só os testes alcançam está morto em produção.
 
-  ```json
-  {
-    "linter": {
-      "rules": {
-        "correctness": {
-          "noUnusedVariables": "error",
-          "noUnusedPrivateClassMembers": "error"
-        }
-      }
-    }
+```json
+{
+  "$schema": "https://unpkg.com/@prunr/prunr/schema.json",
+  "entries": {
+    "production": ["src/index.js", "bin/cli.js"],
+    "test": ["test/**"]
   }
-  ```
+}
+```
 
-  Junto com o `unused-import` do prunr, elas cobrem tudo o que `tsc` com `noUnusedLocals` pega
-  num projeto JavaScript, e substituem o truque de rodar `tsc` num `tsconfig` dedicado e filtrar
-  os erros com `grep`.
+Com Jest, Vitest, Next.js ou NestJS, boa parte disso o prunr acha sozinho. Todas as opções estão
+em [Configuração](docs/guide/configuration.md).
 
-  Imports sem uso são do prunr, e não só do linter: um `require` esquecido mantém o arquivo
-  exigido "vivo" e faz a dependência parecer usada, escondendo outros achados.
-- **Formatação, estilo e tipos.** Use Biome e `tsc --noEmit`.
+## Comandos
 
-## Limitações atuais
+| Comando | O que faz |
+|---|---|
+| `prunr check` | Lista os achados. `--json` para máquinas, `--github` para anotações no PR, `--since <ref>` para só o que é novo. |
+| `prunr fix` | Remove o código morto e as dependências sem uso. `--dry-run` mostra sem mudar nada. |
+| `prunr init` | Cria um `prunr.json` a partir do `package.json`. |
+| `prunr baseline` | Grava os achados atuais, para adotar o prunr sem consertar tudo de uma vez. |
+| `prunr schema` | Imprime o JSON Schema do `prunr.json`. |
 
-- **Um reexport que ninguém usa não é reportado** quando o export de origem tem outro uso: o
-  achado fica onde o export é definido.
-- **Dependências citadas só em arquivos de configuração de outras ferramentas** (plugins do ESLint,
-  presets do Babel) aparecem como `unused-dependency`. Liste-as em `dependencies.ignore`.
+O `check` sai com `0` sem achados (ou só com avisos), `1` com achados e `2` quando não consegue
+rodar.
+
+## O que ele encontra
+
+| Achado | Quando |
+|---|---|
+| `unused-file` | Nenhuma entrada de produção alcança o arquivo. |
+| `unused-export` | Nenhum código de produção usa o export. |
+| `unused-import` | Um `require` ou `import` traz um nome que o arquivo nunca usa. |
+| `unused-dependency` | Nada importa o pacote e nenhum script o roda. |
+| `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o usam. |
+| `missing-dependency` | O código importa um pacote que o `package.json` não declara. |
+| `circular-import` | Há um ciclo de imports. |
+| `unused-ignore` | Um comentário `prunr-ignore` que não ignora mais nada. |
+| `unresolved-require` | Aviso: um `require` que não dá para seguir. |
+
+Quando o único uso vem dos testes, o achado diz `(only tests use it)`. Os detalhes de cada um
+estão em [Achados](docs/guide/checks.md).
+
+## No CI
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- run: npm ci
+- run: npx prunr check --github --since origin/${{ github.base_ref }}
+```
+
+Cada achado novo vira uma anotação na linha certa do diff. Para um código legado, comece com
+`prunr baseline`: o que já existe não falha, e o que surgir depois falha. Veja
+[CI e código legado](docs/guide/ci.md).
+
+## Guia
+
+- [Configuração](docs/guide/configuration.md): o `prunr.json` e os `scripts` do `package.json`.
+- [Achados](docs/guide/checks.md): o que cada um significa, ESM e TypeScript, `require` dinâmico.
+- [`prunr fix`](docs/guide/fix.md): o que ele remove e o que deixa para você.
+- [Frameworks](docs/guide/frameworks.md): Jest, Vitest, Next.js e NestJS.
+- [Monorepos](docs/guide/monorepos.md): como os pacotes são encontrados e checados.
+- [Ignorar no código](docs/guide/ignore.md): exports públicos de propósito.
+- [CI e código legado](docs/guide/ci.md): anotações, `--since` e baseline.
+
+## O que fica de fora
+
+- **Variáveis e membros privados sem uso dentro de um arquivo** são trabalho de linter. Ligue
+  `noUnusedVariables` e `noUnusedPrivateClassMembers` no [Biome](https://biomejs.dev/): junto com
+  o `unused-import` do prunr, elas cobrem o que o `noUnusedLocals` do `tsc` pega.
+- **Formatação, estilo e tipos:** use Biome e `tsc --noEmit`.
+- **Dependências citadas só na configuração de outra ferramenta** (plugins do ESLint, presets do
+  Babel) aparecem como `unused-dependency`. Liste-as em `dependencies.ignore`.
 
 O que vem depois está no [roadmap](docs/roadmap/).
 
+## Por que não o Knip
+
+O Knip é ótimo para ESM e TypeScript, mas não lida bem com CommonJS, e suportá-lo não está nos
+planos dele. O prunr começou pelo caminho oposto: Node puro em CommonJS primeiro, e ESM,
+TypeScript e frameworks depois, no mesmo grafo.
+
+## Contribuindo
+
+O prunr é feito com TDD e 100% de cobertura de testes. Veja [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Licença
 
-[MIT](LICENSE).
-
-## Desenvolvimento
-
-O prunr é construído com **TDD e 100% de cobertura de testes**. As regras estão em
-[`CLAUDE.md`](CLAUDE.md).
-
-```sh
-mise install                    # Rust e cargo-llvm-cov nas versões do projeto
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo llvm-cov --fail-under-lines 100 --fail-under-functions 100
-```
-
-- `src/`: `config` (prunr.json), `facts` (o que um arquivo exige, importa e exporta),
-  `resolve` (para onde aponta um `require` ou `import`), `scripts` (o que os `scripts` do
-  `package.json` rodam), `plugins` (o que cada ferramenta, como Jest e Vitest, carrega por
-  convenção ou configuração), `project` (o grafo), `checks`, `report` e `cli`.
-- `tests/fixtures/<caso>/`: um mini projeto por comportamento, rodado por `tests/check.rs`.
-- `npm/`: o pacote `@prunr/prunr`, o launcher que executa o binário da plataforma e o script que
-  publica tudo.
-
-### Releases
-
-Os commits seguem Conventional Commits, e o [release-please](https://github.com/googleapis/release-please)
-mantém um PR de release aberto com a próxima versão e o CHANGELOG. Ao fazer merge dele, o workflow
-`release`:
-
-1. compila os 5 binários e confere que os de Linux rodam em Alpine e Debian 11;
-2. anexa os binários e os `.sha256` ao release do GitHub;
-3. publica `@prunr/<plataforma>` e `@prunr/prunr` no npm com *trusted publishing* (OIDC, sem token);
-4. instala `@prunr/prunr` do npm em Linux, macOS e Windows e roda `npx prunr --version`.
-
-Todo PR passa pela esteira inteira: testes nos três sistemas, cobertura de 100%, os 5 builds, a
-checagem de binário estático e o `npm pack` de cada pacote. A `main` só aceita PRs com tudo
-verde.
-
-#### Um pacote npm novo
-
-O npm só aceita configurar *trusted publishing* num pacote que já existe. Por isso, um pacote
-novo (por exemplo, o de uma plataforma nova) é criado uma vez, à mão, por um dono da org
-`@prunr`, antes do release que o publica:
-
-1. Publicar um placeholder `0.0.0`: numa pasta vazia, um `package.json` com `name`,
-   `"version": "0.0.0"`, `license` e `repository`, e `npm publish --access public`.
-2. Esperar o npm processar o pacote novo (`npm view <pacote>@0.0.0` responde), o que leva alguns
-   minutos.
-3. Opcional: `npm deprecate <pacote>@0.0.0 "placeholder, install a real release"`.
-4. Ligar o pacote ao workflow de release:
-   `npm trust github <pacote> --file release.yml --repo ViniciusDev26/prunr --allow-publish --yes`.
+[MIT](LICENSE)
