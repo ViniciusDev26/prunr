@@ -180,7 +180,7 @@ impl Project {
         let mut files = BTreeMap::new();
         for (path, id) in &paths {
             let source = std::fs::read_to_string(path).unwrap_or_default();
-            let facts = analyze(&source).map_err(|message| ProjectError::Parse {
+            let facts = analyze(&source, path).map_err(|message| ProjectError::Parse {
                 file: id.clone(),
                 message,
             })?;
