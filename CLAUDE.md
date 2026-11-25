@@ -59,7 +59,9 @@ com falso positivo leva alguém a apagar código vivo, então isso não é negoc
   do commitlint, mas o `committed` não consegue bloquear maiúscula. O release-please depende
   disso para gerar a versão e o CHANGELOG ([ponto 6](docs/mvp/06-ci-and-auto-release.md)).
 - **O título do PR segue a mesma regra**, porque num squash merge ele vira o commit da `main`.
-- O CI (`.github/workflows/commits.yml`) verifica os commits e o título de todo PR. Valide antes
-  de commitar com `committed main..HEAD` (instalado pelo `mise install`).
+- O CI (`.github/workflows/commits.yml`) verifica só o título do PR: com squash merge, é o único
+  texto que chega na `main`, e o "Update branch" do GitHub adiciona commits de merge à branch. Os
+  commits do PR seguem a regra mesmo assim (o histórico de TDD depende deles); valide-os antes de
+  abrir o PR com `committed main..HEAD` (instalado pelo `mise install`).
 - Antes de cada commit: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
   `cargo test` e a cobertura de 100%.
