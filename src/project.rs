@@ -524,10 +524,17 @@ impl Project {
             let package = root.join(dir);
             let declared_packages = manifest.declared();
             let binaries = binaries(&[package.clone(), root.clone()], &visible[index]);
-            let script_packages = manifest
+            // The scripts of `package.json`, and the commands the tools run (Playwright's web
+            // servers), which run test code.
+            let scripts: Vec<(bool, &String)> = manifest
                 .scripts
-                .values()
-                .flat_map(|script| crate::scripts::packages(script, &binaries))
+                .iter()
+                .map(|(name, script)| (name.starts_with("test"), script))
+                .chain(plugins.scripts.iter().map(|script| (true, script)))
+                .collect();
+            let script_packages = scripts
+                .iter()
+                .flat_map(|(_, script)| crate::scripts::packages(script, &binaries))
                 .collect();
             let in_package = |globs: &[String]| -> Vec<String> {
                 globs
@@ -539,8 +546,8 @@ impl Project {
                     .collect()
             };
             production_files.extend(plugin_files(&in_package(&plugins.production), &files));
-            for (name, script) in &manifest.scripts {
-                let entries = if name.starts_with("test") {
+            for (test, script) in scripts {
+                let entries = if test {
                     &mut test_files
                 } else {
                     &mut production_files

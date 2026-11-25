@@ -10,9 +10,12 @@ use std::path::Path;
 
 use serde_json::Value;
 
+mod drizzle;
 mod jest;
 mod nest;
 mod next;
+mod playwright;
+mod postcss;
 mod react;
 mod static_config;
 mod vite;
@@ -62,6 +65,9 @@ pub struct Contribution {
     /// Directories, relative to the package, where a bundler looks up a specifier that starts
     /// with `/` (Vite's public directory and root), tried in order when no such file exists.
     pub absolute_roots: Vec<String>,
+    /// Commands the tools run (Playwright's web servers), read like the `scripts` of
+    /// `package.json` that run test code.
+    pub scripts: Vec<String>,
 }
 
 /// A tool or framework prunr knows.
@@ -82,6 +88,9 @@ pub trait Plugin {
 pub const PLUGINS: &[&dyn Plugin] = &[
     &jest::Jest,
     &vitest::Vitest,
+    &playwright::Playwright,
+    &drizzle::DrizzleKit,
+    &postcss::PostCss,
     &vite::Vite,
     &react::React,
     &next::Next,
@@ -101,6 +110,21 @@ pub fn contribution(context: &Context) -> Contribution {
 
 /// The extensions a configuration file can have, in the order tools look for them.
 const CONFIG_EXTENSIONS: &[&str] = &["js", "ts", "mjs", "cjs", "mts", "cts", "json"];
+
+/// A relative path with `.` and `..` resolved and `/` separators.
+pub(super) fn normalize(path: &Path) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::ParentDir => {
+                parts.pop();
+            }
+            std::path::Component::Normal(part) => parts.push(part.to_string_lossy().into()),
+            _ => {}
+        }
+    }
+    parts.join("/")
+}
 
 /// The strings an option holds: itself, or each item of an array; an item can be a
 /// `[name, options]` pair.
@@ -225,7 +249,17 @@ mod tests {
         let names: Vec<&str> = PLUGINS.iter().map(|plugin| plugin.name()).collect();
         assert_eq!(
             names,
-            ["jest", "vitest", "vite", "react", "next", "@nestjs/core"]
+            [
+                "jest",
+                "vitest",
+                "@playwright/test",
+                "drizzle-kit",
+                "postcss",
+                "vite",
+                "react",
+                "next",
+                "@nestjs/core"
+            ]
         );
     }
 
