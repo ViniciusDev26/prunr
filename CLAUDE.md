@@ -48,8 +48,9 @@ com falso positivo leva alguém a apagar código vivo, então isso não é negoc
 - **Teste de aceite** contra um projeto CommonJS real de referência, rodado localmente (privado,
   fora do CI).
 
-## Commits
+## Commits e PRs
 
+- **Tudo em inglês:** mensagens de commit, títulos de PR e corpos de PR.
 - Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `chore:`). O
   release-please usa isso para gerar a versão e o CHANGELOG ([ponto 6](docs/mvp/06-ci-and-auto-release.md)).
 - Antes de cada commit: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
