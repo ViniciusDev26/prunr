@@ -280,6 +280,7 @@ mod tests {
             (
                 "index.js",
                 r#"const { a } = require("./lib/a");
+                   a();
                    require("./data.json");
                    require("lodash/fp");
                    require("fs");

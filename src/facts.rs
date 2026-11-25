@@ -22,6 +22,8 @@ use oxc_span::{GetSpan, SourceType, Span};
 pub struct Require {
     pub specifier: String,
     pub uses: Vec<Use>,
+    /// Bindings the require declares that the file never references.
+    pub unused: Vec<String>,
 }
 
 /// One use of a required module. With `whole`, everything under `path` is used too.
@@ -152,8 +154,11 @@ impl<'a> Analyzer<'_, 'a> {
             return;
         };
         let mut uses = BTreeSet::new();
+        let mut unused = Vec::new();
         match self.semantic.nodes().parent_kind(node) {
-            AstKind::VariableDeclarator(declarator) => self.pattern_uses(&declarator.id, &mut uses),
+            AstKind::VariableDeclarator(declarator) => {
+                self.pattern_uses(&declarator.id, &mut uses, &mut unused);
+            }
             AstKind::StaticMemberExpression(member) => {
                 uses.insert(Use {
                     path: vec![member.property.name.to_string()],
@@ -175,19 +180,28 @@ impl<'a> Analyzer<'_, 'a> {
             }
         }
         self.facts.requires.push(Require {
+            unused,
             specifier,
             uses: uses.into_iter().collect(),
         });
     }
 
-    fn pattern_uses(&self, pattern: &BindingPattern, uses: &mut BTreeSet<Use>) {
+    /// What a `const <pattern> = require(...)` uses; bindings never referenced go to `unused`.
+    fn pattern_uses(
+        &self,
+        pattern: &BindingPattern,
+        uses: &mut BTreeSet<Use>,
+        unused: &mut Vec<String>,
+    ) {
         let whole_module = Use {
             path: vec![],
             whole: true,
         };
         match pattern {
             BindingPattern::BindingIdentifier(ident) => {
-                self.binding_uses(ident.symbol_id(), &[], uses);
+                if !self.binding_uses(ident.symbol_id(), &[], uses) {
+                    unused.push(ident.name.to_string());
+                }
             }
             BindingPattern::ObjectPattern(object) => {
                 if object.rest.is_some() {
@@ -200,11 +214,11 @@ impl<'a> Analyzer<'_, 'a> {
                     };
                     let path = vec![name.display().to_string()];
                     if let BindingPattern::BindingIdentifier(ident) = &property.value {
-                        uses.insert(Use {
-                            path: path.clone(),
-                            whole: false,
-                        });
-                        self.binding_uses(ident.symbol_id(), &path, uses);
+                        if self.binding_uses(ident.symbol_id(), &path, uses) {
+                            uses.insert(Use { path, whole: false });
+                        } else {
+                            unused.push(ident.name.to_string());
+                        }
                     } else {
                         uses.insert(Use { path, whole: true });
                     }
@@ -216,10 +230,13 @@ impl<'a> Analyzer<'_, 'a> {
         }
     }
 
-    /// How the file uses a binding holding `prefix` of a required module.
-    fn binding_uses(&self, symbol: SymbolId, prefix: &[String], uses: &mut BTreeSet<Use>) {
+    /// How the file uses a binding holding `prefix` of a required module. False when the file
+    /// never references it.
+    fn binding_uses(&self, symbol: SymbolId, prefix: &[String], uses: &mut BTreeSet<Use>) -> bool {
         let nodes = self.semantic.nodes();
+        let mut referenced = false;
         for reference in self.semantic.symbol_references(symbol) {
+            referenced = true;
             let node = reference.node_id();
             let span = nodes.kind(node).span();
             let used = match nodes.parent_kind(node) {
@@ -243,6 +260,7 @@ impl<'a> Analyzer<'_, 'a> {
             };
             uses.insert(used);
         }
+        referenced
     }
 
     // ---- exports ----
@@ -378,6 +396,7 @@ mod tests {
     #[test]
     fn records_each_static_require_in_order() {
         let facts = facts(r#"require("./a"); require("pkg"); require(`./b`);"#);
+        assert!(facts.requires.iter().all(|r| r.unused.is_empty()));
         let specifiers: Vec<_> = facts
             .requires
             .iter()
@@ -418,11 +437,40 @@ mod tests {
     // ---- how a require is used ----
 
     #[test]
-    fn destructuring_uses_each_property() {
+    fn destructuring_uses_each_property_it_references() {
         assert_eq!(
-            uses_of(r#"const { a, b: c } = require("./x");"#),
-            [uses(&["a"], false), uses(&["b"], false)]
+            uses_of(r#"const { a, b: c } = require("./x"); use(a, c);"#),
+            [
+                uses(&["a"], false),
+                uses(&["a"], true),
+                uses(&["b"], false),
+                uses(&["b"], true)
+            ]
         );
+    }
+
+    fn unused_of(source: &str) -> Vec<String> {
+        let facts = facts(source);
+        assert_eq!(facts.requires.len(), 1, "{facts:?}");
+        facts.requires[0].unused.clone()
+    }
+
+    #[test]
+    fn a_destructured_binding_never_referenced_is_unused_and_uses_nothing() {
+        let source = r#"const { a, b: c, d } = require("./x"); d();"#;
+        assert_eq!(uses_of(source), [uses(&["d"], false)]);
+        assert_eq!(unused_of(source), ["a", "c"]);
+    }
+
+    #[test]
+    fn a_namespace_binding_never_referenced_is_unused() {
+        assert_eq!(unused_of(r#"const x = require("./x");"#), ["x"]);
+    }
+
+    #[test]
+    fn a_require_for_its_side_effect_declares_nothing_unused() {
+        assert!(unused_of(r#"require("./a");"#).is_empty());
+        assert!(unused_of(r#"const x = require("./a"); x.run();"#).is_empty());
     }
 
     #[test]
@@ -444,7 +492,7 @@ mod tests {
     #[test]
     fn a_rest_element_uses_the_whole_module() {
         assert_eq!(
-            uses_of(r#"const { a, ...rest } = require("./x");"#),
+            uses_of(r#"const { a, ...rest } = require("./x"); a();"#),
             [uses(&[], true), uses(&["a"], false)]
         );
     }
