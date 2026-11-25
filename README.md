@@ -171,6 +171,8 @@ errors: 7, warnings: 1
 - **Dependências usadas só pela linha de comando** (`jest`, `@biomejs/biome`, `husky`...) aparecem
   como `unused-dependency`, porque nenhum arquivo as importa. Liste-as em `dependencies.ignore`.
 
+O que vem depois está no [roadmap](docs/roadmap/).
+
 ## Licença
 
 [MIT](LICENSE).
