@@ -54,7 +54,7 @@ Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir
     "test": ["test/**", "**/*.test.js"]
   },
   "dependencies": {
-    "ignore": ["jest", "husky"]
+    "ignore": ["eslint-plugin-import"]
   },
   "baseline": ".prunr-baseline.json"
 }
@@ -76,7 +76,7 @@ prunr schema         # o JSON Schema do prunr.json
 | `$schema` | não | O JSON Schema do arquivo, para autocompletar e validar no editor. |
 | `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. |
 
-| `dependencies.ignore` | não | Pacotes que ficam de fora das verificações de dependência: os que só a linha de comando usa (`jest`, `husky`, `@biomejs/biome`) ou que são carregados de um jeito que o grafo não vê. |
+| `dependencies.ignore` | não | Pacotes que ficam de fora das verificações de dependência: os carregados de um jeito que nem o grafo nem os `scripts` mostram (um plugin citado no arquivo de configuração de outra ferramenta). |
 
 | `baseline` | não | Arquivo de baseline, relativo à raiz. Veja [Adotando num código legado](#adotando-num-código-legado). |
 
@@ -93,7 +93,7 @@ erro, para que um erro de digitação não passe em silêncio.
 | `unused-file` | Nenhuma entrada de produção alcança o arquivo. Se só os testes o alcançam, a linha diz `(only tests use it)`: apague-o junto com os testes. |
 | `unused-export` | Nenhum arquivo de produção usa o export, nem o próprio arquivo onde ele está. Métodos estáticos de uma classe exportada contam como exports (`Invoice.total`). Também marca `(only tests use it)`. |
 | `unused-import` | Um `require` declara um binding que o arquivo nunca usa (`const x = require("./x")`, ou uma propriedade desestruturada). Um `require("./x");` sozinho, por efeito colateral, não conta. |
-| `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa. |
+| `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa e nenhum script do `package.json` o roda. |
 | `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o importam: ele pertence a `devDependencies`. |
 | `missing-dependency` | O arquivo importa um pacote que o `package.json` não declara. |
 | `circular-import` | Há um ciclo de `require`. Cada grupo de arquivos em ciclo é reportado uma vez, pelo caminho mais curto. |
@@ -102,6 +102,13 @@ erro, para que um erro de digitação não passe em silêncio.
 Teste não mantém código vivo: o que só os testes usam está morto em produção. Um arquivo que
 nem produção nem testes alcançam não gera outros achados nem mantém nada vivo. No JSON, os
 achados que só os testes usam têm `"testOnly": true`.
+
+Os `scripts` do `package.json` também usam pacotes: o binário de cada comando (`jest`,
+`tsc`, `npx nodemon`, `cross-env NODE_ENV=test jest`, `dotenv -- jest`) conta como uso do pacote
+que o declara no campo `bin` (lido em `node_modules`; sem ele, vale o nome do pacote), e
+`node -r dotenv/config` ou `--import tsx` conta como uso do pacote carregado. Um pacote usado por
+script não é `unused-dependency` nem `misplaced-dependency`, e um binário sem pacote declarado
+(`docker`, `git`) não é `missing-dependency`.
 
 Na dúvida, o prunr é conservador: quando o resultado de um `require` é passado adiante ou
 acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um
@@ -180,8 +187,8 @@ errors: 7, warnings: 1
 ## Limitações atuais
 
 - **Só CommonJS** (`.js` e `.cjs`). ESM, TypeScript e `.mjs` ainda não são lidos.
-- **Dependências usadas só pela linha de comando** (`jest`, `@biomejs/biome`, `husky`...) aparecem
-  como `unused-dependency`, porque nenhum arquivo as importa. Liste-as em `dependencies.ignore`.
+- **Dependências citadas só em arquivos de configuração de outras ferramentas** (plugins do ESLint,
+  presets do Babel) aparecem como `unused-dependency`. Liste-as em `dependencies.ignore`.
 
 O que vem depois está no [roadmap](docs/roadmap/).
 

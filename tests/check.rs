@@ -442,3 +442,13 @@ fn a_require_with_a_pattern_uses_every_file_it_can_reach() {
          errors: 2, warnings: 2\n"
     );
 }
+
+#[test]
+fn a_package_the_scripts_run_is_used() {
+    let run = check("script-dependencies");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     left-pad\n\nerrors: 1, warnings: 0\n"
+    );
+}

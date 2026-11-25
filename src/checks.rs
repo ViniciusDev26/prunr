@@ -35,9 +35,10 @@ pub enum Finding {
         name: String,
         specifier: String,
     },
-    /// Declared in `dependencies` or `devDependencies`, required by no file.
+    /// Declared in `dependencies` or `devDependencies`, required by no file and run by no script.
     UnusedDependency { package: String },
-    /// Declared in `dependencies`, but only tests require it: it belongs in `devDependencies`.
+    /// Declared in `dependencies`, but only tests require it (and no script runs it): it belongs
+    /// in `devDependencies`.
     MisplacedDependency { package: String },
     /// Required, but declared in no dependency field of `package.json`.
     MissingDependency { file: FileId, package: String },
@@ -194,15 +195,22 @@ fn dependencies(
             }
         }
     }
+    let in_scripts = &project.script_packages;
     for package in project.dependencies.union(&project.dev_dependencies) {
-        if !in_production.contains(package) && !in_tests.contains(package) {
+        if !in_production.contains(package)
+            && !in_tests.contains(package)
+            && !in_scripts.contains(package)
+        {
             findings.push(Finding::UnusedDependency {
                 package: package.clone(),
             });
         }
     }
     for package in &project.dependencies {
-        if !in_production.contains(package) && in_tests.contains(package) {
+        if !in_production.contains(package)
+            && in_tests.contains(package)
+            && !in_scripts.contains(package)
+        {
             findings.push(Finding::MisplacedDependency {
                 package: package.clone(),
             });

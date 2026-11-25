@@ -47,7 +47,7 @@ pub fn canonical(path: &Path) -> PathBuf {
 }
 
 /// `@scope/name/sub` → `@scope/name`, `name/sub` → `name`.
-fn package_name(specifier: &str) -> &str {
+pub fn package_name(specifier: &str) -> &str {
     let segments = if specifier.starts_with('@') { 2 } else { 1 };
     match specifier.match_indices('/').nth(segments - 1) {
         Some((end, _)) => &specifier[..end],

@@ -43,8 +43,8 @@ pub struct Entries {
 #[derive(Debug, Default, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Dependencies {
-    /// Packages to leave out of the dependency checks: those only a command line uses (`jest`,
-    /// `husky`), or that are loaded in ways the graph cannot see.
+    /// Packages to leave out of the dependency checks: those loaded in ways neither the graph nor
+    /// the `scripts` of `package.json` show (a plugin named in another tool's config file).
     #[serde(default)]
     pub ignore: Vec<String>,
 }
