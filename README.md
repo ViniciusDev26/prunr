@@ -22,11 +22,11 @@ Vitest, Next, Nest etc.
 Como dependência de desenvolvimento, fixada por projeto:
 
 ```sh
-npm i -D prunr      # ou: pnpm add -D prunr / yarn add -D prunr
+npm i -D @prunr/prunr      # ou: pnpm add -D @prunr/prunr / yarn add -D @prunr/prunr
 npx prunr check
 ```
 
-O pacote `prunr` não tem binário próprio nem script de instalação: ele declara um pacote por
+O pacote `@prunr/prunr` não tem binário próprio nem script de instalação: ele declara um pacote por
 plataforma (`@prunr/linux-x64`, `@prunr/linux-arm64`, `@prunr/darwin-x64`,
 `@prunr/darwin-arm64`, `@prunr/win32-x64`) como dependência opcional, e o gerenciador de pacotes
 baixa só o da sua máquina. Os binários de Linux são estáticos (musl), então rodam em qualquer
@@ -42,7 +42,7 @@ Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir
 
 ```json
 {
-  "$schema": "https://unpkg.com/prunr/schema.json",
+  "$schema": "https://unpkg.com/@prunr/prunr/schema.json",
   "entries": {
     "production": ["src/index.js", "bin/cli.js"],
     "test": ["test/**", "**/*.test.js"]
@@ -191,7 +191,7 @@ cargo llvm-cov --fail-under-lines 100 --fail-under-functions 100
 - `src/`: `config` (prunr.json), `facts` (o que um arquivo CommonJS exige e exporta),
   `resolve` (para onde aponta um `require`), `project` (o grafo), `checks`, `report` e `cli`.
 - `tests/fixtures/<caso>/`: um mini projeto por comportamento, rodado por `tests/check.rs`.
-- `npm/`: o pacote `prunr`, o launcher que executa o binário da plataforma e o script que
+- `npm/`: o pacote `@prunr/prunr`, o launcher que executa o binário da plataforma e o script que
   publica tudo.
 
 ### Releases
@@ -202,8 +202,8 @@ mantém um PR de release aberto com a próxima versão e o CHANGELOG. Ao fazer m
 
 1. compila os 5 binários e confere que os de Linux rodam em Alpine e Debian 11;
 2. anexa os binários e os `.sha256` ao release do GitHub;
-3. publica `@prunr/<plataforma>` e `prunr` no npm com *trusted publishing* (OIDC, sem token);
-4. instala `prunr` do npm em Linux, macOS e Windows e roda `npx prunr --version`.
+3. publica `@prunr/<plataforma>` e `@prunr/prunr` no npm com *trusted publishing* (OIDC, sem token);
+4. instala `@prunr/prunr` do npm em Linux, macOS e Windows e roda `npx prunr --version`.
 
 Todo PR passa pela esteira inteira: testes nos três sistemas, cobertura de 100%, os 5 builds, a
 checagem de binário estático e o `npm pack` de cada pacote. A `main` só aceita PRs com tudo

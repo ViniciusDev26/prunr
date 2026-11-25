@@ -13,7 +13,7 @@ Exemplo (ilustrativo):
 
 ```json
 {
-  "$schema": "https://unpkg.com/prunr/schema.json",
+  "$schema": "https://unpkg.com/@prunr/prunr/schema.json",
   "entries": {
     "production": [
       "index.js",

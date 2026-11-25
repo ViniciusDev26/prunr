@@ -10,7 +10,7 @@ use serde::Deserialize;
 pub const FILE_NAME: &str = "prunr.json";
 
 /// Where the JSON Schema of `prunr.json` is published.
-pub const SCHEMA_URL: &str = "https://unpkg.com/prunr/schema.json";
+pub const SCHEMA_URL: &str = "https://unpkg.com/@prunr/prunr/schema.json";
 
 /// The configuration of prunr, the dead code detector.
 #[derive(Debug, PartialEq, Eq, Deserialize, JsonSchema)]
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn the_schema_key_is_accepted() {
         let dir = project(
-            r#"{ "$schema": "https://unpkg.com/prunr/schema.json", "entries": { "production": [] } }"#,
+            r#"{ "$schema": "https://unpkg.com/@prunr/prunr/schema.json", "entries": { "production": [] } }"#,
         );
         assert!(Config::load(dir.path()).is_ok());
     }

@@ -127,7 +127,7 @@ mod tests {
         assert_eq!(
             written(&dir),
             serde_json::json!({
-                "$schema": "https://unpkg.com/prunr/schema.json",
+                "$schema": "https://unpkg.com/@prunr/prunr/schema.json",
                 "entries": {
                     "production": ["scripts/cli.js", "src/index.js", "workers/index.js"],
                     "test": ["__tests__/**", "**/*.test.js", "**/*.spec.js"]
@@ -143,7 +143,7 @@ mod tests {
         assert_eq!(
             written(&dir),
             serde_json::json!({
-                "$schema": "https://unpkg.com/prunr/schema.json",
+                "$schema": "https://unpkg.com/@prunr/prunr/schema.json",
                 "entries": { "production": ["index.js"] }
             })
         );

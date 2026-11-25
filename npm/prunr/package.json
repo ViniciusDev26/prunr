@@ -1,5 +1,5 @@
 {
-  "name": "prunr",
+  "name": "@prunr/prunr",
   "version": "0.0.0",
   "description": "Dead code detector for Node.js, with CommonJS as a first-class citizen",
   "license": "MIT",
