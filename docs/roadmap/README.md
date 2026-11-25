@@ -12,6 +12,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 4. [`prunr fix`](04-fix.md)
 - [x] 5. [Saída para PR](05-pull-request-output.md)
 - [x] 6. [Ignorar no código](06-ignore-in-code.md)
+- [x] 7. [Workspaces e monorepo](07-workspaces.md)
 - [x] 8. [`require` dinâmico com padrão](08-dynamic-require-patterns.md)
 - [x] 9. [Next.js e NestJS](09-next-and-nest.md)
 - [x] 11. [Plugins internos](11-plugins.md)
@@ -19,7 +20,6 @@ A numeração é a da priorização original e não muda quando um item termina.
 
 ## Depois
 
-- [ ] 7. [Workspaces e monorepo](07-workspaces.md)
 - [ ] 10. [Performance](10-performance.md)
 - [ ] 13. [`prunr fix --test-only`](13-fix-test-only.md)
 - [ ] 14. [Ligar e desligar plugins no `prunr.json`](14-toggle-plugins.md)

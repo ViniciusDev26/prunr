@@ -284,6 +284,36 @@ mod tests {
     }
 
     #[test]
+    fn odd_declarations_are_read_as_far_as_they_go() {
+        assert_eq!(
+            found((
+                "package.json",
+                r#"{ "workspaces": ["packages/[", "./packages/a/"] }"#
+            )),
+            dirs(&["packages/a"]),
+            "an invalid glob matches nothing"
+        );
+        assert_eq!(
+            found(("pnpm-workspace.yaml", "catalog:\n  react: ^19\n")),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            found((
+                "pnpm-workspace.yaml",
+                "packages:\n  # a comment\n  not-an-item\n  - packages/b # the second\n"
+            )),
+            dirs(&["packages/b"])
+        );
+        assert_eq!(
+            found((
+                "rush.json",
+                r#"{ "note": "a \"quoted\" // not a comment", "projects": [{ "projectFolder": "apps/web" }] }"#
+            )),
+            dirs(&["apps/web"])
+        );
+    }
+
+    #[test]
     fn every_tool_adds_up_and_a_broken_file_is_skipped() {
         assert_eq!(found(("lerna.json", "{ nope")), Vec::<String>::new());
         let mut files = PACKAGES.to_vec();

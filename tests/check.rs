@@ -1026,9 +1026,10 @@ fn nest_starts_at_its_main_and_tests_end_to_end() {
 const WORKSPACES_FINDINGS: &str = "unused-file           packages/lib/internal.js\n\
      unused-export         packages/shared/src/index.js: unused\n\
      unused-dependency     left-pad (packages/shared)\n\
+     misplaced-dependency  supertest (packages/shared): only tests use it, move it to devDependencies\n\
      missing-dependency    packages/app/src/index.js: lodash\n\
      \n\
-     errors: 4, warnings: 0\n";
+     errors: 5, warnings: 0\n";
 
 #[test]
 fn npm_workspaces_are_one_graph_with_dependencies_per_package() {
@@ -1058,5 +1059,49 @@ fn json_names_the_package_of_a_dependency_finding() {
                 "workspace": "packages/shared"
             })),
         "{actual}"
+    );
+}
+
+#[test]
+fn github_annotates_a_dependency_of_a_package_in_its_package_json() {
+    let run = prunr("workspaces-npm", &["check", "--github"]);
+    assert!(
+        run.stdout.contains(
+            "::error file=packages/shared/package.json,line=7,title=unused-dependency::left-pad (packages/shared)\n"
+        ),
+        "{}",
+        run.stdout
+    );
+}
+
+#[test]
+fn fix_edits_the_package_json_of_the_package() {
+    let dir = copy_tree("workspaces-npm");
+    let run = run_in(dir.path(), &["fix"]);
+    assert_eq!(run.code, 1, "{}", run.stderr);
+    assert!(
+        run.stdout
+            .contains("fixed unused-dependency     left-pad (packages/shared)\n"),
+        "{}",
+        run.stdout
+    );
+    let shared = read(dir.path(), "packages/shared/package.json");
+    assert!(
+        !shared.contains("left-pad") && shared.contains("lodash"),
+        "{shared}"
+    );
+}
+
+#[test]
+fn an_invalid_package_json_of_a_package_is_an_error_that_names_it() {
+    let dir = copy_tree("workspaces-npm");
+    std::fs::write(dir.path().join("packages/lib/package.json"), "{ nope").unwrap();
+    let run = run_in(dir.path(), &["check"]);
+    assert_eq!(run.code, 2);
+    assert!(
+        run.stderr
+            .starts_with("error: invalid package.json: packages/lib/package.json: "),
+        "{}",
+        run.stderr
     );
 }
