@@ -323,7 +323,7 @@ impl Project {
         let runners = crate::runners::setup(
             &root,
             &declared_packages,
-            &serde_json::json!({ "jest": manifest.jest }),
+            &serde_json::json!({ "jest": manifest.jest, "scripts": manifest.scripts }),
         );
         let mut test_files = BTreeSet::new();
         for pattern in &runners.tests {

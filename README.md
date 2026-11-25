@@ -107,8 +107,9 @@ achados que só os testes usam têm `"testOnly": true`.
 
 Os `scripts` do `package.json` também usam pacotes: o binário de cada comando (`jest`,
 `tsc`, `npx nodemon`, `cross-env NODE_ENV=test jest`, `dotenv -- jest`) conta como uso do pacote
-que o declara no campo `bin` (lido em `node_modules`; sem ele, vale o nome do pacote), e
-`node -r dotenv/config` ou `--import tsx` conta como uso do pacote carregado. Um pacote usado por
+que o declara no campo `bin` (lido em `node_modules`; sem ele, vale o nome do pacote),
+`node -r dotenv/config` ou `--import tsx` conta como uso do pacote carregado, e um caminho
+dentro de `node_modules` (`node node_modules/jest/bin/jest.js`) conta como uso do pacote dele. Um pacote usado por
 script não é `unused-dependency` nem `misplaced-dependency`, e um binário sem pacote declarado
 (`docker`, `git`) não é `missing-dependency`.
 
@@ -137,7 +138,10 @@ Quando `jest` ou `vitest` está declarado no `package.json`, o prunr lê a confi
 executá-la:
 
 - **Arquivos de teste:** os de `testMatch` (Jest) ou `test.include` (Vitest), ou os padrões de
-  cada runner quando a opção não existe. Eles se somam a `entries.test`.
+  cada runner quando a opção não existe, mais as pastas `__mocks__` do Jest. Eles se somam a
+  `entries.test`.
+- **Configurações passadas por script:** `jest --config jest.e2e.config.js` (ou `-c`, também
+  com `node node_modules/jest/bin/jest.js`) é lida como as outras.
 - **Arquivos carregados:** a própria configuração e os arquivos de `setupFiles`,
   `setupFilesAfterEnv`, `globalSetup` e `globalTeardown` (Jest) ou `test.setupFiles` e
   `test.globalSetup` (Vitest) são código de teste.

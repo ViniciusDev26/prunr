@@ -27,6 +27,16 @@ pub struct Setup {
 /// The setup of Jest and Vitest at `root`, for those `package.json` declares (`declared`).
 /// `manifest` is the whole `package.json`, whose `jest` key can hold Jest's configuration.
 pub fn setup(root: &Path, declared: &BTreeSet<String>, manifest: &Value) -> Setup {
+    let scripts: Vec<&str> = match &manifest["scripts"] {
+        Value::Object(scripts) => scripts.values().filter_map(Value::as_str).collect(),
+        _ => Vec::new(),
+    };
+    let passed = |runner: &str| -> Vec<String> {
+        scripts
+            .iter()
+            .flat_map(|script| crate::scripts::configs(script, runner))
+            .collect()
+    };
     let mut setup = Setup::default();
     if declared.contains("jest") {
         let config = match config_file(root, &["jest.config"], &mut setup) {
@@ -34,10 +44,20 @@ pub fn setup(root: &Path, declared: &BTreeSet<String>, manifest: &Value) -> Setu
             None => manifest["jest"].clone(),
         };
         setup.jest(&config);
+        for name in passed("jest") {
+            if let Some(config) = setup.read(root, &name) {
+                setup.jest(&config);
+            }
+        }
     }
     if declared.contains("vitest") {
         let config = config_file(root, &["vitest.config", "vite.config"], &mut setup);
         setup.vitest(&config.unwrap_or_default()["test"]);
+        for name in passed("vitest") {
+            if let Some(config) = setup.read(root, &name) {
+                setup.vitest(&config["test"]);
+            }
+        }
     }
     setup
 }
@@ -54,28 +74,20 @@ const JEST_TESTS: &[&str] = &[
     "**/spec.*",
 ];
 
+/// Jest's manual mocks, next to the modules they mock or at the root.
+const MOCKS: &str = "**/__mocks__/**";
+
 /// Vitest's default `include`.
 const VITEST_TESTS: &[&str] = &["**/*.{test,spec}.*"];
 
 /// The first configuration file named `<stem>.<extension>` at `root`, recorded in `setup` as a
 /// file the runner loads, and what it exports. `Null` when it exists but cannot be read.
 fn config_file(root: &Path, stems: &[&str], setup: &mut Setup) -> Option<Value> {
-    for stem in stems {
-        for extension in CONFIG_EXTENSIONS {
-            let name = format!("{stem}.{extension}");
-            let Ok(source) = std::fs::read_to_string(root.join(&name)) else {
-                continue;
-            };
-            setup.files.push(format!("./{name}"));
-            let config = if *extension == "json" {
-                serde_json::from_str(&source).ok()
-            } else {
-                static_config(&source, Path::new(&name))
-            };
-            return Some(config.unwrap_or_default());
-        }
-    }
-    None
+    stems.iter().find_map(|stem| {
+        CONFIG_EXTENSIONS
+            .iter()
+            .find_map(|extension| setup.read(root, &format!("{stem}.{extension}")))
+    })
 }
 
 /// The strings an option holds: itself, or each item of an array; an item can be a
@@ -95,6 +107,23 @@ fn names(option: &Value) -> Vec<&str> {
 }
 
 impl Setup {
+    /// The configuration in the file `name` (relative to `root`), recorded as a file the runner
+    /// loads. `None` when there is no such file; `Null` when it cannot be read statically.
+    fn read(&mut self, root: &Path, name: &str) -> Option<Value> {
+        let name = name.trim_start_matches("./");
+        let source = std::fs::read_to_string(root.join(name)).ok()?;
+        let file = format!("./{name}");
+        if !self.files.contains(&file) {
+            self.files.push(file);
+        }
+        let config = if name.ends_with(".json") {
+            serde_json::from_str(&source).ok()
+        } else {
+            static_config(&source, Path::new(name))
+        };
+        Some(config.unwrap_or_default())
+    }
+
     /// A file (`./x`, `/x`, `<rootDir>/x`) or a package the configuration names.
     fn reference(&mut self, name: &str) {
         let name = match name.strip_prefix("<rootDir>/") {
@@ -123,6 +152,10 @@ impl Setup {
     }
 
     fn jest(&mut self, config: &Value) {
+        // Manual mocks are test code wherever they are, whatever `testMatch` says.
+        if !self.tests.iter().any(|test| test == MOCKS) {
+            self.tests.push(MOCKS.into());
+        }
         self.tests(&config["testMatch"], JEST_TESTS);
         for option in [
             "setupFiles",
@@ -346,7 +379,7 @@ mod tests {
         assert_eq!(
             setup(dir.path(), &declared(&["jest"]), &json!({})),
             Setup {
-                tests: strings(&["test/**/*.test.js"]),
+                tests: strings(&["**/__mocks__/**", "test/**/*.test.js"]),
                 files: strings(&[
                     "./jest.config.js",
                     "./test/env.js",
@@ -368,6 +401,7 @@ mod tests {
     }
 
     const JEST_DEFAULTS: &[&str] = &[
+        "**/__mocks__/**",
         "**/__tests__/**",
         "**/*.test.*",
         "**/*.spec.*",
@@ -485,6 +519,41 @@ mod tests {
         )]);
         let setup = super::setup(dir.path(), &declared(&["vitest"]), &json!({}));
         assert_eq!(setup.packages, declared(&["jsdom"]));
+    }
+
+    #[test]
+    fn a_config_a_script_passes_is_read_too() {
+        let dir = project(&[
+            ("jest.config.js", "module.exports = {};"),
+            (
+                "jest.e2e.config.js",
+                r#"module.exports = { testMatch: ["e2e/**/*.js"] };"#,
+            ),
+            (
+                "vitest.bench.json",
+                r#"{ "test": { "include": ["bench/**"] } }"#,
+            ),
+        ]);
+        let manifest = json!({
+            "scripts": {
+                "e2e": "jest --config jest.e2e.config.js",
+                "bench": "vitest -c vitest.bench.json",
+                "gone": "jest --config ./gone.js && vitest -c gone.ts",
+                "again": "jest --config jest.config.js",
+                "other": 1
+            }
+        });
+        let setup = setup(dir.path(), &declared(&["jest", "vitest"]), &manifest);
+        assert_eq!(
+            setup.files,
+            strings(&[
+                "./jest.config.js",
+                "./jest.e2e.config.js",
+                "./vitest.bench.json"
+            ])
+        );
+        assert!(setup.tests.contains(&"e2e/**/*.js".to_string()));
+        assert!(setup.tests.contains(&"bench/**".to_string()));
     }
 
     #[test]
