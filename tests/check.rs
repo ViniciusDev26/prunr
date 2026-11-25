@@ -214,7 +214,8 @@ fn an_unknown_command_is_a_usage_error() {
         let run = prunr("clean", args);
         assert_eq!(run.code, 2, "{args:?}");
         assert_eq!(
-            run.stderr, "usage: prunr check [--json] | prunr init | prunr schema\n",
+            run.stderr,
+            "usage: prunr check [--json] | prunr baseline | prunr init | prunr schema\n",
             "{args:?}"
         );
     }
@@ -302,4 +303,98 @@ fn schema_prints_the_published_schema() {
     let published =
         std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("schema.json")).unwrap();
     assert_eq!(run.stdout, published);
+}
+
+#[test]
+fn a_cycle_is_the_same_entry_whichever_file_reaches_it_first() {
+    let run = check("circular-from-b");
+    assert_eq!(
+        run.stdout,
+        "circular-import       a.js -> b.js -> c.js -> a.js\n\nerrors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
+fn the_baseline_hides_known_findings_and_flags_fixed_ones() {
+    let run = check("baseline");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-export         math.js: mul\n\
+         stale-baseline        unused-export math.js: div (fixed: run `prunr baseline`)\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
+}
+
+#[test]
+fn json_lists_stale_baseline_entries_apart() {
+    let run = prunr("baseline", &["check", "--json"]);
+    let actual: serde_json::Value = serde_json::from_str(&run.stdout).unwrap();
+    let expected = serde_json::json!({
+        "findings": [{ "kind": "unused-export", "file": "math.js", "symbol": "mul" }],
+        "stale": [{ "kind": "unused-export", "file": "math.js", "symbol": "div" }],
+    });
+    assert_eq!(actual, expected);
+}
+
+/// A copy of a fixture, for commands that write to it.
+fn copy(fixture: &str) -> tempfile::TempDir {
+    let from = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(fixture);
+    let dir = tempfile::tempdir().unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), dir.path().join(entry.file_name())).unwrap();
+    }
+    dir
+}
+
+#[test]
+fn baseline_records_the_current_findings() {
+    let dir = copy("baseline");
+    let run = run_in(dir.path(), &["baseline"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(run.stdout, "wrote .prunr-baseline.json: 2 findings\n");
+    let first = std::fs::read(dir.path().join(".prunr-baseline.json")).unwrap();
+    assert_eq!(run_in(dir.path(), &["check"]).stdout, "No findings.\n");
+
+    run_in(dir.path(), &["baseline"]);
+    assert_eq!(
+        std::fs::read(dir.path().join(".prunr-baseline.json")).unwrap(),
+        first
+    );
+
+    let math = std::fs::read_to_string(dir.path().join("math.js")).unwrap();
+    std::fs::write(dir.path().join("math.js"), format!("// moved\n\n{math}")).unwrap();
+    let moved = run_in(dir.path(), &["check"]);
+    assert_eq!(
+        moved.code, 0,
+        "moving code does not invalidate the baseline"
+    );
+}
+
+#[test]
+fn baseline_needs_a_baseline_file_in_the_config() {
+    let run = prunr("clean", &["baseline"]);
+    assert_eq!(run.code, 2);
+    assert_eq!(
+        run.stderr,
+        "error: set baseline in prunr.json to use prunr baseline\n"
+    );
+}
+
+#[test]
+fn an_invalid_baseline_is_an_error() {
+    let dir = copy("baseline");
+    std::fs::write(dir.path().join(".prunr-baseline.json"), "{ nope").unwrap();
+    let run = run_in(dir.path(), &["check"]);
+    assert_eq!(run.code, 2);
+    assert!(
+        run.stderr
+            .starts_with("error: invalid baseline .prunr-baseline.json: "),
+        "{}",
+        run.stderr
+    );
 }

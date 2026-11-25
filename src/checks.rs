@@ -6,18 +6,18 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::facts::Use;
 use crate::project::{FileId, Project};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum Finding {
     /// No production entry reaches the file. With `test_only`, tests do: delete it with them.
     UnusedFile {
         file: FileId,
-        #[serde(rename = "testOnly", skip_serializing_if = "is_false")]
+        #[serde(rename = "testOnly", default, skip_serializing_if = "is_false")]
         test_only: bool,
     },
     /// No production file uses the export, and neither does its own file. With `test_only`,
@@ -25,7 +25,7 @@ pub enum Finding {
     UnusedExport {
         file: FileId,
         symbol: String,
-        #[serde(rename = "testOnly", skip_serializing_if = "is_false")]
+        #[serde(rename = "testOnly", default, skip_serializing_if = "is_false")]
         test_only: bool,
     },
     /// Declared in `dependencies` or `devDependencies`, required by no file.

@@ -40,7 +40,8 @@ Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir
   },
   "dependencies": {
     "ignore": ["jest", "husky"]
-  }
+  },
+  "baseline": ".prunr-baseline.json"
 }
 ```
 
@@ -48,6 +49,7 @@ Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir
 prunr init           # cria um prunr.json a partir do package.json
 prunr check          # saída para pessoas
 prunr check --json   # saída para máquinas
+prunr baseline       # grava os achados atuais no arquivo de baseline
 prunr schema         # o JSON Schema do prunr.json
 ```
 
@@ -60,6 +62,8 @@ prunr schema         # o JSON Schema do prunr.json
 | `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. |
 
 | `dependencies.ignore` | não | Pacotes que ficam de fora das verificações de dependência: os que só a linha de comando usa (`jest`, `husky`, `@biomejs/biome`) ou que são carregados de um jeito que o grafo não vê. |
+
+| `baseline` | não | Arquivo de baseline, relativo à raiz. Veja [Adotando num código legado](#adotando-num-código-legado). |
 
 Caminhos e globs são relativos à raiz; num glob, `*` não atravessa `/` e `**` atravessa. Cada
 entrada precisa casar com pelo menos um arquivo `.js` ou `.cjs`.
@@ -87,6 +91,19 @@ Na dúvida, o prunr é conservador: quando o resultado de um `require` é passad
 acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um
 export morto do que reportar um vivo.
 
+### Adotando num código legado
+
+Com `"baseline": ".prunr-baseline.json"` no config, `prunr baseline` grava os achados atuais
+nesse arquivo (versione-o). A partir daí:
+
+- os achados listados no baseline não falham o check;
+- um achado **novo** falha;
+- uma entrada do baseline que deixou de ser achada aparece como `stale-baseline` e também falha,
+  até você rodar `prunr baseline` de novo. Assim a lista só diminui.
+
+Cada entrada é identificada pelo tipo, arquivo e símbolo (ou pacote, ou ciclo), sem número de
+linha: mover código não invalida o baseline. No JSON, as entradas obsoletas vêm em `"stale"`.
+
 ### Exemplo
 
 [`tests/fixtures/example/`](tests/fixtures/example/) tem todos os tipos de achado de uma vez:
@@ -110,7 +127,7 @@ errors: 7, warnings: 1
 | Código | Significado |
 |---|---|
 | `0` | Nenhum achado, ou só avisos. |
-| `1` | Há achados. |
+| `1` | Há achados novos, ou entradas obsoletas no baseline. |
 | `2` | O comando não pôde rodar: `prunr.json` ausente ou inválido, `package.json` inválido, arquivo com erro de sintaxe ou argumento desconhecido. |
 
 ## Limitações atuais
@@ -118,8 +135,6 @@ errors: 7, warnings: 1
 - **Só CommonJS** (`.js` e `.cjs`). ESM, TypeScript e `.mjs` ainda não são lidos.
 - **Dependências usadas só pela linha de comando** (`jest`, `@biomejs/biome`, `husky`...) aparecem
   como `unused-dependency`, porque nenhum arquivo as importa. Liste-as em `dependencies.ignore`.
-- **Ainda não há baseline** para adotar o prunr num código legado sem limpar tudo antes. Isso é o
-  [ponto 3](docs/mvp/03-shrinking-baseline.md).
 - **Variáveis locais sem uso ficam com o Biome** (`noUnusedVariables`, `noUnusedImports`). Ver o
   [ponto 5](docs/mvp/05-locals-delegated-to-biome.md).
 

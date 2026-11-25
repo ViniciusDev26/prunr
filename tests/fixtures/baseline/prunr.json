@@ -1,0 +1,4 @@
+{
+  "entries": { "production": ["index.js"] },
+  "baseline": ".prunr-baseline.json"
+}
