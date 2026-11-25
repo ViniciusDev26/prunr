@@ -8,8 +8,8 @@ dependências sem uso ou não declaradas, imports circulares e `require` que nã
 Ele substitui a composição comum de dependency-cruiser + depcheck + madge + scripts próprios por
 uma ferramenta, um arquivo de configuração e um comando.
 
-> **Estado:** em desenvolvimento, antes da primeira versão. O ponto 1 do MVP (um grafo só) está
-> pronto; o resto está em [`docs/mvp/`](docs/mvp/README.md).
+> **Estado:** em desenvolvimento, antes da primeira versão. O andamento do MVP está em
+> [`docs/mvp/`](docs/mvp/README.md).
 
 ## Por que não o Knip
 
@@ -32,7 +32,10 @@ Crie um `prunr.json` na raiz do projeto e rode `prunr check` nela:
 
 ```json
 {
-  "entries": ["src/index.js", "bin/cli.js"]
+  "entries": {
+    "production": ["src/index.js", "bin/cli.js"],
+    "test": ["test/**", "**/*.test.js"]
+  }
 }
 ```
 
@@ -45,7 +48,11 @@ prunr check --json   # saída para máquinas
 
 | Opção | Obrigatória | O que é |
 |---|---|---|
-| `entries` | sim | Arquivos por onde o programa começa, relativos à raiz. Tudo o que eles alcançam, direta ou indiretamente, está vivo. |
+| `entries.production` | sim | Caminhos ou globs dos arquivos por onde o programa começa. Tudo o que eles alcançam, direta ou indiretamente, está vivo. |
+| `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. |
+
+Caminhos e globs são relativos à raiz; num glob, `*` não atravessa `/` e `**` atravessa. Cada
+entrada precisa casar com pelo menos um arquivo `.js` ou `.cjs`.
 
 Uma opção só entra no arquivo quando alguma funcionalidade precisa dela. Uma chave desconhecida é
 erro, para que um erro de digitação não passe em silêncio.
@@ -54,15 +61,17 @@ erro, para que um erro de digitação não passe em silêncio.
 
 | Achado | Quando |
 |---|---|
-| `unused-file` | Nenhuma entrada alcança o arquivo. |
-| `unused-export` | Nenhum arquivo usa o export, nem o próprio arquivo onde ele está. Métodos estáticos de uma classe exportada contam como exports (`Invoice.total`). |
+| `unused-file` | Nenhuma entrada de produção alcança o arquivo. Se só os testes o alcançam, a linha diz `(only tests use it)`: apague-o junto com os testes. |
+| `unused-export` | Nenhum arquivo de produção usa o export, nem o próprio arquivo onde ele está. Métodos estáticos de uma classe exportada contam como exports (`Invoice.total`). Também marca `(only tests use it)`. |
 | `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa. |
+| `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o importam: ele pertence a `devDependencies`. |
 | `missing-dependency` | O arquivo importa um pacote que o `package.json` não declara. |
 | `circular-import` | Há um ciclo de `require`. Cada grupo de arquivos em ciclo é reportado uma vez, pelo caminho mais curto. |
 | `unresolved-require` | **Aviso:** um `require` com caminho dinâmico (`require(nome)`) ou que aponta para um arquivo que não existe. Não falha o check. |
 
-Só conta o que as entradas alcançam: o que um arquivo sem uso importa ou exporta não gera outros
-achados nem mantém nada vivo.
+Teste não mantém código vivo: o que só os testes usam está morto em produção. Um arquivo que
+nem produção nem testes alcançam não gera outros achados nem mantém nada vivo. No JSON, os
+achados que só os testes usam têm `"testOnly": true`.
 
 Na dúvida, o prunr é conservador: quando o resultado de um `require` é passado adiante ou
 acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um
@@ -74,14 +83,14 @@ export morto do que reportar um vivo.
 
 ```console
 $ cd tests/fixtures/example && prunr check
-unused-file         src/legacy-report.js
-unused-export       src/invoices.js: cancelInvoice
-unused-export       src/money.js: Money.fromCents
-unused-export       src/money.js: Money.invoiceFor
-unused-dependency   left-pad
-missing-dependency  src/index.js: dotenv
-circular-import     src/invoices.js -> src/money.js -> src/invoices.js
-unresolved-require  src/index.js: require(process.env.PLUGIN) (warning)
+unused-file           src/legacy-report.js
+unused-export         src/invoices.js: cancelInvoice
+unused-export         src/money.js: Money.fromCents
+unused-export         src/money.js: Money.invoiceFor
+unused-dependency     left-pad
+missing-dependency    src/index.js: dotenv
+circular-import       src/invoices.js -> src/money.js -> src/invoices.js
+unresolved-require    src/index.js: require(process.env.PLUGIN) (warning)
 
 errors: 7, warnings: 1
 ```
@@ -97,9 +106,6 @@ errors: 7, warnings: 1
 ## Limitações atuais
 
 - **Só CommonJS** (`.js` e `.cjs`). ESM, TypeScript e `.mjs` ainda não são lidos.
-- **Testes não são separados de produção.** Até o [ponto 2](docs/mvp/02-tests-dont-keep-code-alive.md),
-  arquivos de teste que não estão em `entries` aparecem como `unused-file`, e as dependências que
-  só eles usam aparecem como `unused-dependency`.
 - **Dependências usadas só pela linha de comando** (`jest`, `@biomejs/biome`, `husky`...) aparecem
   como `unused-dependency`, porque nenhum arquivo as importa.
 - **Ainda não há baseline** para adotar o prunr num código legado sem limpar tudo antes. Isso é o

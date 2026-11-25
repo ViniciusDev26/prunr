@@ -16,10 +16,21 @@ Código que só o próprio teste usa está morto em produção. O prunr separa o
 - Dependências: um pacote importado só por arquivos de teste e declarado em `dependencies` é
   reportado como `misplaced-dependency` (deveria estar em `devDependencies`).
 
+### Decisões tomadas na implementação
+
+- **Todo arquivo que casa com `entries.test` é código de teste**: entrada do grafo de teste,
+  nunca reportado, e seus exports não são verificados. Helpers e mocks entram nos globs de teste
+  (ex.: `"test": ["__tests__/**", "__mocks__/**"]`). Um arquivo fora desses globs que só os
+  testes alcançam é `unused-file` com `testOnly`.
+- **`entries` aceita caminhos e globs** (`*` não atravessa `/`). Uma entrada que não casa com
+  nenhum arquivo `.js`/`.cjs` é erro.
+- **Ciclos, `missing-dependency` e `unresolved-require`** olham os dois grafos: um problema num
+  arquivo de teste também é um problema.
+
 ## Critérios de aceite
 
-- [ ] Fixture com um export usado só pelo `.test.js` → reportado com `testOnly: true`.
-- [ ] Fixture com um arquivo importado só por teste → `unused-file` com `testOnly: true`.
-- [ ] Fixture com um helper de teste (ex.: `__mocks__/`) que não é produção → não é reportado.
-- [ ] Fixture com pacote usado só em teste e declarado em `dependencies` → `misplaced-dependency`.
-- [ ] Um export usado em produção **e** em teste não é reportado.
+- [x] Fixture com um export usado só pelo `.test.js` → reportado com `testOnly: true`.
+- [x] Fixture com um arquivo importado só por teste → `unused-file` com `testOnly: true`.
+- [x] Fixture com um helper de teste (ex.: `__mocks__/`) que não é produção → não é reportado.
+- [x] Fixture com pacote usado só em teste e declarado em `dependencies` → `misplaced-dependency`.
+- [x] Um export usado em produção **e** em teste não é reportado.
