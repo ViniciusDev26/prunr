@@ -1,6 +1,6 @@
 [package]
 name = "prunr"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 description = "Dead code detector for Node.js, with CommonJS as a first-class citizen"
 license = "MIT"
