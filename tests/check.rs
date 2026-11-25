@@ -1119,3 +1119,19 @@ fn vite_starts_at_the_scripts_of_its_index_html() {
          errors: 2, warnings: 1\n"
     );
 }
+
+#[test]
+fn the_files_scripts_run_are_entries() {
+    let run = check("script-entries");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           input.js\n\
+         unused-file           packages/tools/src/dead.ts\n\
+         unused-file           src/dead.js\n\
+         unused-file           src/never.js\n\
+         unused-file           src/only-e2e.js (only tests use it)\n\
+         \n\
+         errors: 5, warnings: 0\n"
+    );
+}

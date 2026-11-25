@@ -1,0 +1,19 @@
+{
+  "name": "script-entries",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "start": "NODE_ENV=production node --env-file .env -r ./src/tracing.js src/server.js",
+    "dev": "tsx watch --inspect=0.0.0.0:9229 ./src/server.js",
+    "worker": "pnpm exec tsx src/worker",
+    "seed": "cross-env SIZE=3 ts-node src/seed.ts --count 3",
+    "job": "bun run src/job.ts",
+    "lint:custom": "node scripts/lint.mjs input.js",
+    "eval": "node -e \"require('./src/never.js')\"",
+    "gen": "pnpm --filter @demo/tools exec tsx src/gen.ts",
+    "docs": "yarn workspace @demo/tools tsx src/docs.ts",
+    "elsewhere": "pnpm --filter not-in-this-repo exec tsx src/dead.js",
+    "test:e2e": "node --test e2e/run.js",
+    "build": "pnpm run compile"
+  }
+}
