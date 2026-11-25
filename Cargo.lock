@@ -849,6 +849,7 @@ name = "prunr"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "globset",
  "ignore",
  "insta",
  "nodejs-built-in-modules",

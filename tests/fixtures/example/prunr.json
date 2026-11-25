@@ -1,1 +1,1 @@
-{ "entries": ["src/index.js"] }
+{"entries": {"production": ["src/index.js"]}}

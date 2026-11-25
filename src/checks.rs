@@ -13,12 +13,24 @@ use crate::project::{FileId, Project};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum Finding {
-    /// No entry reaches the file.
-    UnusedFile { file: FileId },
-    /// No other file uses the export, and neither does its own file.
-    UnusedExport { file: FileId, symbol: String },
+    /// No production entry reaches the file. With `test_only`, tests do: delete it with them.
+    UnusedFile {
+        file: FileId,
+        #[serde(rename = "testOnly", skip_serializing_if = "is_false")]
+        test_only: bool,
+    },
+    /// No production file uses the export, and neither does its own file. With `test_only`,
+    /// tests do.
+    UnusedExport {
+        file: FileId,
+        symbol: String,
+        #[serde(rename = "testOnly", skip_serializing_if = "is_false")]
+        test_only: bool,
+    },
     /// Declared in `dependencies` or `devDependencies`, required by no file.
     UnusedDependency { package: String },
+    /// Declared in `dependencies`, but only tests require it: it belongs in `devDependencies`.
+    MisplacedDependency { package: String },
     /// Required, but declared in no dependency field of `package.json`.
     MissingDependency { file: FileId, package: String },
     /// A cycle, from its first file back to it.
@@ -33,12 +45,28 @@ impl Finding {
     }
 }
 
-/// Every finding in the part of the project the `entries` reach, sorted.
-pub fn check(project: &Project, entries: &[FileId]) -> Vec<Finding> {
+fn is_false(value: &bool) -> bool {
+    !value
+}
+
+/// Every finding, sorted. `production` are the production entries; `tests` are the test files,
+/// which are entries of the test graph and are never reported.
+pub fn check(
+    project: &Project,
+    production: &BTreeSet<FileId>,
+    tests: &BTreeSet<FileId>,
+) -> Vec<Finding> {
+    todo!()
+}
+
+fn old_check(project: &Project, entries: &[FileId]) -> Vec<Finding> {
     let reachable = reachable(project, entries);
     let mut findings = Vec::new();
     for file in project.files.keys().filter(|id| !reachable.contains(*id)) {
-        findings.push(Finding::UnusedFile { file: file.clone() });
+        findings.push(Finding::UnusedFile {
+            file: file.clone(),
+            test_only: false,
+        });
     }
     unused_exports(project, entries, &reachable, &mut findings);
     dependencies(project, &reachable, &mut findings);
@@ -95,6 +123,7 @@ fn unused_exports(
                     .any(|u| covers(u, &export.path, file.facts.default_export));
             if !used {
                 findings.push(Finding::UnusedExport {
+                    test_only: false,
                     file: id.clone(),
                     symbol: export.path.join("."),
                 });
@@ -127,7 +156,7 @@ fn dependencies(project: &Project, reachable: &BTreeSet<FileId>, findings: &mut 
             }
         }
     }
-    for package in &project.required_packages {
+    for package in project.dependencies.union(&project.dev_dependencies) {
         if !required.contains(package) {
             findings.push(Finding::UnusedDependency {
                 package: package.clone(),

@@ -27,9 +27,12 @@ pub fn human(findings: &[Finding]) -> String {
 
 fn describe(finding: &Finding) -> (&'static str, String) {
     match finding {
-        Finding::UnusedFile { file } => ("unused-file", file.clone()),
-        Finding::UnusedExport { file, symbol } => ("unused-export", format!("{file}: {symbol}")),
+        Finding::UnusedFile { file, .. } => ("unused-file", file.clone()),
+        Finding::UnusedExport { file, symbol, .. } => {
+            ("unused-export", format!("{file}: {symbol}"))
+        }
         Finding::UnusedDependency { package } => ("unused-dependency", package.clone()),
+        Finding::MisplacedDependency { .. } => todo!(),
         Finding::MissingDependency { file, package } => {
             ("missing-dependency", format!("{file}: {package}"))
         }

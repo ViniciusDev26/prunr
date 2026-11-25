@@ -1,0 +1,6 @@
+{
+  "entries": {
+    "production": ["index.js"],
+    "test": ["__tests__/**", "__mocks__/**"]
+  }
+}
