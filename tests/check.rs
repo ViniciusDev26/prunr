@@ -487,3 +487,20 @@ fn a_typescript_project_is_read_like_the_compiler_resolves_it() {
          errors: 6, warnings: 0\n"
     );
 }
+
+#[test]
+fn a_reexport_forwards_uses_to_where_the_export_is_defined() {
+    let run = check("reexports");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-export         src/greek.js: beta\n\
+         unused-export         src/internal.js: other\n\
+         unused-export         src/tools/hammer.js: nail\n\
+         unused-export         src/tools/index.js: local\n\
+         unused-export         src/tools/legacy.cjs: stop\n\
+         unused-export         src/tools/saw.js: saw\n\
+         \n\
+         errors: 6, warnings: 0\n"
+    );
+}
