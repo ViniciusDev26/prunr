@@ -5,8 +5,9 @@ Instruções para agentes (e humanos) que trabalham no prunr.
 ## O projeto
 
 prunr é um detector de código morto para Node.js, com CommonJS como cidadão de primeira classe,
-escrito em Rust. O escopo do MVP e os critérios de aceite estão em [`docs/mvp/`](docs/mvp/);
-leia o ponto relevante antes de implementar qualquer coisa.
+escrito em Rust. O escopo do MVP e os critérios de aceite estão em [`docs/mvp/`](docs/mvp/), e o
+que vem depois em [`docs/roadmap/`](docs/roadmap/); leia o ponto relevante antes de implementar
+qualquer coisa.
 
 ## TDD é obrigatório
 
