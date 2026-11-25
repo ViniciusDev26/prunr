@@ -6,10 +6,10 @@ A numeração é a da priorização original e não muda quando um item termina.
 
 ## Em andamento
 
-- [ ] 1. [ESM e TypeScript](01-esm-and-typescript.md)
-- [ ] 2. [Dependências usadas fora do código](02-dependencies-outside-code.md)
+- [x] 1. [ESM e TypeScript](01-esm-and-typescript.md)
+- [x] 2. [Dependências usadas fora do código](02-dependencies-outside-code.md)
 - [ ] 3. [Jest e Vitest](03-jest-and-vitest.md)
-- [ ] 8. [`require` dinâmico com padrão](08-dynamic-require-patterns.md)
+- [x] 8. [`require` dinâmico com padrão](08-dynamic-require-patterns.md)
 
 ## Depois
 
