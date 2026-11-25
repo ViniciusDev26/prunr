@@ -25,6 +25,39 @@ Só valores literais são lidos. Uma configuração montada em tempo de execuç�
 variável importada) cai nos padrões do runner; cubra o resto com `entries.test`. `testRegex`
 não é lido.
 
+### Vitest com `projects`
+
+Os itens de `test.projects` são lidos também: um arquivo de configuração, ou uma pasta (ou um
+glob de pastas, `packages/*`) com o seu `vitest.config.*` ou `vite.config.*`. Os globs e os
+arquivos de setup de cada projeto são relativos à pasta da configuração dele.
+
+## Playwright
+
+Com `@playwright/test` declarado, o prunr lê o `playwright.config.*` (ou o que um script passa
+com `-c`/`--config`):
+
+- **Arquivos de teste:** tudo o que está no `testDir` (helpers, fixtures, servidores de mock),
+  mais os arquivos de `testMatch` (por padrão, `*.spec.*` e `*.test.*`), também os de cada item
+  de `projects`.
+- **Arquivos carregados:** `globalSetup` e `globalTeardown`.
+- **Reporters** que não vêm com o Playwright contam como uso de teste.
+- **`webServer.command`** é lido como um script de teste: o arquivo que ele roda é código de
+  teste e o binário conta como uso (veja [Configuração](configuration.md#os-scripts-do-packagejson)).
+
+## Drizzle Kit
+
+Com `drizzle-kit` declarado, o `drizzle.config.*` (ou o que um script passa com `--config`) é
+código de ferramenta, e os arquivos do `schema` (um arquivo, uma pasta ou um glob) são entradas
+de produção: é deles que as migrations são geradas.
+
+## PostCSS
+
+Com `postcss` declarado, ou com um `postcss.config.*` ou `.postcssrc*` no projeto (o Next.js e o
+Vite carregam a configuração sem o projeto declarar o `postcss`), os plugins que a configuração
+cita pelo nome (`"@tailwindcss/postcss": {}`, `["autoprefixer"]`) e o `parser`, `syntax` e
+`stringifier` contam como uso de produção: a configuração roda no build, e é comum essas
+dependências ficarem em `dependencies`.
+
 ## Vite
 
 Com `vite` declarado, as entradas de produção são os `<script type="module" src="...">` das
