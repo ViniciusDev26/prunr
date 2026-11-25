@@ -59,9 +59,9 @@ nunca um caso especial no núcleo (`facts`, `project`, `checks`). Para adicionar
    que o ativa; `contribute` lê a configuração com `static_config` (nunca a executa) e acrescenta
    à `Contribution`. Os testes unitários ficam no próprio arquivo.
 3. O plugin entra em `PLUGINS`, e o teste que fixa essa lista é atualizado.
-4. Se a `Contribution` não tem o campo de que o plugin precisa (entradas de produção por
-   convenção, exports lidos pelo framework), o campo nasce junto com esse plugin, e o núcleo
-   passa a usá-lo nesse mesmo PR.
+4. A `Contribution` tem arquivos e pacotes de teste e entradas e pacotes de produção. Se o
+   plugin precisa de outra coisa, o campo nasce junto com ele, e o núcleo passa a usá-lo nesse
+   mesmo PR.
 
 ## Commits e PRs
 

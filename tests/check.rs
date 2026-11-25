@@ -999,3 +999,26 @@ fn fix_deletes_the_declaration_an_export_leaves_unused() {
          module.exports = { kept, also };\n"
     );
 }
+
+#[test]
+fn next_routes_are_entries_by_convention() {
+    let run = check("nextjs");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           components/Dead.tsx\n\
+         unused-export         components/Button.tsx: unusedVariant\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
+}
+
+#[test]
+fn nest_starts_at_its_main_and_tests_end_to_end() {
+    let run = check("nestjs");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/orphan.service.ts\n\nerrors: 1, warnings: 0\n"
+    );
+}

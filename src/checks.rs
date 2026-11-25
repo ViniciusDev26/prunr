@@ -280,7 +280,8 @@ fn dependencies(
             .flat_map(|id| &project.files[id].packages)
             .collect()
     };
-    let in_production = required(live);
+    let mut in_production = required(live);
+    in_production.extend(&project.production_packages);
     let mut in_tests = required(tested);
     in_tests.extend(&project.test_packages);
     let in_scripts = &project.script_packages;

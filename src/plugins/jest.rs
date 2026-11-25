@@ -124,6 +124,7 @@ mod tests {
                     "jest-watch-typeahead",
                     "ts-jest",
                 ]),
+                ..Contribution::default()
             }
         );
     }

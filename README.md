@@ -193,6 +193,24 @@ sem uso, um `export default` com efeito colateral). Um import removido inteiro d
 era importado só pelo efeito colateral, reponha como `import "./x"`. Revise o diff antes de
 fazer commit.
 
+### Next.js e NestJS
+
+Com `next` declarado no `package.json`, as rotas são entradas de produção por convenção, sem
+listá-las no `prunr.json`: `pages/**`, os arquivos do app router (`page`, `layout`, `route`,
+`loading`, `error`, `not-found`, `template`, `default`, `sitemap`, `robots`...), `middleware`,
+`instrumentation` e `next.config`, também dentro de `src/`. Os exports de uma entrada são a
+interface dela, então o que o Next.js lê (`default`, `getServerSideProps`, `metadata`,
+`generateStaticParams`, `GET`...) nunca é reportado. `react` e `react-dom` contam como usados,
+mesmo sem `import React`.
+
+Com `@nestjs/core` declarado, a entrada é o `main` que o CLI do Nest inicia (`src/main.ts`, ou o
+`sourceRoot`/`entryFile` de cada projeto do `nest-cli.json`). As classes que um `@Module`
+registra já estão no grafo pelos `import` do módulo. Os testes e2e (`test/**`, `*.e2e-spec.*`)
+são código de teste; `@nestjs/cli` e a coleção de schematics contam como usados, e
+`reflect-metadata` e `rxjs` também, porque o Nest os exige sem que o código os importe.
+
+Num projeto assim, `entries.production` pode ficar vazio (`[]`).
+
 ### Ignorar no código
 
 Para um export que é API pública de propósito (usado por quem instala o pacote, carregado por
