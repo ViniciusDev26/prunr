@@ -27,8 +27,18 @@ struct Manifest {
     main: Option<String>,
 }
 
-/// Writes `prunr.json` at `root` and returns its contents.
-pub fn init(root: &Path) -> Result<String, String> {
+/// What `init` wrote.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Created {
+    pub contents: String,
+    /// The Knip config it was translated from.
+    pub from: Option<String>,
+    /// What of that config has no equivalent in prunr.
+    pub left_out: Vec<String>,
+}
+
+/// Writes `prunr.json` at `root` and returns what it wrote.
+pub fn init(root: &Path) -> Result<Created, String> {
     if root.join(FILE_NAME).exists() {
         return Err(format!("{FILE_NAME} already exists"));
     }
@@ -73,7 +83,11 @@ pub fn init(root: &Path) -> Result<String, String> {
     let config = serde_json::json!({ "$schema": SCHEMA_URL, "entries": entries });
     let contents = serde_json::to_string_pretty(&config).expect("the config serializes") + "\n";
     std::fs::write(root.join(FILE_NAME), &contents).map_err(|e| e.to_string())?;
-    Ok(contents)
+    Ok(Created {
+        contents,
+        from: None,
+        left_out: Vec::new(),
+    })
 }
 
 #[cfg(test)]
@@ -117,9 +131,10 @@ mod tests {
             ("__tests__/index.test.js", ""),
             ("lib/util.spec.js", ""),
         ]);
-        let contents = init(dir.path()).unwrap();
+        let created = init(dir.path()).unwrap();
+        assert_eq!(created.from, None);
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&contents).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&created.contents).unwrap(),
             written(&dir)
         );
         assert_eq!(
@@ -234,6 +249,76 @@ mod tests {
             written(&dir)["entries"]["production"],
             serde_json::json!(["index.js"])
         );
+    }
+
+    #[test]
+    fn a_knip_config_gives_its_entries_and_ignored_dependencies() {
+        let dir = project(&[
+            ("package.json", r#"{ "main": "index.js" }"#),
+            ("index.js", ""),
+            (
+                "knip.jsonc",
+                r#"{
+                    // Knip's config, with comments and trailing commas
+                    "$schema": "https://unpkg.com/knip@5/schema.json",
+                    "entry": ["src/server.ts!", "./scripts/*.ts", "test/**/*.test.ts", "!src/gen/**"],
+                    "ignoreDependencies": ["left-pad", 1],
+                    "ignore": ["dist/**"],
+                    "rules": { "types": "off" },
+                }"#,
+            ),
+        ]);
+        let created = init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir),
+            serde_json::json!({
+                "$schema": "https://unpkg.com/@prunr/prunr/schema.json",
+                "entries": {
+                    "production": ["index.js", "scripts/*.ts", "src/server.ts"],
+                    "test": ["test/**/*.test.ts"]
+                },
+                "dependencies": { "ignore": ["left-pad"] }
+            })
+        );
+        assert_eq!(created.from.as_deref(), Some("knip.jsonc"));
+        assert_eq!(
+            created.left_out,
+            ["entry !src/gen/**", "ignore", "rules"].map(String::from)
+        );
+    }
+
+    #[test]
+    fn the_knip_key_of_package_json_and_its_workspaces_are_read() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{ "knip": { "workspaces": { ".": { "entry": "main.js" }, "packages/a": { "entry": ["cli.js"], "project": ["**"] }, "packages/b": 1 } } }"#,
+            ),
+            ("main.js", ""),
+        ]);
+        let created = init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir)["entries"],
+            serde_json::json!({ "production": ["main.js", "packages/a/cli.js"] })
+        );
+        assert_eq!(created.from.as_deref(), Some("package.json"));
+        assert_eq!(
+            created.left_out,
+            ["workspaces.packages/a.project"].map(String::from)
+        );
+    }
+
+    #[test]
+    fn a_knip_config_in_typescript_is_read_without_running_it() {
+        let dir = project(&[("knip.ts", "export default { entry: ['src/app.ts'] };")]);
+        let created = init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir)["entries"],
+            serde_json::json!({ "production": ["src/app.ts"] })
+        );
+        assert_eq!(created.from.as_deref(), Some("knip.ts"));
+        let dir = project(&[("knip.json", "{ nope")]);
+        assert_eq!(init(dir.path()), Err("invalid knip.json".into()));
     }
 
     #[test]
