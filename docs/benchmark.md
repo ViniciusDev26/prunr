@@ -116,9 +116,9 @@ Nos 85 projetos em que os dois rodaram, somando todos:
 
 | | Os dois | Só o prunr | Só o Knip |
 |---|---|---|---|
-| Arquivos sem uso | 20.949 | 842 | 26.041 |
+| Arquivos sem uso | 20.952 | 842 | 26.038 |
 | Exports sem uso | 193 | 105 | 5.983 |
-| Dependências sem uso | 500 | 143 | 466 |
+| Dependências sem uso | 511 | 136 | 455 |
 
 Com a fase 2 (plugin de TypeScript, componentes `.vue`/`.svelte`/`.astro`/`.mdx`, as
 configurações das ferramentas e os frameworks), as dependências que só o prunr apontava caíram
@@ -131,6 +131,37 @@ Knip reporta como arquivos sem uso. Os 102 exports que só o prunr aponta foram 
 (os casos e as duas limitações que eles mostram estão no
 [item 23 do roadmap](roadmap/23-validation-corpus.md)); os que só o Knip aponta incluem os
 exports usados no próprio arquivo, que o prunr não reporta por desenho (veja abaixo).
+
+### O que só o Knip aponta
+
+Cada achado que só o Knip aponta foi classificado por
+[`corpus/knip-triage.mjs`](../corpus/README.md), com a evidência no disco e no `prunr why`
+(nenhum ficou sem categoria):
+
+| | Categoria | Quantos | Quem está certo |
+|---|---|---|---|
+| Arquivos | numa pasta de fixtures de teste | 19.996 | desenho: o prunr não reporta os dados dos testes |
+| Arquivos | um arquivo de teste (o runner o roda) | 5.337 | o prunr: o Knip não conhece o runner (borp, mocha do node-redis, tsd) |
+| Arquivos | alcançado a partir de uma entrada que o Knip dá como sem uso | 368 | o prunr: a cadeia de imports até a entrada (`main`, `exports`, `bin`) |
+| Arquivos | alcançado só por testes | 198 | os dois: o prunr reporta como `testOnly`, que o benchmark não conta |
+| Arquivos | declaração (`.d.ts`) | 83 | desenho: declarações não entram no grafo |
+| Arquivos | alcançado por um import que o Knip não segue | 54 | o prunr: `require` com padrão, páginas do VitePress, um import estático |
+| Arquivos | atrás de um link simbólico | 2 | desenho |
+| Exports | o módulo inteiro é usado (passado adiante, lido por chave computada) | 3.817 | conservador: as tabelas de constantes do mysql e do mysql2 (`ErrorCodeToName[code]`) |
+| Exports | usado no próprio arquivo | 997 | desenho |
+| Exports | usado pelo nome (`const X = require(...)`, depois `X.nome`) | 713 | o prunr |
+| Exports | de uma entrada: a interface dela | 233 | desenho |
+| Exports | usado só por testes | 116 | os dois: reportado como `testOnly` |
+| Exports | um reexport: o prunr o reporta onde é declarado | 35 | os dois, em lugares diferentes |
+| Exports | num `.d.ts`, numa fixture, num arquivo sem uso, num teste, `module.exports` como `default` | 72 | desenho |
+| Dependências | importada por um arquivo do pacote | 432 | o prunr (no npm CLI, os workspaces que o Knip não lê) |
+| Dependências | tipos, scripts e peers de um pacote usado | 23 | o prunr |
+
+A triagem achou três erros do prunr, corrigidos: o valor do `--watch-files` do Mocha lido como
+spec (todo o `lib/` do mongoose virava teste); uma dependência da raiz que só pacotes que a
+declaram usam (as do npm CLI); e o `prunr why`, que não seguia reexports nem dizia quando um
+export é de uma entrada ou usado no próprio arquivo. Corrigir a segunda mostrou que um
+`tsconfig.json` não contava como uso do `typescript` (35 falsos positivos a menos).
 
 Para os arquivos, exports e dependências sem uso, o harness separa o que os dois apontam, o que
 só o prunr aponta e o que só o Knip aponta (`results/<projeto>/diff.json`). Cada diferença vira

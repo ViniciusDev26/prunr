@@ -32,6 +32,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 30. [SvelteKit e Nuxt](30-sveltekit-and-nuxt.md)
 - [x] 31. [Astro e React Router/Remix](31-astro-and-react-router.md)
 - [x] 32. [VitePress](32-vitepress.md)
+- [x] 33. [Triagem do que só o Knip aponta](33-knip-only-triage.md)
 
 ## Fase 1: credibilidade (concluída)
 
@@ -63,7 +64,7 @@ Os pacotes e arquivos que as ferramentas carregam sem import:
 
 A fase 2 ampliou o que o prunr enxerga; a 3 amplia o que ele reporta e quem o adota, na ordem:
 
-1. [ ] Triagem do que só o Knip aponta ([33](33-knip-only-triage.md)).
+1. [x] Triagem do que só o Knip aponta ([33](33-knip-only-triage.md)).
 2. Achados novos:
    - [ ] Membros de enum sem uso ([34](34-unused-enum-members.md)).
    - [ ] Membros de classe sem uso ([35](35-unused-class-members.md)).

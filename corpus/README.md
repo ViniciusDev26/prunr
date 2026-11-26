@@ -37,6 +37,12 @@ disputam a CPU e os tempos medidos sobem: para os números do benchmark, use `--
 último run, com a categoria e a evidência no disco de cada um (pacote irmão, declarado por outro
 pacote, saída de build, caminho montado, submódulo, inexistente...).
 
+`node corpus/knip-triage.mjs > knip-triage.md` (depois de um run com `--knip` e do
+`cargo build --release`) classifica cada arquivo, export e dependência que só o Knip aponta, com
+o `prunr why` de cada um e a evidência no disco (pasta de fixtures, arquivo de teste, entrada que
+o Knip não vê, módulo usado inteiro, uso no próprio arquivo...). O resumo está no
+[benchmark](../docs/benchmark.md).
+
 Para cada achado que só o prunr tem, ou que parece errado: se é falso positivo, ele vira uma
 fixture mínima que reproduz o padrão, depois a correção. Um achado real fica como está: o
 corpus mede o prunr, não corrige os projetos.
