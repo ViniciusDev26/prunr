@@ -62,10 +62,17 @@ fn configure(root: &Path, base: &str, config: &Value, contribution: &mut Contrib
             base => format!("{base}/{path}"),
         }
     };
+    // `test.dir` is where the include globs start.
+    let dir = test["dir"]
+        .as_str()
+        .map(|dir| dir.trim_start_matches("./").trim_end_matches('/'));
     let first = contribution.tests.len();
     contribution.tests(&test["include"], TESTS);
     for glob in &mut contribution.tests[first..] {
-        *glob = at(glob);
+        *glob = match dir {
+            Some(dir) => at(&format!("{dir}/{glob}")),
+            None => at(glob),
+        };
     }
     for option in ["setupFiles", "globalSetup"] {
         for name in names(&test[option]) {
@@ -91,6 +98,12 @@ fn configure(root: &Path, base: &str, config: &Value, contribution: &mut Contrib
         }
         Some(custom) => contribution.reference(custom),
         None => {}
+    }
+    // A project written inline, as a configuration object.
+    if let Value::Array(projects) = &test["projects"] {
+        for project in projects.iter().filter(|project| project.is_object()) {
+            configure(root, base, project, contribution);
+        }
     }
     for project in names(&test["projects"]) {
         let path = at(project);
@@ -210,6 +223,29 @@ mod tests {
             ])
         );
         assert_eq!(found.packages, declared(&["@testing-library/jest-dom"]));
+    }
+
+    #[test]
+    fn an_inline_project_is_read_with_its_dir() {
+        let dir = project(&[(
+            "vitest.config.ts",
+            r#"export default { test: { projects: [
+                { test: { name: "main", dir: "src", include: ["**/test.ts"], setupFiles: ["./setup.ts"] } },
+                { test: { include: ["e2e/**/*.ts"] } },
+                { extends: true }
+            ] } };"#,
+        )]);
+        let found = setup(dir.path(), &declared(&["vitest"]), &json!({}));
+        assert_eq!(
+            found.tests,
+            strings(&[
+                "**/*.{test,spec}.*",
+                "src/**/test.ts",
+                "e2e/**/*.ts",
+                "**/*.{test,spec}.*"
+            ])
+        );
+        assert_eq!(found.files, strings(&["./vitest.config.ts", "./setup.ts"]));
     }
 
     #[test]
