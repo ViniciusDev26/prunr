@@ -132,6 +132,13 @@ each are in [Findings](docs/guide/checks.md).
 - run: npx prunr check --github --since origin/${{ github.base_ref }}
 ```
 
+Or with the Action, which needs no install step:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: ViniciusDev26/prunr@v0
+```
+
 Each new finding becomes an annotation on the right line of the diff. For legacy code, start
 with `prunr baseline`: what is already there does not fail, and anything that shows up later
 does. See [CI and legacy code](docs/guide/ci.md).
