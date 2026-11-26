@@ -1569,3 +1569,13 @@ fn the_tsconfig_uses_the_packages_it_extends_types_and_plugins_and_runs_type_tes
         "unused-dependency     unused-dev\n\nerrors: 1, warnings: 0\n"
     );
 }
+
+#[test]
+fn the_scripts_of_vue_svelte_astro_and_mdx_files_are_part_of_the_graph() {
+    let run = check("single-file-components");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/Orphan.vue\nunused-export         src/util.ts: unused\n\nerrors: 2, warnings: 0\n"
+    );
+}
