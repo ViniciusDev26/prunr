@@ -128,7 +128,7 @@ pub fn check(
 }
 
 /// The files the entries reach, the entries included.
-fn reachable(project: &Project, entries: &BTreeSet<FileId>) -> BTreeSet<FileId> {
+pub(crate) fn reachable(project: &Project, entries: &BTreeSet<FileId>) -> BTreeSet<FileId> {
     let mut seen = entries.clone();
     let mut queue: VecDeque<&FileId> = entries.iter().collect();
     while let Some(id) = queue.pop_front() {

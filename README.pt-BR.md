@@ -92,6 +92,7 @@ em [Configuração](docs/guide/configuration.md).
 |---|---|
 | `prunr check` | Lista os achados. `--json` para máquinas, `--github` para anotações no PR, `--since <ref>` para só o que é novo. |
 | `prunr fix` | Remove o código morto e as dependências sem uso. `--dry-run` mostra sem mudar nada. |
+| `prunr why <alvo>` | Explica um arquivo (a cadeia de imports desde uma entrada), um `arquivo:export` (quem o usa) ou um pacote (os arquivos, scripts e ferramentas que precisam dele). |
 | `prunr init` | Cria um `prunr.json` a partir do `package.json`. |
 | `prunr baseline` | Grava os achados atuais, para adotar o prunr sem consertar tudo de uma vez. |
 | `prunr schema` | Imprime o JSON Schema do `prunr.json`. |

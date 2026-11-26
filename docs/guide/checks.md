@@ -29,6 +29,32 @@ Na dúvida, o prunr é conservador: quando o resultado de um `require` é passad
 acessado por chave computada, o módulo inteiro conta como usado. É melhor deixar passar um
 export morto do que reportar um vivo.
 
+## Por que algo está vivo: `prunr why`
+
+`prunr why` responde com o mesmo grafo do check, antes de você apagar (ou manter) algo:
+
+```console
+$ prunr why src/money.js
+src/money.js is used in production:
+  src/index.js (entry)
+  -> src/money.js (src/index.js:4)
+
+$ prunr why src/money.js:Money.format
+src/money.js: Money.format is used by:
+  src/invoices.js:1 (production)
+
+$ prunr why express
+express is used by:
+  src/index.js:1 (production)
+```
+
+- Um arquivo: a cadeia mais curta de imports desde uma entrada de produção, ou desde um teste
+  quando só os testes o alcançam; se nada o alcança, quem o importa.
+- `arquivo:export` (com `.` para um método estático, `Money.format`): os arquivos que o usam,
+  cada um marcado `production`, `test` ou `unreached`.
+- Um pacote: os arquivos que o importam, os scripts que o rodam, as ferramentas e frameworks
+  que o carregam e os pacotes que o exigem como peer.
+
 ## Folhas de estilo
 
 Um arquivo que importa uma folha de estilo (`import "./globals.css"`, também `.scss`, `.sass`,

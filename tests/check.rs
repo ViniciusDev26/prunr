@@ -238,7 +238,7 @@ fn an_unknown_command_is_a_usage_error() {
         assert_eq!(run.code, 2, "{args:?}");
         assert_eq!(
             run.stderr,
-            "usage: prunr check [--json | --github] [--since <ref>] | prunr fix [--dry-run] | prunr baseline | prunr init | prunr schema | prunr --version\n",
+            "usage: prunr check [--json | --github] [--since <ref>] | prunr fix [--dry-run] | prunr why <file | file:export | package> | prunr baseline | prunr init | prunr schema | prunr --version\n",
             "{args:?}"
         );
     }
@@ -1245,5 +1245,126 @@ fn a_package_any_package_json_above_the_file_declares_is_declared() {
     assert_eq!(
         run.stdout,
         "missing-dependency    tests/smoke/cjs/a.test.js: chai\n\nerrors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
+fn why_shows_the_chain_from_an_entry_to_a_file() {
+    let run = prunr("example", &["why", "src/money.js"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "src/money.js is used in production:\n\
+         \x20 src/index.js (entry)\n\
+         \x20 -> src/money.js (src/index.js:4)\n"
+    );
+    let run = prunr("example", &["why", "src/legacy-report.js"]);
+    assert_eq!(
+        run.stdout,
+        "src/legacy-report.js is not reached by any entry, and no file imports it.\n"
+    );
+}
+
+#[test]
+fn why_lists_the_files_that_use_an_export() {
+    let run = prunr("example", &["why", "src/money.js:Money.format"]);
+    assert_eq!(
+        run.stdout,
+        "src/money.js: Money.format is used by:\n\
+         \x20 src/invoices.js:1 (production)\n"
+    );
+    let run = prunr("example", &["why", "src/invoices.js:cancelInvoice"]);
+    assert_eq!(
+        run.stdout,
+        "src/invoices.js: cancelInvoice is used by no file.\n"
+    );
+}
+
+#[test]
+fn why_lists_what_uses_a_package() {
+    let run = prunr("example", &["why", "express"]);
+    assert_eq!(
+        run.stdout,
+        "express is used by:\n\
+         \x20 src/index.js:1 (production)\n"
+    );
+    let run = prunr("example", &["why", "left-pad"]);
+    assert_eq!(run.stdout, "left-pad is used by no file, script or tool.\n");
+    let empty = tempfile::tempdir().unwrap();
+    let run = run_in(empty.path(), &["why", "x"]);
+    assert_eq!(run.code, 2);
+    assert!(run.stderr.contains("prunr.json"), "{}", run.stderr);
+    let run = prunr("example", &["why", "nope"]);
+    assert_eq!(run.code, 2);
+    assert_eq!(
+        run.stderr,
+        "error: nope is not a file of the project nor a package it declares or imports\n"
+    );
+}
+
+#[test]
+fn why_explains_test_files_dead_importers_and_what_needs_a_package() {
+    let dir = tempfile::tempdir().unwrap();
+    for (path, content) in [
+        (
+            "package.json",
+            r#"{
+                "workspaces": ["web"],
+                "scripts": { "lint": "eslint ." },
+                "devDependencies": { "eslint": "9", "jest": "29", "ts-jest": "29" },
+                "jest": { "preset": "ts-jest" }
+            }"#,
+        ),
+        (
+            "prunr.json",
+            r#"{ "entries": { "production": ["index.js"], "test": ["a.test.js"] } }"#,
+        ),
+        (
+            "web/package.json",
+            r#"{ "dependencies": { "next": "15", "react": "19" } }"#,
+        ),
+        (
+            "node_modules/next/package.json",
+            r#"{ "peerDependencies": { "react": "19" } }"#,
+        ),
+        ("web/index.js", "require('react');"),
+        ("index.js", "require('undeclared');"),
+        ("a.test.js", "require('./helper').x();"),
+        ("helper.js", "exports.x = () => {};"),
+        ("dead.js", "require('./orphan');"),
+        ("orphan.js", ""),
+    ] {
+        let path = dir.path().join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    }
+    let why = |target: &str| run_in(dir.path(), &["why", target]).stdout;
+    assert_eq!(
+        why("helper.js"),
+        "helper.js is used only by tests:\n  a.test.js (test entry)\n  -> helper.js (a.test.js:1)\n"
+    );
+    assert_eq!(
+        why("helper.js:x"),
+        "helper.js: x is used by:\n  a.test.js:1 (test)\n"
+    );
+    assert_eq!(
+        why("orphan.js"),
+        "orphan.js is not reached by any entry. Imported by:\n  dead.js:1 (unreached)\n"
+    );
+    assert_eq!(
+        why("eslint"),
+        "eslint is used by:\n  a script of package.json\n"
+    );
+    assert_eq!(
+        why("ts-jest"),
+        "ts-jest is used by:\n  a tool configured in the project (test)\n"
+    );
+    assert_eq!(
+        why("react"),
+        "react is used by:\n  web/index.js:1 (production)\n  a framework of web (production)\n  a peer dependency of next\n"
+    );
+    assert_eq!(
+        why("undeclared"),
+        "undeclared is used by:\n  index.js:1 (production)\n"
     );
 }
