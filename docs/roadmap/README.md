@@ -50,9 +50,9 @@ Os pacotes e arquivos que as ferramentas carregam sem import:
 
 - [x] Plugin de TypeScript ([27](27-typescript-plugin.md)).
 - [x] `.vue`, `.svelte`, `.astro` e `.mdx`: o script de cada um passa pelo parser ([28](28-single-file-components.md)).
-- [x] Plugins declarativos para ferramentas: ESLint, Prettier, Babel e commitlint
+- [x] Plugins declarativos para ferramentas: ESLint, Prettier, Babel, commitlint, Tailwind,
+  Storybook, Cypress, husky, lint-staged, Prisma, tsup, Rollup e webpack
   ([29](29-tool-plugins.md)).
-- [ ] Storybook, Cypress, husky, lint-staged, Tailwind, Prisma, tsup, Rollup, webpack.
 - [x] SvelteKit e Nuxt ([30](30-sveltekit-and-nuxt.md)).
 - [ ] Astro (além das páginas) e Remix/React Router.
 

@@ -188,3 +188,17 @@ Com `nuxt` declarado, o que o Nuxt carrega por convenção é entrada de produç
 `middleware/` (sob `app/` no Nuxt 4, ou sob o `srcDir`), e `server/`, `modules/` e `shared/` na
 raiz. Os `modules` do `nuxt.config` contam como usados. `~`, `@`, `~~` e `@@` são resolvidos, e
 `#imports`, `#app`, `#components`... são módulos que o Nuxt gera.
+
+## Tailwind, Storybook, Cypress, husky, lint-staged, Prisma e bundlers
+
+- **Tailwind:** o `tailwind.config.*` é um arquivo da ferramenta; os plugins que ele importa
+  contam como usados.
+- **Storybook:** o `.storybook/main.*` e o `preview.*` são arquivos da ferramenta; os `addons` e
+  o `framework` contam como usados; as stories (`*.stories.*`) são código de teste.
+- **Cypress:** o `cypress.config.*` é um arquivo da ferramenta; `cypress/**` e `*.cy.*` são
+  código de teste.
+- **husky e lint-staged:** os comandos dos hooks de `.husky/` e da configuração do lint-staged
+  são lidos como os `scripts` do `package.json`: os binários que rodam contam como usados.
+- **Prisma:** o comando `seed` da chave `prisma` do `package.json`, também.
+- **tsup, Rollup e webpack:** as entradas do bundle (`entry`, `input`) são entradas de produção,
+  e os loaders do webpack (`loader`, `use`) contam como usados.
