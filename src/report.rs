@@ -69,6 +69,158 @@ pub fn github(findings: &[Finding], stale: &[Finding], project: &Project) -> Str
     out + &summary(findings, stale)
 }
 
+/// What each kind of finding means, for the reports that describe their rules.
+const RULES: &[(&str, &str)] = &[
+    ("unused-file", "No production entry reaches the file."),
+    ("unused-export", "No production code uses the export."),
+    (
+        "unused-import",
+        "A require or import brings in a name the file never uses.",
+    ),
+    (
+        "unused-ignore",
+        "A prunr-ignore comment that no longer ignores anything.",
+    ),
+    (
+        "unused-dependency",
+        "Nothing imports the package and no script runs it.",
+    ),
+    (
+        "misplaced-dependency",
+        "The package is in dependencies, but only the tests use it.",
+    ),
+    (
+        "missing-dependency",
+        "The code imports a package package.json does not declare.",
+    ),
+    ("circular-import", "There is an import cycle."),
+    ("unresolved-require", "A require prunr cannot follow."),
+    ("unparsed-file", "A file the graph reaches does not parse."),
+    (
+        "stale-baseline",
+        "A baseline entry that is no longer found.",
+    ),
+];
+
+/// Each finding (and stale baseline entry) with its kind, description, file, line and whether
+/// it is a warning: what the structured reports are built from.
+fn located<'f>(
+    findings: &'f [Finding],
+    stale: &'f [Finding],
+    project: &Project,
+) -> Vec<(&'static str, String, String, Option<u32>, bool)> {
+    let mut items: Vec<_> = findings
+        .iter()
+        .map(|finding| {
+            let (kind, detail) = describe(finding);
+            let (file, line) = position(finding, project);
+            let text = format!("{detail}{}", note(finding));
+            (kind, text, file, line, finding.is_warning())
+        })
+        .collect();
+    items.extend(stale.iter().map(|finding| {
+        let entry = stale_entry(finding);
+        (
+            "stale-baseline",
+            entry,
+            crate::config::FILE_NAME.to_string(),
+            None,
+            false,
+        )
+    }));
+    items
+}
+
+/// SARIF 2.1.0, for code scanning tools: one rule per kind of finding, one result per finding.
+pub fn sarif(findings: &[Finding], stale: &[Finding], project: &Project) -> String {
+    let rules: Vec<serde_json::Value> = RULES
+        .iter()
+        .map(|(id, text)| serde_json::json!({ "id": id, "shortDescription": { "text": text } }))
+        .collect();
+    let results: Vec<serde_json::Value> = located(findings, stale, project)
+        .into_iter()
+        .map(|(kind, text, file, line, warning)| {
+            let mut location = serde_json::json!({ "artifactLocation": { "uri": file } });
+            if let Some(line) = line {
+                location["region"] = serde_json::json!({ "startLine": line });
+            }
+            serde_json::json!({
+                "ruleId": kind,
+                "level": if warning { "warning" } else { "error" },
+                "message": { "text": text },
+                "locations": [{ "physicalLocation": location }],
+            })
+        })
+        .collect();
+    let report = serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": { "driver": {
+                "name": "prunr",
+                "version": env!("CARGO_PKG_VERSION"),
+                "informationUri": "https://github.com/ViniciusDev26/prunr",
+                "rules": rules,
+            } },
+            "results": results,
+        }],
+    });
+    serde_json::to_string_pretty(&report).expect("the report serializes") + "\n"
+}
+
+/// GitLab's Code Quality report (the Code Climate format): one issue per finding.
+pub fn codeclimate(findings: &[Finding], stale: &[Finding], project: &Project) -> String {
+    let issues: Vec<serde_json::Value> = located(findings, stale, project)
+        .into_iter()
+        .map(|(kind, text, file, line, warning)| {
+            serde_json::json!({
+                "type": "issue",
+                "check_name": kind,
+                "description": text,
+                "categories": ["Clarity"],
+                "severity": if warning { "minor" } else { "major" },
+                "fingerprint": fingerprint(&format!("{kind}:{text}")),
+                "location": { "path": file, "lines": { "begin": line.unwrap_or(1) } },
+            })
+        })
+        .collect();
+    serde_json::to_string_pretty(&issues).expect("the report serializes") + "\n"
+}
+
+/// A stable identifier for an issue: the FNV-1a hash of its kind and description, in hex.
+fn fingerprint(text: &str) -> String {
+    let hash = text.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+    });
+    format!("{hash:016x}")
+}
+
+/// A Markdown table, for a pull request comment.
+pub fn markdown(findings: &[Finding], stale: &[Finding], project: &Project) -> String {
+    let items = located(findings, stale, project);
+    if items.is_empty() {
+        return "### prunr: no findings\n".into();
+    }
+    let warnings = items.iter().filter(|item| item.4).count();
+    let errors = items.len() - warnings;
+    let plural = |count: usize, word: &str| match count {
+        1 => format!("{count} {word}"),
+        _ => format!("{count} {word}s"),
+    };
+    let mut out = format!(
+        "### prunr: {}, {}\n\n| Finding | Where | What |\n|---|---|---|\n",
+        plural(errors, "error"),
+        plural(warnings, "warning")
+    );
+    for (kind, text, file, line, warning) in items {
+        let mark = if warning { " (warning)" } else { "" };
+        let at = line.map_or(file.clone(), |line| format!("{file}:{line}"));
+        let text = text.replace('|', "\\|");
+        out.push_str(&format!("| `{kind}`{mark} | `{at}` | {text} |\n"));
+    }
+    out
+}
+
 /// Where a finding is: its file and, when it has one, its line.
 fn position(finding: &Finding, project: &Project) -> (String, Option<u32>) {
     let facts = |file: &String| &project.files[file].facts;
