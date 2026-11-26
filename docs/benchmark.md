@@ -8,10 +8,10 @@ Para reproduzir: `cargo build --release && node corpus/run.mjs --install --knip`
 
 ## Tempo
 
-| Projeto | Arquivos-fonte | prunr | Knip |
-|---|---|---|---|
-| webpack | ~24 mil | 0,78 s | 7,19 s |
-| date-fns | ~1.700 | 0,07 s | 4,87 s |
+| Projeto | prunr | Knip |
+|---|---|---|
+| webpack | 0,78 s | 7,19 s |
+| date-fns | 0,07 s | 4,87 s |
 | mongoose | | 0,02 s | 3,30 s |
 | express | | 0,01 s | 2,98 s |
 | npm cli | | 0,09 s | 2,85 s |
@@ -30,7 +30,8 @@ Para reproduzir: `cargo build --release && node corpus/run.mjs --install --knip`
 | hapi | | 0,01 s | 1,42 s |
 | json-server | | < 0,01 s | 1,37 s |
 
-Num monorepo privado de 13 mil arquivos, fora do corpus, o check leva 0,6 s.
+O webpack tem mais de 24 mil arquivos-fonte. Num monorepo privado de 13 mil arquivos, fora do
+corpus, o check leva 0,6 s.
 
 ## Onde só um dos dois roda
 
