@@ -315,6 +315,11 @@ fn dependencies(
         let declared = |package: &String| {
             workspace.declared_packages.contains(package)
                 || root.declared_packages.contains(package)
+                || project.nested_declared.iter().any(|(dir, declared)| {
+                    id.strip_prefix(dir.as_str())
+                        .is_some_and(|rest| rest.starts_with('/'))
+                        && declared.contains(package)
+                })
         };
         for package in &project.files[id].packages {
             if !declared(package) && !declared(&types_of(package)) {

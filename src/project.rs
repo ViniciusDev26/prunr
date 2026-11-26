@@ -12,6 +12,10 @@ pub type FileId = String;
 
 #[derive(Debug)]
 pub struct Project {
+    /// The packages each `package.json` that is not a package of the repository declares (a
+    /// test harness with its own dependencies), by its directory: a file under it can import
+    /// them, as Node.js looks for packages in every folder above the file.
+    pub nested_declared: BTreeMap<String, BTreeSet<String>>,
     /// The canonical project root.
     pub root: PathBuf,
     pub files: BTreeMap<FileId, File>,
@@ -298,6 +302,23 @@ fn peers(
                 return None;
             };
             Some((package.clone(), peers.keys().cloned().collect()))
+        })
+        .collect()
+}
+
+/// The packages each `package.json` under `root` that is not one of the repository's packages
+/// (`dirs`) declares, by its directory. One that is not valid JSON declares nothing.
+fn nested_manifests(root: &Path, dirs: &[String]) -> BTreeMap<String, BTreeSet<String>> {
+    ignore::WalkBuilder::new(root)
+        .require_git(false)
+        .filter_entry(|entry| entry.file_name() != "node_modules")
+        .build()
+        .flatten()
+        .filter(|entry| entry.file_name() == "package.json")
+        .filter_map(|entry| {
+            let dir = file_id(root, entry.path().parent()?)?;
+            let manifest = Manifest::load(root, &dir).ok()?;
+            (!dirs.contains(&dir)).then(|| (dir, manifest.declared()))
         })
         .collect()
 }
@@ -674,7 +695,9 @@ impl Project {
                 peers: peers(&installed),
             });
         }
+        let nested_declared = nested_manifests(&root, &dirs);
         Ok(Self {
+            nested_declared,
             root,
             parsed: files.len(),
             files,
