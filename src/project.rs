@@ -642,12 +642,22 @@ impl Project {
             })
             .collect();
         // The files of every package that a plugin compiles (`.vue`) are sources too.
-        let compilers: BTreeMap<String, crate::plugins::Compiler> = contributions
+        // A package's plugins compile its own files only: the `.svelte` routes of a SvelteKit app
+        // are not sources because a sibling package uses Svelte.
+        let compilers_of = |id: &str| &contributions[workspace_index(&dir_names, id)].compilers;
+        let compiled: BTreeSet<&str> = contributions
             .iter()
-            .flat_map(|contribution| contribution.compilers.clone())
+            .flat_map(|contribution| contribution.compilers.keys())
+            .map(String::as_str)
             .collect();
-        let compiled: Vec<&str> = compilers.keys().map(String::as_str).collect();
-        let paths = source_files(&root, &compiled);
+        let mut paths = source_files(&root, &compiled.into_iter().collect::<Vec<_>>());
+        paths.retain(|path, id| {
+            let extension = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or_default();
+            EXTENSIONS.contains(&extension) || compilers_of(id).contains_key(extension)
+        });
         // Each file is read and analyzed on its own, in parallel; the results keep the order of
         // `paths`.
         use rayon::prelude::*;
@@ -655,7 +665,7 @@ impl Project {
             .par_iter()
             .map(|(path, id)| {
                 let source = std::fs::read_to_string(path).unwrap_or_default();
-                (id.clone(), analyze_file(&source, path, &compilers))
+                (id.clone(), analyze_file(&source, path, compilers_of(id)))
             })
             .collect();
         // A file that does not parse (a fixture broken on purpose, a syntax prunr does not read)

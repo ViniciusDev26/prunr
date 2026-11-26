@@ -42,17 +42,25 @@ pub fn keep(source: &str, ranges: &[Range<usize>]) -> String {
 /// The contents of the `<script>` elements of a markup source (outside HTML comments), and
 /// whether one of them is TypeScript.
 pub fn script_blocks(source: &str) -> (Vec<Range<usize>>, bool) {
-    let element = regex::Regex::new(r"(?s)<!--.*?-->|<script\b([^>]*)>(.*?)</script\s*>")
-        .expect("the pattern compiles");
     let typescript =
         regex::Regex::new(r#"\blang\s*=\s*["']?(ts|typescript)\b"#).expect("the pattern compiles");
-    let mut ranges = Vec::new();
-    let mut is_typescript = false;
-    for captures in element.captures_iter(source) {
-        if let (Some(attributes), Some(content)) = (captures.get(1), captures.get(2)) {
-            is_typescript |= typescript.is_match(attributes.as_str());
-            ranges.push(content.range());
-        }
-    }
-    (ranges, is_typescript)
+    let elements = scripts(source);
+    let is_typescript = elements
+        .iter()
+        .any(|(attributes, _)| typescript.is_match(attributes));
+    (
+        elements.into_iter().map(|(_, content)| content).collect(),
+        is_typescript,
+    )
+}
+
+/// The `<script>` elements of a markup source, outside HTML comments: their attributes and the
+/// range of their contents.
+pub fn scripts(source: &str) -> Vec<(&str, Range<usize>)> {
+    let element = regex::Regex::new(r"(?s)<!--.*?-->|<script\b([^>]*)>(.*?)</script\s*>")
+        .expect("the pattern compiles");
+    element
+        .captures_iter(source)
+        .filter_map(|captures| Some((captures.get(1)?.as_str(), captures.get(2)?.range())))
+        .collect()
 }

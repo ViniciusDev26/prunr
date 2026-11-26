@@ -1589,3 +1589,10 @@ fn the_packages_eslint_prettier_babel_and_commitlint_configs_name_are_used() {
         "unused-dependency     unused-dev\n\nerrors: 1, warnings: 0\n"
     );
 }
+
+#[test]
+fn a_package_compiles_only_the_files_its_own_plugins_compile() {
+    let run = check("compilers-per-package");
+    assert_eq!(run.code, 0, "{}", run.stdout);
+    assert_eq!(run.stdout, "No findings.\n");
+}
