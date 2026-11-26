@@ -84,6 +84,8 @@ pub struct Facts {
     pub exports: Vec<Export>,
     /// `module.exports` is assigned something other than an object literal.
     pub default_export: bool,
+    /// The exports that are members of an exported enum (`["E", "A"]`).
+    pub enum_members: BTreeSet<Vec<String>>,
     /// The file has ESM `import` or `export` declarations.
     pub esm: bool,
     pub reexports: Vec<Reexport>,
@@ -1944,6 +1946,48 @@ mod tests {
                 reexport("./u", ReexportKind::All, true),
             ]
         );
+    }
+
+    #[test]
+    fn the_members_of_an_exported_enum_are_exports() {
+        let facts = facts_at(
+            "index.ts",
+            "export enum E { A, B = 2, 'C' } export const a = E.A;
+             enum F { X, Y } const all = Object.values(F); export { F, all };",
+        );
+        assert_eq!(
+            facts.exports,
+            [
+                export(&["E"], true),
+                export(&["E", "A"], true),
+                export(&["E", "B"], false),
+                export(&["E", "C"], false),
+                export(&["F"], true),
+                export(&["F", "X"], true),
+                export(&["F", "Y"], true),
+                export(&["a"], false),
+                export(&["all"], false),
+            ]
+        );
+        assert_eq!(
+            facts.enum_members,
+            BTreeSet::from([
+                path(&["E", "A"]),
+                path(&["E", "B"]),
+                path(&["E", "C"]),
+                path(&["F", "X"]),
+                path(&["F", "Y"])
+            ])
+        );
+        assert_eq!(facts.export_lines[&path(&["E", "B"])], 1);
+        assert!(matches!(
+            facts.export_removals[&path(&["E", "B"])],
+            Removal::Item {
+                index: 1,
+                all: None,
+                ..
+            }
+        ));
     }
 
     #[test]
