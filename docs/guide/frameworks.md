@@ -140,6 +140,7 @@ Num projeto Vite, Next.js ou NestJS, `entries.production` pode ficar vazio (`[]`
 Com `typescript` declarado, ou um `tsconfig.json` na raiz, os `tsconfig*.json` da raiz e os que
 os scripts passam a `tsc -p` são lidos, seguindo `extends` e `references`. Contam como usados:
 
+- o próprio `typescript`, num pacote com `tsconfig.json` (o `tsc` e o editor o leem);
 - os pacotes do `extends` (`@tsconfig/node20`, `@sindresorhus/tsconfig`...);
 - os de `compilerOptions.types` (`node` é `@types/node`; `vitest/globals` é `vitest`);
 - o de `compilerOptions.jsxImportSource`;

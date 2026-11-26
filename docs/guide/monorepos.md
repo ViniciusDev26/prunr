@@ -21,7 +21,9 @@ pacote. Ele acha os pacotes pela declaração de cada ferramenta, somando o que 
 - As dependências de cada pacote são checadas nele: `unused-dependency` e `misplaced-dependency`
   dizem o pacote (`left-pad (packages/shared)`), e o `prunr fix` edita o `package.json` dele. O
   que o `package.json` raiz declara vale para todos os pacotes (dependências içadas e
-  ferramentas), e conta como usado por qualquer arquivo ou script do repositório.
+  ferramentas), e conta como usado por qualquer arquivo ou script do repositório, menos os de
+  um pacote que declara a mesma dependência: nele, quem instala é a declaração dele, e a da raiz
+  sobra. Um `@types/x` da raiz continua valendo para o `x` que um pacote declara.
 - Os scripts e os [frameworks](frameworks.md) de cada pacote são lidos no diretório dele.
 - As entradas de um pacote publicado (sem `"private": true`), cada subcaminho do `exports`, são
   a interface dele: seus exports não são reportados. Vale também para o pacote raiz. A de um pacote privado é checada pelos usos reais dos outros pacotes.
