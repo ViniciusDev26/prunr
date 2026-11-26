@@ -25,6 +25,31 @@ impl Plugin for Vite {
         let absolute_roots = public.map(|dir| super::normalize(&Path::new(vite_root).join(dir)));
         contribution.absolute_roots.extend(absolute_roots);
         contribution.absolute_roots.push(vite_root.to_string());
+        // `resolve.alias`: an object, or a list of `{ find, replacement }`. A replacement from
+        // `/` starts at the Vite root; a relative one, at the configuration.
+        let target = |replacement: &str| match replacement.strip_prefix('/') {
+            Some(path) => format!("./{}", super::normalize(&Path::new(vite_root).join(path))),
+            None => replacement.to_string(),
+        };
+        match &config["resolve"]["alias"] {
+            serde_json::Value::Object(aliases) => {
+                for (find, replacement) in aliases {
+                    if let Some(replacement) = replacement.as_str() {
+                        contribution.alias(find, &target(replacement));
+                    }
+                }
+            }
+            serde_json::Value::Array(aliases) => {
+                for alias in aliases {
+                    if let (Some(find), Some(replacement)) =
+                        (alias["find"].as_str(), alias["replacement"].as_str())
+                    {
+                        contribution.alias(find, &target(replacement));
+                    }
+                }
+            }
+            _ => {}
+        }
         let pages = ignore::WalkBuilder::new(context.root)
             .require_git(false)
             .filter_entry(|entry| entry.file_name() != "node_modules")
@@ -166,6 +191,28 @@ mod tests {
         let dir = project(&[("vite.config.js", "export default { publicDir: false };")]);
         let found = setup(dir.path(), &declared(&["vite"]), &json!({}));
         assert_eq!(found.absolute_roots, strings(&[""]));
+    }
+
+    #[test]
+    fn resolve_alias_maps_names_from_the_root_or_the_config() {
+        let dir = project(&[(
+            "vite.config.js",
+            r##"export default { root: "app", resolve: { alias: { "@": "/src", "#x": "./lib/x", "n": 1 } } };"##,
+        )]);
+        let found = setup(dir.path(), &declared(&["vite"]), &json!({}));
+        let resolve = |name: &str| found.aliases.iter().find_map(|alias| alias.apply(name));
+        assert_eq!(resolve("@/a/b").as_deref(), Some("./app/src/a/b"));
+        assert_eq!(resolve("@").as_deref(), Some("./app/src"));
+        assert_eq!(resolve("@scope/pkg"), None);
+        assert_eq!(resolve("#x").as_deref(), Some("./lib/x"));
+        assert_eq!(found.aliases.len(), 2);
+        let dir = project(&[(
+            "vite.config.js",
+            r#"export default { resolve: { alias: [{ find: "~", replacement: "pkg" }, { find: "y" }] } };"#,
+        )]);
+        let found = setup(dir.path(), &declared(&["vite"]), &json!({}));
+        assert_eq!(found.aliases.len(), 1);
+        assert_eq!(found.aliases[0].apply("~/z").as_deref(), Some("pkg/z"));
     }
 
     #[test]

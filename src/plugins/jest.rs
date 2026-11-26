@@ -30,6 +30,7 @@ impl Plugin for Jest {
             None => context.manifest["jest"].clone(),
         };
         configure(&config, contribution);
+        mocks(context, contribution);
         for name in context.configs_passed_to("jest") {
             if let Some(config) = contribution.read(context.root, &name) {
                 configure(&config, contribution);
@@ -38,8 +39,43 @@ impl Plugin for Jest {
     }
 }
 
+/// The files of the `__mocks__` folders: Jest resolves the name of each (`createRuntime` for
+/// `__mocks__/createRuntime.js`) to it. The mock of a declared package stays the package's.
+fn mocks(context: &Context, contribution: &mut Contribution) {
+    let walker = ignore::WalkBuilder::new(context.root)
+        .require_git(false)
+        .filter_entry(|entry| entry.file_name() != "node_modules")
+        .build();
+    let files = walker
+        .flatten()
+        .filter(|entry| entry.path().is_file())
+        .filter_map(|entry| {
+            let path = entry.path().strip_prefix(context.root).ok()?;
+            Some(
+                path.to_string_lossy()
+                    .replace(std::path::MAIN_SEPARATOR, "/"),
+            )
+        });
+    for path in files {
+        let mock = path
+            .split_once("__mocks__/")
+            .map(|(_, inside)| inside.rsplit_once('.').map_or(inside, |(stem, _)| stem));
+        if let Some(name) = mock.filter(|name| !context.declared.contains(*name)) {
+            contribution.alias(name, &format!("./{path}"));
+        }
+    }
+}
+
 /// What one Jest configuration adds.
 fn configure(config: &Value, contribution: &mut Contribution) {
+    if let Value::Object(mapper) = &config["moduleNameMapper"] {
+        for (pattern, target) in mapper {
+            if let Some(target) = names(target).first() {
+                let target = target.replace("<rootDir>/", "./");
+                contribution.alias_regex(pattern, &target);
+            }
+        }
+    }
     // Manual mocks are test code wherever they are, whatever `testMatch` says.
     if !contribution.tests.iter().any(|test| test == MOCKS) {
         contribution.tests.push(MOCKS.into());
@@ -127,6 +163,36 @@ mod tests {
                 ..Contribution::default()
             }
         );
+    }
+
+    #[test]
+    fn mocks_and_the_module_name_mapper_are_aliases() {
+        let dir = project(&[]);
+        for (path, content) in [
+            ("__mocks__/createRuntime.js", ""),
+            ("__mocks__/lodash.js", ""),
+            ("src/a.js", ""),
+        ] {
+            let path = dir.path().join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, content).unwrap();
+        }
+        let manifest = json!({ "jest": { "moduleNameMapper": {
+            "^@/(.*)$": "<rootDir>/src/$1",
+            "\\.css$": ["identity-obj-proxy"],
+            "[": "nope",
+            "x": 1
+        } } });
+        let found = setup(dir.path(), &declared(&["jest", "lodash"]), &manifest);
+        let resolve = |name: &str| found.aliases.iter().find_map(|alias| alias.apply(name));
+        assert_eq!(
+            resolve("createRuntime").as_deref(),
+            Some("./__mocks__/createRuntime.js")
+        );
+        assert_eq!(resolve("lodash"), None);
+        assert_eq!(resolve("@/a").as_deref(), Some("./src/a"));
+        assert_eq!(resolve("./x.css").as_deref(), Some("identity-obj-proxy"));
+        assert_eq!(found.aliases.len(), 3);
     }
 
     #[test]
