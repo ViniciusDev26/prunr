@@ -27,6 +27,19 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 25. [SARIF, Code Climate e Markdown](25-report-formats.md)
 - [x] 26. [Modo produção](26-production-mode.md)
 
+## Fase 1: credibilidade (concluída)
+
+O plano era provar que o prunr acerta e que é rápido, antes de ampliar a cobertura:
+
+- [x] Corpus de validação com 55 projetos e triagem dos achados ([23](23-validation-corpus.md)).
+- [x] Benchmark contra o Knip ([`benchmark.md`](../benchmark.md)).
+- [x] `prunr why` ([24](24-why.md)).
+- [x] SARIF, Code Climate e Markdown ([25](25-report-formats.md)).
+- [x] Modo produção ([26](26-production-mode.md)).
+
+O que a triagem deixou para depois depende da fase 2 (o plugin de TypeScript, os compiladores de
+Vue, Svelte e Angular, os aliases de Jest e Vite) e está no item 23.
+
 ## Depois
 
 - [ ] 10. [Performance](10-performance.md)
