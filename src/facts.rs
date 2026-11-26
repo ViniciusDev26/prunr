@@ -455,7 +455,9 @@ impl<'a> Analyzer<'_, 'a> {
         for comment in comments.iter().filter(|comment| comment.is_jsdoc()) {
             let start = comment.span.start as usize;
             let text = &self.source[start..comment.span.end as usize];
-            for (at, _) in text.match_indices("import(") {
+            let types = type_expressions(text);
+            let in_type = |at: usize| types.iter().any(|(from, to)| *from < at && at < *to);
+            for (at, _) in text.match_indices("import(").filter(|(at, _)| in_type(*at)) {
                 let inner = text[at + "import(".len()..].trim_start();
                 let Some(quote) = inner
                     .chars()
@@ -1112,6 +1114,33 @@ impl<'a> Analyzer<'_, 'a> {
     }
 }
 
+/// The type expressions of a JSDoc comment: the `{...}` right after a tag (`@type {X}`,
+/// `@param {X} name`), as ranges of `text`. An `import("./x")` outside them is prose.
+fn type_expressions(text: &str) -> Vec<(usize, usize)> {
+    let mut ranges = Vec::new();
+    for (at, _) in text.match_indices('@') {
+        let tag = text[at + 1..].trim_start_matches(|c: char| c.is_ascii_alphabetic());
+        let rest = tag.trim_start();
+        if !rest.starts_with('{') || tag.len() == text.len() - at - 1 {
+            continue;
+        }
+        let open = text.len() - rest.len();
+        let mut depth = 0;
+        for (offset, c) in text[open..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => depth -= 1,
+                _ => continue,
+            }
+            if depth == 0 {
+                ranges.push((open, open + offset));
+                break;
+            }
+        }
+    }
+    ranges
+}
+
 /// Whether evaluating `expression` can have no side effect: a literal, a function, a class, or
 /// an array or object of those (`Object.freeze` of one too).
 fn is_pure(expression: &Expression) -> bool {
@@ -1484,6 +1513,19 @@ mod tests {
         );
         let paths: Vec<Vec<String>> = found.exports.iter().map(|e| e.path.clone()).collect();
         assert_eq!(paths, [vec!["Socket".to_string()]]);
+    }
+
+    #[test]
+    fn only_an_import_in_a_jsdoc_type_is_an_import() {
+        let found = facts(
+            "/**\n * Example:\n *   import(\"./moduleA\");\n *   router({ slow: lazy(() => import('./slow.js')) })\n * @type {import('./types').Config}\n * @param {{ a: import(\"./b\").B }} x\n */\nexport const x = 1;\n",
+        );
+        let specifiers: Vec<&str> = found
+            .requires
+            .iter()
+            .map(|r| r.specifier.as_str())
+            .collect();
+        assert_eq!(specifiers, ["./types", "./b"]);
     }
 
     #[test]
