@@ -1,85 +1,127 @@
 # Benchmark
 
-O prunr e o Knip nos 55 projetos do [corpus de validação](../corpus/README.md), no mesmo commit
+O prunr e o Knip nos 100 projetos do [corpus de validação](../corpus/README.md), no mesmo commit
 de cada projeto, com as dependências instaladas. Os números são de uma máquina Linux (x86-64,
-32 núcleos), com o prunr de release do commit `76a3c56` e o Knip 5 rodado por `npx`, um
+32 núcleos), com o prunr de release e o Knip 5 rodado por `npx`, um
 projeto por vez (`--jobs 1`). O tempo do Knip inclui a partida do Node.
 
 Para reproduzir: `cargo build --release && node corpus/run.mjs --install --knip --jobs 1`.
 
 ## Tempo
 
-Os 44 projetos em que os dois rodaram, do mais lento para o Knip:
+Os 85 projetos em que os dois rodaram, do mais lento para o Knip:
 
 | Projeto | prunr | Knip |
 |---|---|---|
-| webpack | 0,94 s | 6,83 s |
-| date-fns | 0,09 s | 4,80 s |
-| mongoose | 0,03 s | 3,03 s |
-| rollup | 0,31 s | 2,89 s |
-| cli | 0,10 s | 2,84 s |
-| fastify | 0,02 s | 2,71 s |
-| bullmq | 0,03 s | 2,53 s |
-| undici | 0,03 s | 2,28 s |
-| pino | 0,01 s | 2,24 s |
-| mocha | 0,02 s | 2,22 s |
-| got | 0,01 s | 2,17 s |
-| axios | 0,03 s | 2,04 s |
-| socket.io | 0,04 s | 2,03 s |
-| cheerio | 0,01 s | 2,00 s |
-| jsdom | 0,03 s | 1,97 s |
-| knex | 0,03 s | 1,96 s |
-| execa | 0,02 s | 1,95 s |
-| nodemailer | 0,02 s | 1,94 s |
-| commander | 0,01 s | 1,81 s |
-| pm2 | 0,03 s | 1,76 s |
-| lodash | 0,02 s | 1,67 s |
-| ioredis | 0,03 s | 1,67 s |
-| yargs | 0,01 s | 1,65 s |
+| webpack | 1,14 s | 6,86 s |
+| date-fns | 0,10 s | 4,75 s |
+| mongoose | 0,03 s | 2,93 s |
+| cli | 0,09 s | 2,88 s |
+| fastify | 0,02 s | 2,74 s |
+| core | 0,02 s | 2,54 s |
+| rollup | 0,33 s | 2,51 s |
+| bullmq | 0,03 s | 2,47 s |
+| agenda | 0,02 s | 2,42 s |
+| node-postgres | 0,02 s | 2,29 s |
+| undici | 0,03 s | 2,22 s |
+| node-redis | 0,04 s | 2,19 s |
+| pino | 0,01 s | 2,18 s |
+| mocha | 0,02 s | 2,18 s |
+| less | 0,02 s | 2,13 s |
+| got | 0,02 s | 2,13 s |
+| handlebars | 0,01 s | 2,11 s |
+| axios | 0,02 s | 2,00 s |
+| sinon | 0,02 s | 2,00 s |
+| commander | 0,02 s | 1,97 s |
+| socket.io | 0,05 s | 1,96 s |
+| cheerio | 0,01 s | 1,96 s |
+| nodemailer | 0,02 s | 1,96 s |
+| jsdom | 0,03 s | 1,94 s |
+| node-mongodb-native | 0,19 s | 1,94 s |
+| execa | 0,02 s | 1,92 s |
+| knex | 0,03 s | 1,91 s |
+| node-cron | 0,01 s | 1,86 s |
+| http-proxy-middleware | 0,01 s | 1,86 s |
+| nock | 0,01 s | 1,78 s |
+| postcss | 0,01 s | 1,78 s |
+| bull | 0,01 s | 1,77 s |
+| ramda | 0,02 s | 1,77 s |
+| dayjs | 0,01 s | 1,77 s |
+| express | 0,01 s | 1,75 s |
+| pm2 | 0,03 s | 1,73 s |
+| marked | 0,01 s | 1,67 s |
 | body-parser | 0,01 s | 1,64 s |
-| express | 0,01 s | 1,62 s |
-| hapi | 0,01 s | 1,61 s |
-| node-semver | 0,01 s | 1,57 s |
-| ws | 0,01 s | 1,56 s |
-| debug | 0,01 s | 1,55 s |
-| multer | 0,01 s | 1,54 s |
+| ioredis | 0,03 s | 1,64 s |
+| chai | 0,01 s | 1,63 s |
+| lodash | 0,02 s | 1,62 s |
+| yargs | 0,01 s | 1,62 s |
+| superagent | 0,01 s | 1,62 s |
+| node-restify | 0,01 s | 1,61 s |
+| luxon | 0,01 s | 1,61 s |
+| helmet | 0,01 s | 1,61 s |
+| redux | 0,01 s | 1,59 s |
+| node-mysql2 | 0,02 s | 1,57 s |
+| ws | 0,01 s | 1,54 s |
+| nunjucks | 0,02 s | 1,53 s |
 | moment | 0,02 s | 1,53 s |
-| winston | 0,01 s | 1,53 s |
-| helmet | 0,01 s | 1,52 s |
-| ajv | 0,01 s | 1,50 s |
+| node-fetch | 0,01 s | 1,52 s |
+| winston | 0,01 s | 1,52 s |
+| joi | 0,01 s | 1,52 s |
+| node-semver | 0,01 s | 1,52 s |
+| hapi | 0,01 s | 1,51 s |
+| multer | 0,01 s | 1,49 s |
+| ajv | 0,01 s | 1,47 s |
+| node-red | 0,02 s | 1,46 s |
+| nodemon | 0,01 s | 1,46 s |
 | chalk | 0,01 s | 1,46 s |
-| dotenv | 0,01 s | 1,46 s |
-| node-red | 0,02 s | 1,45 s |
-| koa | 0,01 s | 1,45 s |
-| node-jsonwebtoken | 0,01 s | 1,44 s |
-| nodemon | 0,01 s | 1,41 s |
-| gulp | 0,01 s | 1,40 s |
-| json-server | 0,01 s | 1,35 s |
-| node-glob | 0,01 s | 1,33 s |
-| passport | 0,01 s | 1,31 s |
+| validator | 0,01 s | 1,45 s |
+| koa | 0,01 s | 1,43 s |
+| uuid | 0,01 s | 1,42 s |
+| node-jsonwebtoken | 0,01 s | 1,41 s |
+| supertest | 0,01 s | 1,40 s |
+| nyc | 0,01 s | 1,39 s |
+| debug | 0,01 s | 1,39 s |
+| path-to-regexp | 0,01 s | 1,38 s |
+| session | 0,01 s | 1,36 s |
+| mysql | 0,01 s | 1,36 s |
+| gulp | 0,01 s | 1,36 s |
+| morgan | 0,01 s | 1,36 s |
+| node-schedule | 0,01 s | 1,35 s |
+| ejs | 0,01 s | 1,35 s |
+| node-bunyan | 0,01 s | 1,34 s |
+| node-http-proxy | 0,01 s | 1,33 s |
+| json-server | 0,01 s | 1,32 s |
+| dotenv | 0,01 s | 1,32 s |
+| node-glob | 0,01 s | 1,32 s |
+| log4js-node | 0,01 s | 1,31 s |
+| cors | 0,01 s | 1,31 s |
+| passport | 0,01 s | 1,29 s |
+| nanoid | 0,01 s | 1,29 s |
+| grunt | 0,01 s | 1,23 s |
 
 O webpack tem mais de 24 mil arquivos-fonte. Num monorepo privado de 13 mil arquivos, fora do
 corpus, o check leva 0,6 s.
 
 ## Onde só um dos dois roda
 
-O prunr rodou nos 55. O Knip carrega as configurações das ferramentas executando-as, e em 5
-projetos (ESLint, Vite, tRPC, TanStack Query, Excalidraw) parou num erro ao carregar uma delas.
-Em outros 6 (Prettier, Nest, Jest, Sequelize, TypeORM, Zod) a instalação das dependências falhou
-(conflito de peers, versões antigas do npm), e o Knip não roda sem elas.
+O prunr rodou nos 100. O Knip carrega as configurações das ferramentas executando-as, e em 7
+projetos (ESLint, Vite, tRPC, TanStack Query, Excalidraw, browserify, markdown-it) parou num erro
+ao carregar uma delas. Em outros 8 (Prettier, Nest, Jest, Sequelize, TypeORM, Zod, AVA, Yup) a
+instalação das dependências falhou (conflito de peers, versões antigas do npm), e o Knip não roda
+sem elas.
 
 ## Concordância
 
-Nos 44 projetos em que os dois rodaram, somando todos:
+Nos 85 projetos em que os dois rodaram, somando todos:
 
 | | Os dois | Só o prunr | Só o Knip |
 |---|---|---|---|
-| Arquivos sem uso | 19.461 | 703 | 23.707 |
-| Exports sem uso | 104 | 63 | 1.424 |
-| Dependências sem uso | 311 | 196 | 336 |
+| Arquivos sem uso | 21.125 | 1.184 | 25.865 |
+| Exports sem uso | 170 | 102 | 6.006 |
+| Dependências sem uso | 535 | 381 | 431 |
 
 O prunr não reporta o que está em pastas de fixtures de teste (os milhares do webpack), que o
-Knip reporta como arquivos sem uso. Os 63 exports que só o prunr aponta foram conferidos um a um
+Knip reporta como arquivos sem uso. Os 102 exports que só o prunr aponta foram conferidos um a um
 (os casos e as duas limitações que eles mostram estão no
 [item 23 do roadmap](roadmap/23-validation-corpus.md)); os que só o Knip aponta incluem os
 exports usados no próprio arquivo, que o prunr não reporta por desenho (veja abaixo).

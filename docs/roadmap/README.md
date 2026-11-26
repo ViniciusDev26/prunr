@@ -31,7 +31,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 
 O plano era provar que o prunr acerta e que é rápido, antes de ampliar a cobertura:
 
-- [x] Corpus de validação com 55 projetos e triagem dos achados ([23](23-validation-corpus.md)).
+- [x] Corpus de validação com 100 projetos e triagem dos achados ([23](23-validation-corpus.md)).
 - [x] Benchmark contra o Knip ([`benchmark.md`](../benchmark.md)).
 - [x] `prunr why` ([24](24-why.md)).
 - [x] SARIF, Code Climate e Markdown ([25](25-report-formats.md)).

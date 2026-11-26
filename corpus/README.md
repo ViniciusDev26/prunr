@@ -1,6 +1,6 @@
 # Corpus de validação
 
-Projetos open source reais, fixados num commit, onde o prunr roda para achar falsos positivos,
+100 projetos open source reais, fixados num commit, onde o prunr roda para achar falsos positivos,
 erros e lentidão antes de quem usa. É o teste de aceite do [MVP](../docs/mvp/README.md) em
 escala: cada divergência encontrada aqui vira uma fixture em `tests/fixtures/` antes da correção.
 
