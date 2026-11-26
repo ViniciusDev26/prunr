@@ -11,6 +11,10 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use crate::checks::reachable;
 use crate::project::{FileId, Project};
 
+/// Why `@types/node` is kept.
+const NODE_TYPES: &str =
+    "  the types of Node.js, kept while the project has TypeScript or uses Node.js modules\n";
+
 /// Where a file stands: reached by production, only by tests, or by nothing.
 fn kind(id: &FileId, live: &BTreeSet<FileId>, tested: &BTreeSet<FileId>) -> &'static str {
     if live.contains(id) {
@@ -37,7 +41,7 @@ pub fn why(
     if let Some((file, symbol)) = target.rsplit_once(':')
         && project.files.contains_key(file)
     {
-        return Ok(export(project, &live, &tested, file, symbol));
+        return Ok(export(project, production, &live, &tested, file, symbol));
     }
     let known = project
         .workspaces
@@ -121,27 +125,53 @@ fn chain(project: &Project, entries: &BTreeSet<FileId>, target: &str) -> Option<
 
 fn export(
     project: &Project,
+    production: &BTreeSet<FileId>,
     live: &BTreeSet<FileId>,
     tested: &BTreeSet<FileId>,
     target: &str,
     symbol: &str,
 ) -> String {
-    let path: Vec<&str> = symbol.split('.').collect();
-    let users: Vec<String> = project
-        .files
+    let path: Vec<String> = symbol.split('.').map(str::to_string).collect();
+    let facts = &project.files[target].facts;
+    let mut users = Vec::new();
+    if production.contains(target) {
+        users.push("  an entry: its exports are its interface\n".to_string());
+    }
+    if facts
+        .exports
         .iter()
-        .filter_map(|(id, file)| {
-            let uses = file.edges.iter().filter(|edge| edge.target == target);
-            let used = uses.flat_map(|edge| &edge.uses).any(|used| {
-                let shared = used.path.iter().zip(&path).all(|(a, b)| a == b);
-                shared && (used.path.len() >= path.len() || used.whole)
+        .any(|export| export.path == path && export.used_internally)
+    {
+        users.push("  its own file\n".to_string());
+    }
+    // Each import, with what it uses forwarded through the files that reexport others.
+    for (id, file) in &project.files {
+        for edge in &file.edges {
+            // Only a file that reexports others forwards a use to another file.
+            if edge.target != target && project.files[&edge.target].reexports.is_empty() {
+                continue;
+            }
+            let seed = BTreeMap::from([(&edge.target, edge.uses.iter().cloned().collect())]);
+            let uses = crate::checks::forwarded(project, seed);
+            let covered = uses.get(&target.to_string()).is_some_and(|incoming| {
+                incoming
+                    .iter()
+                    .any(|used| crate::checks::covers(used, &path, facts.default_export))
             });
-            used.then(|| {
-                let line = file.edge_lines[target];
-                format!("  {id}:{line} ({})\n", kind(id, live, tested))
-            })
-        })
-        .collect();
+            if !covered {
+                continue;
+            }
+            let line = file.edge_lines[&edge.target];
+            let through = match edge.target == target {
+                true => String::new(),
+                false => format!(", through {}", edge.target),
+            };
+            users.push(format!(
+                "  {id}:{line} ({}{through})\n",
+                kind(id, live, tested)
+            ));
+        }
+    }
     match users.is_empty() {
         true => format!("{target}: {symbol} is used by no file.\n"),
         false => format!("{target}: {symbol} is used by:\n{}", users.concat()),
@@ -195,6 +225,14 @@ fn package(
                 lines.push(format!("  a peer dependency of {host}\n"));
             }
         }
+    }
+    match target.strip_prefix("@types/") {
+        Some("node") => lines.push(NODE_TYPES.to_string()),
+        Some(typed) => lines.push(format!(
+            "  the types of {0}, kept while {0} is used\n",
+            crate::checks::typed_package(typed)
+        )),
+        None => {}
     }
     match lines.is_empty() {
         true => format!("{target} is used by no file, script or tool.\n"),
@@ -254,6 +292,44 @@ mod tests {
     }
 
     #[test]
+    fn an_export_kept_by_a_reexport_an_entry_or_its_own_file() {
+        let (_dir, project) = project(&[
+            ("index.js", "export const e = 1;"),
+            (
+                "main.js",
+                "import { x } from './barrel'; import { y } from './lib'; import './index.js'; x; y;",
+            ),
+            ("barrel.js", "export * from './lib';"),
+            (
+                "lib.js",
+                "export const x = 1; export const y = 2; export const z = 3; export const own = 4; own;",
+            ),
+        ]);
+        let production = ids(&["index.js", "main.js"]);
+        let none = BTreeSet::new();
+        assert_eq!(
+            why(&project, &production, &none, "lib.js:x").unwrap(),
+            "lib.js: x is used by:\n  main.js:1 (production, through barrel.js)\n"
+        );
+        assert_eq!(
+            why(&project, &production, &none, "lib.js:y").unwrap(),
+            "lib.js: y is used by:\n  main.js:1 (production)\n"
+        );
+        assert_eq!(
+            why(&project, &production, &none, "lib.js:own").unwrap(),
+            "lib.js: own is used by:\n  its own file\n"
+        );
+        assert_eq!(
+            why(&project, &production, &none, "index.js:e").unwrap(),
+            "index.js: e is used by:\n  an entry: its exports are its interface\n"
+        );
+        assert_eq!(
+            why(&project, &production, &none, "lib.js:z").unwrap(),
+            "lib.js: z is used by no file.\n"
+        );
+    }
+
+    #[test]
     fn a_package_scripts_tools_frameworks_and_peers_need() {
         let (_dir, project) = project(&[
             (
@@ -267,7 +343,7 @@ mod tests {
             ),
             (
                 "web/package.json",
-                r#"{ "dependencies": { "next": "15", "react": "19", "react-dom": "19" } }"#,
+                r#"{ "dependencies": { "next": "15", "react": "19", "react-dom": "19" }, "devDependencies": { "@types/react": "19", "@types/node": "22" } }"#,
             ),
             (
                 "node_modules/next/package.json",
@@ -289,6 +365,14 @@ mod tests {
         assert_eq!(
             why(&project, &none, &none, "ts-jest").unwrap(),
             "ts-jest is used by:\n  a tool configured in the project (test)\n"
+        );
+        assert_eq!(
+            why(&project, &none, &none, "@types/react").unwrap(),
+            "@types/react is used by:\n  the types of react, kept while react is used\n"
+        );
+        assert_eq!(
+            why(&project, &none, &none, "@types/node").unwrap(),
+            "@types/node is used by:\n  the types of Node.js, kept while the project has TypeScript or uses Node.js modules\n"
         );
         assert_eq!(
             why(&project, &none, &none, "react").unwrap(),

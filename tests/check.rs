@@ -1294,6 +1294,43 @@ fn why_lists_the_files_that_use_an_export() {
 }
 
 #[test]
+fn why_explains_exports_kept_by_an_entry_or_their_own_file_and_types_packages() {
+    let dir = tempfile::tempdir().unwrap();
+    for (path, content) in [
+        (
+            "package.json",
+            r#"{ "devDependencies": { "@types/node": "22", "@types/chai": "4" } }"#,
+        ),
+        (
+            "prunr.json",
+            r#"{ "entries": { "production": ["index.js"] } }"#,
+        ),
+        ("index.js", "export const a = 1; export const b = 2; b;"),
+    ] {
+        std::fs::write(dir.path().join(path), content).unwrap();
+    }
+    let run = run_in(dir.path(), &["why", "index.js:b"]);
+    assert_eq!(
+        run.stdout,
+        "index.js: b is used by:\n\
+         \x20 an entry: its exports are its interface\n\
+         \x20 its own file\n"
+    );
+    let run = run_in(dir.path(), &["why", "@types/chai"]);
+    assert_eq!(
+        run.stdout,
+        "@types/chai is used by:\n\
+         \x20 the types of chai, kept while chai is used\n"
+    );
+    let run = run_in(dir.path(), &["why", "@types/node"]);
+    assert!(
+        run.stdout.contains("the types of Node.js"),
+        "{}",
+        run.stdout
+    );
+}
+
+#[test]
 fn why_lists_what_uses_a_package() {
     let run = prunr("example", &["why", "express"]);
     assert_eq!(
