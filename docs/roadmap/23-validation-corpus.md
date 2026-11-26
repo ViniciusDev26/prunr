@@ -59,16 +59,30 @@ contra o Knip. É o teste de aceite do MVP em escala.
   - os `export` de dentro de um `namespace` (ou de um `declare module`) do TypeScript são membros
     dele, não exports do módulo (`Socket.DisconnectReason` no socket.io).
 
-  Com isso, os `missing-dependency` do corpus caíram de 2.429 para 452 e os `unresolved-require`
-  sem explicação, de 447 para 60. O que sobrou, por categoria:
+  - um `import("./x")` num exemplo de código de um comentário JSDoc não é import: só conta o de
+    dentro de uma expressão de tipo (`@type {import("./x").Y}`) (webpack, tRPC).
 
-  | Achado | Quantos | Por quê |
-  |---|---|---|
-  | `unresolved-require` com caminho montado | 438 | Aviso legítimo: o prunr não sabe o caminho. |
-  | `unresolved-require` para saídas de build (`dist/`, `generated/`, `built/`) | 502 | Aviso legítimo: só existem depois do build. |
-  | `unresolved-require` para arquivos que não são fonte | 25 | Aviso legítimo. |
-  | `unresolved-require` restantes | 60 | Imports quebrados de propósito em testes de resolução (Jest), casos do `test/configCases` do webpack, `require` de caminhos fora do repositório. |
-  | `missing-dependency` | 452 | Pacotes irmãos sem declaração (Excalidraw, Sequelize, socket.io, Nest), dependências opcionais não declaradas (pm2, node-red), aliases do `moduleNameMapper` do Jest e do `resolve.alias` do Vite, imports de JSR do Deno (axios). |
+  Com isso, os `missing-dependency` do corpus caíram de 2.429 para 448.
+
+- A triagem item a item: [`corpus/triage.mjs`](../../corpus/triage.mjs) confere cada
+  `missing-dependency` e `unresolved-require` do último run no disco e escreve a categoria e a
+  evidência de cada um. No run final:
+
+  | Achado | Categoria | Quantos | Evidência conferida |
+  |---|---|---|---|
+  | `missing-dependency` | pacote irmão sem declaração | 240 | o `package.json` do irmão tem esse `name` |
+  | `missing-dependency` | declarado por outro pacote do repositório | 43 | o `package.json` que declara |
+  | `missing-dependency` | módulo local que um alias resolve | 43 | o arquivo com esse nome (`moduleNameMapper` do Jest) |
+  | `missing-dependency` | import de JSR do Deno | 5 | o mapa de imports do Deno |
+  | `missing-dependency` | sem declaração | 117 | nenhum `package.json` do repositório o declara |
+  | `unresolved-require` | caminho montado | 438 | o caminho só existe em tempo de execução |
+  | `unresolved-require` | saída de build | 502 | a pasta para onde o build escreve |
+  | `unresolved-require` | submódulo git não clonado | 23 | o `.gitmodules`; o corpus clona raso |
+  | `unresolved-require` | sintaxe de loader | 1 | `loader!arquivo` do webpack |
+  | `unresolved-require` | não existe | 54 | nada no caminho: imports quebrados de propósito nos testes de resolução do Jest, configs locais ignoradas pelo git, dados gerados por script, caminhos escritos para o teste compilado |
+
+  Nenhuma categoria esconde um falso positivo do prunr: os que existiam viraram as correções
+  acima.
 
 ## O que a triagem decidiu manter
 

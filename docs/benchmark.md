@@ -74,12 +74,12 @@ Nos 44 projetos em que os dois rodaram, somando todos:
 
 | | Os dois | Só o prunr | Só o Knip |
 |---|---|---|---|
-| Arquivos sem uso | 19.469 | 700 | 23.605 |
-| Exports sem uso | 103 | 69 | 1.332 |
-| Dependências sem uso | 325 | 191 | 337 |
+| Arquivos sem uso | 19.461 | 703 | 23.707 |
+| Exports sem uso | 104 | 63 | 1.424 |
+| Dependências sem uso | 311 | 196 | 336 |
 
 O prunr não reporta o que está em pastas de fixtures de teste (os milhares do webpack), que o
-Knip reporta como arquivos sem uso. Os 69 exports que só o prunr aponta foram conferidos um a um
+Knip reporta como arquivos sem uso. Os 63 exports que só o prunr aponta foram conferidos um a um
 (os casos e as duas limitações que eles mostram estão no
 [item 23 do roadmap](roadmap/23-validation-corpus.md)); os que só o Knip aponta incluem os
 exports usados no próprio arquivo, que o prunr não reporta por desenho (veja abaixo).

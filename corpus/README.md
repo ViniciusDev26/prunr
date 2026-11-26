@@ -33,6 +33,10 @@ disputam a CPU e os tempos medidos sobem: para os números do benchmark, use `--
 
 ## Triagem
 
+`node corpus/triage.mjs > triage.md` lista cada `missing-dependency` e `unresolved-require` do
+último run, com a categoria e a evidência no disco de cada um (pacote irmão, declarado por outro
+pacote, saída de build, caminho montado, submódulo, inexistente...).
+
 Para cada achado que só o prunr tem, ou que parece errado: se é falso positivo, ele vira uma
 fixture mínima que reproduz o padrão, depois a correção. Um achado real fica como está: o
 corpus mede o prunr, não corrige os projetos.
