@@ -1616,3 +1616,13 @@ fn nuxt_pages_components_composables_and_aliases_are_part_of_the_graph() {
         "unused-file           orphan.ts\n\nerrors: 1, warnings: 0\n"
     );
 }
+
+#[test]
+fn storybook_cypress_husky_lint_staged_tailwind_prisma_and_bundlers_are_read() {
+    let run = check("more-tool-configs");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/orphan.ts\nunused-dependency     unused-dev\n\nerrors: 2, warnings: 0\n"
+    );
+}
