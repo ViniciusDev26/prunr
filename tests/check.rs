@@ -124,6 +124,18 @@ fn the_class_methods_of_a_published_package_are_its_interface() {
 }
 
 #[test]
+fn two_exports_of_the_same_binding_are_duplicates() {
+    let run = check("duplicate-exports");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "duplicate-export      dates.js: format, formatDate\n\
+         \n\
+         errors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
 fn a_require_that_cannot_be_followed_is_a_warning() {
     let run = check("unresolved-require");
     assert_eq!(run.code, 0, "warnings do not fail the check");

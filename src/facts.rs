@@ -92,6 +92,8 @@ pub struct Facts {
     pub class_members: BTreeSet<Vec<String>>,
     /// The names of the properties the file reads (`a.b`, `const { b } = a`, `a["b"]`).
     pub properties: BTreeSet<String>,
+    /// Groups of exports that are the same local binding (`export { a, a as b }`), by name.
+    pub duplicate_exports: Vec<Vec<String>>,
     /// The file has ESM `import` or `export` declarations.
     pub esm: bool,
     pub reexports: Vec<Reexport>,
@@ -2132,6 +2134,19 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn exports_of_the_same_binding_are_duplicates() {
+        let esm = facts_at(
+            "index.mjs",
+            "function a() {} const c = 1; export { a, a as b, c }; export default a;",
+        );
+        assert_eq!(esm.duplicate_exports, [path(&["a", "b", "default"])]);
+        let commonjs = facts("function a() {} module.exports = { a, b: a, c: 1 };");
+        assert_eq!(commonjs.duplicate_exports, [path(&["a", "b"])]);
+        let nested = facts("class X {} module.exports = X; module.exports.X = X;");
+        assert!(nested.duplicate_exports.is_empty());
     }
 
     #[test]
