@@ -11,6 +11,12 @@ está declarado.
 - Só entra quando um caso real pedir: a regra do projeto é não criar opção antes da necessidade.
 - Um nome de plugin desconhecido é erro, como qualquer chave desconhecida.
 
+## Feito
+
+`"plugins": { "jest": false, "mocha": true }` no `prunr.json` desliga e liga plugins pelo nome,
+em todos os pacotes do repositório, e um nome desconhecido é erro. O `prunr.json` e o
+`schema.json` publicado ganharam a chave.
+
 ## Critérios de aceite
 
-- [ ] Uma fixture com um plugin desligado e outro forçado.
+- [x] Uma fixture com um plugin desligado e outro forçado.

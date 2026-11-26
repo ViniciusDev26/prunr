@@ -23,6 +23,10 @@ pub struct Config {
     pub entries: Entries,
     #[serde(default)]
     pub dependencies: Dependencies,
+    /// Plugins turned off (`false`) or on (`true`) by name, whatever `package.json` declares:
+    /// each one is turned on by the package it is named after.
+    #[serde(default)]
+    pub plugins: std::collections::BTreeMap<String, bool>,
     /// The baseline file, relative to the root: findings the project already had. They do not
     /// fail the check, and `prunr baseline` rewrites the file.
     pub baseline: Option<String>,
@@ -82,7 +86,17 @@ impl Config {
         }
         let text =
             std::fs::read_to_string(&path).map_err(|e| ConfigError::Invalid(e.to_string()))?;
-        serde_json::from_str(&text).map_err(|e| ConfigError::Invalid(e.to_string()))
+        let config: Self =
+            serde_json::from_str(&text).map_err(|e| ConfigError::Invalid(e.to_string()))?;
+        let known: Vec<&str> = crate::plugins::PLUGINS.iter().map(|p| p.name()).collect();
+        if let Some(name) = config
+            .plugins
+            .keys()
+            .find(|name| !known.contains(&name.as_str()))
+        {
+            return Err(ConfigError::Invalid(format!("unknown plugin `{name}`")));
+        }
+        Ok(config)
     }
 }
 
@@ -132,6 +146,21 @@ mod tests {
         assert!(
             error.to_string().contains("unknown field `ignored`"),
             "{error}"
+        );
+    }
+
+    #[test]
+    fn plugins_are_turned_off_or_on_by_name() {
+        let dir = project(
+            r#"{ "entries": { "production": [] }, "plugins": { "jest": false, "@playwright/test": true } }"#,
+        );
+        let plugins = Config::load(dir.path()).unwrap().plugins;
+        assert!(!plugins["jest"]);
+        assert!(plugins["@playwright/test"]);
+        let dir = project(r#"{ "entries": { "production": [] }, "plugins": { "jets": false } }"#);
+        assert_eq!(
+            Config::load(dir.path()).unwrap_err().to_string(),
+            "invalid prunr.json: unknown plugin `jets`"
         );
     }
 
