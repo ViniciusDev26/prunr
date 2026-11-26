@@ -238,7 +238,7 @@ fn an_unknown_command_is_a_usage_error() {
         assert_eq!(run.code, 2, "{args:?}");
         assert_eq!(
             run.stderr,
-            "usage: prunr check [--json | --github] [--since <ref>] | prunr fix [--dry-run] | prunr why <file | file:export | package> | prunr baseline | prunr init | prunr schema | prunr --version\n",
+            "usage: prunr check [--json | --github | --sarif | --codeclimate | --markdown] [--since <ref>] | prunr fix [--dry-run] | prunr why <file | file:export | package> | prunr baseline | prunr init | prunr schema | prunr --version\n",
             "{args:?}"
         );
     }
@@ -1367,4 +1367,109 @@ fn why_explains_test_files_dead_importers_and_what_needs_a_package() {
         why("undeclared"),
         "undeclared is used by:\n  index.js:1 (production)\n"
     );
+}
+
+#[test]
+fn sarif_reports_each_finding_as_a_result_of_its_rule() {
+    let run = prunr("example", &["check", "--sarif"]);
+    assert_eq!(run.code, 1);
+    let sarif: serde_json::Value = serde_json::from_str(&run.stdout).unwrap();
+    assert_eq!(sarif["version"], "2.1.0");
+    let run0 = &sarif["runs"][0];
+    assert_eq!(run0["tool"]["driver"]["name"], "prunr");
+    let rules: Vec<&str> = run0["tool"]["driver"]["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|rule| rule["id"].as_str().unwrap())
+        .collect();
+    assert!(rules.contains(&"unused-export") && rules.contains(&"unresolved-require"));
+    let results = run0["results"].as_array().unwrap();
+    assert_eq!(results.len(), 8);
+    let export = results
+        .iter()
+        .find(|result| result["ruleId"] == "unused-export")
+        .unwrap();
+    assert_eq!(export["level"], "error");
+    assert_eq!(export["message"]["text"], "src/invoices.js: cancelInvoice");
+    let location = &export["locations"][0]["physicalLocation"];
+    assert_eq!(location["artifactLocation"]["uri"], "src/invoices.js");
+    assert_eq!(location["region"]["startLine"], 11);
+    let warning = results
+        .iter()
+        .find(|result| result["ruleId"] == "unresolved-require")
+        .unwrap();
+    assert_eq!(warning["level"], "warning");
+}
+
+#[test]
+fn codeclimate_reports_gitlab_code_quality_issues() {
+    let run = prunr("example", &["check", "--codeclimate"]);
+    assert_eq!(run.code, 1);
+    let issues: serde_json::Value = serde_json::from_str(&run.stdout).unwrap();
+    let issues = issues.as_array().unwrap();
+    assert_eq!(issues.len(), 8);
+    let dependency = issues
+        .iter()
+        .find(|issue| issue["check_name"] == "unused-dependency")
+        .unwrap();
+    assert_eq!(dependency["description"], "left-pad");
+    assert_eq!(dependency["severity"], "major");
+    assert_eq!(dependency["location"]["path"], "package.json");
+    assert_eq!(dependency["location"]["lines"]["begin"], 4);
+    let fingerprints: std::collections::BTreeSet<&str> = issues
+        .iter()
+        .map(|issue| issue["fingerprint"].as_str().unwrap())
+        .collect();
+    assert_eq!(fingerprints.len(), 8, "fingerprints are unique");
+    let warning = issues
+        .iter()
+        .find(|issue| issue["check_name"] == "unresolved-require")
+        .unwrap();
+    assert_eq!(warning["severity"], "minor");
+}
+
+#[test]
+fn markdown_reports_a_table_for_a_pull_request_comment() {
+    let run = prunr("example", &["check", "--markdown"]);
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "### prunr: 7 errors, 1 warning\n\
+         \n\
+         | Finding | Where | What |\n\
+         |---|---|---|\n\
+         | `unused-file` | `src/legacy-report.js` | src/legacy-report.js |\n\
+         | `unused-export` | `src/invoices.js:11` | src/invoices.js: cancelInvoice |\n\
+         | `unused-export` | `src/money.js:10` | src/money.js: Money.fromCents |\n\
+         | `unused-export` | `src/money.js:13` | src/money.js: Money.invoiceFor |\n\
+         | `unused-dependency` | `package.json:4` | left-pad |\n\
+         | `missing-dependency` | `src/index.js:2` | src/index.js: dotenv |\n\
+         | `circular-import` | `src/invoices.js:1` | src/invoices.js -> src/money.js -> src/invoices.js |\n\
+         | `unresolved-require` (warning) | `src/index.js:9` | src/index.js: require(process.env.PLUGIN) |\n"
+    );
+    let clean = prunr("clean", &["check", "--markdown"]);
+    assert_eq!(clean.stdout, "### prunr: no findings\n");
+}
+
+#[test]
+fn the_structured_reports_list_stale_baseline_entries_too() {
+    let run = prunr("baseline", &["check", "--markdown"]);
+    assert_eq!(
+        run.stdout,
+        "### prunr: 2 errors, 0 warnings\n\
+         \n\
+         | Finding | Where | What |\n\
+         |---|---|---|\n\
+         | `unused-export` | `math.js:3` | math.js: mul |\n\
+         | `stale-baseline` | `prunr.json` | unused-export math.js: div (fixed: run `prunr baseline`) |\n"
+    );
+    let sarif: serde_json::Value =
+        serde_json::from_str(&prunr("baseline", &["check", "--sarif"]).stdout).unwrap();
+    let stale = &sarif["runs"][0]["results"][1];
+    assert_eq!(stale["ruleId"], "stale-baseline");
+    assert!(stale["locations"][0]["physicalLocation"]["region"].is_null());
+    let issues: serde_json::Value =
+        serde_json::from_str(&prunr("baseline", &["check", "--codeclimate"]).stdout).unwrap();
+    assert_eq!(issues[1]["location"]["lines"]["begin"], 1);
 }

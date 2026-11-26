@@ -11,9 +11,10 @@ use crate::config::Config;
 use crate::project::{FileId, Project};
 use crate::report;
 
-pub const USAGE: &str = "usage: prunr check [--json | --github] [--since <ref>] \
-     | prunr fix [--dry-run] | prunr why <file | file:export | package> | prunr baseline \
-     | prunr init | prunr schema | prunr --version";
+pub const USAGE: &str = "usage: prunr check [--json | --github | --sarif | --codeclimate \
+     | --markdown] [--since <ref>] | prunr fix [--dry-run] \
+     | prunr why <file | file:export | package> | prunr baseline | prunr init | prunr schema \
+     | prunr --version";
 
 /// How `prunr check` prints its findings.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -21,6 +22,9 @@ enum Format {
     Human,
     Json,
     Github,
+    Sarif,
+    CodeClimate,
+    Markdown,
 }
 
 struct CheckOptions<'a> {
@@ -40,6 +44,9 @@ fn check_options<'a>(args: &[&'a str]) -> Option<CheckOptions<'a>> {
         let format = match *arg {
             "--json" => Format::Json,
             "--github" => Format::Github,
+            "--sarif" => Format::Sarif,
+            "--codeclimate" => Format::CodeClimate,
+            "--markdown" => Format::Markdown,
             "--since" => {
                 options.since = Some(args.next()?);
                 continue;
@@ -105,6 +112,9 @@ fn check_command(root: &Path, options: &CheckOptions, out: &mut impl Write) -> R
         Format::Human => report::human(&diff.fresh, &diff.stale),
         Format::Json => report::json(&diff.fresh, &diff.stale),
         Format::Github => report::github(&diff.fresh, &diff.stale, &project),
+        Format::Sarif => report::sarif(&diff.fresh, &diff.stale, &project),
+        Format::CodeClimate => report::codeclimate(&diff.fresh, &diff.stale, &project),
+        Format::Markdown => report::markdown(&diff.fresh, &diff.stale, &project),
     };
     let _ = out.write_all(text.as_bytes());
     let failed = !diff.stale.is_empty() || diff.fresh.iter().any(|f| !f.is_warning());

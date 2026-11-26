@@ -18,6 +18,28 @@ aparece mesmo num arquivo que o PR não tocou.
 
 Rode a partir da raiz do repositório: os caminhos das anotações são relativos à raiz do projeto.
 
+## Outros formatos
+
+| Flag | Para quê |
+|---|---|
+| `--json` | Máquinas: `{ "findings": [...], "stale": [...] }`. |
+| `--github` | Anotações do GitHub Actions no diff do PR. |
+| `--sarif` | SARIF 2.1.0, para o code scanning do GitHub (`github/codeql-action/upload-sarif`) e outras ferramentas de análise. Uma regra por tipo de achado. |
+| `--codeclimate` | O relatório de Code Quality do GitLab (`artifacts: reports: codequality`), com um fingerprint estável por achado. |
+| `--markdown` | Uma tabela para comentar no PR. |
+
+Todos combinam com `--since` e com o baseline, e saem com o mesmo código de saída do check. As
+entradas obsoletas do baseline aparecem como `stale-baseline`.
+
+```yaml
+# GitLab
+prunr:
+  script: npx prunr check --codeclimate > gl-code-quality-report.json
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
+```
+
 ## Adotando num código legado
 
 Com `"baseline": ".prunr-baseline.json"` no `prunr.json`, `prunr baseline` grava os achados
