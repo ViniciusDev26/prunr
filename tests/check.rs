@@ -154,6 +154,15 @@ fn a_script_binary_from_an_undeclared_package_is_missing() {
          \n\
          errors: 2, warnings: 0\n"
     );
+    let run = prunr("missing-binaries", &["check", "--github"]);
+    assert!(
+        run.stdout
+            .contains("::error file=package.json,line=6,title=missing-binary::"),
+        "{}",
+        run.stdout
+    );
+    let run = prunr("missing-binaries", &["check", "--production"]);
+    assert_eq!(run.stdout, "No findings.\n");
 }
 
 #[test]

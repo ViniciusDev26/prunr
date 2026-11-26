@@ -115,6 +115,7 @@ findings, and `2` when it cannot run.
 | `unused-dependency` | Nothing imports the package and no script runs it. |
 | `misplaced-dependency` | The package is in `dependencies`, but only the tests use it. |
 | `missing-dependency` | The code imports a package `package.json` does not declare. |
+| `missing-binary` | A script runs a binary of a package `package.json` does not declare. |
 | `circular-import` | There is an import cycle. |
 | `unused-ignore` | A `prunr-ignore` comment that no longer ignores anything. |
 | `unresolved-require` | Warning: a `require` prunr cannot follow. |

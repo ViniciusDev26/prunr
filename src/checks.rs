@@ -72,6 +72,15 @@ pub enum Finding {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         workspace: Option<String>,
     },
+    /// A binary a script of `package.json` runs that only an undeclared package provides: it is
+    /// in `node_modules` as another package's dependency, and may go with it.
+    MissingBinary {
+        script: String,
+        binary: String,
+        package: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace: Option<String>,
+    },
     /// Required, but declared in no dependency field of `package.json`.
     MissingDependency { file: FileId, package: String },
     /// A cycle, from its first file back to it.
@@ -155,7 +164,9 @@ pub fn check(
         | Finding::MissingDependency { file, .. }
         | Finding::UnresolvedRequire { file, .. }
         | Finding::UnparsedFile { file, .. } => !in_test_fixture(file),
-        Finding::UnusedDependency { .. } | Finding::MisplacedDependency { .. } => true,
+        Finding::UnusedDependency { .. }
+        | Finding::MisplacedDependency { .. }
+        | Finding::MissingBinary { .. } => true,
     });
     findings.sort();
     findings
@@ -200,6 +211,8 @@ pub fn in_production(
         | Finding::UnresolvedRequire { file, .. }
         | Finding::UnparsedFile { file, .. } => live.contains(file),
         Finding::CircularImport { cycle } => cycle.iter().all(|file| live.contains(file)),
+        // Scripts are tooling: production does not run them.
+        Finding::MissingBinary { .. } => false,
         Finding::UnusedDependency { package, workspace } => {
             let dir = workspace.as_deref().unwrap_or_default();
             project
@@ -564,6 +577,14 @@ fn dependencies(
             None => false,
         };
         let at = (index > 0).then(|| workspace.dir.clone());
+        for (script, binary, package) in &workspace.undeclared_binaries {
+            findings.push(Finding::MissingBinary {
+                script: script.clone(),
+                binary: binary.clone(),
+                package: package.clone(),
+                workspace: at.clone(),
+            });
+        }
         for package in workspace.dependencies.union(&workspace.dev_dependencies) {
             if !used(package) && !types_used(package) {
                 findings.push(Finding::UnusedDependency {
