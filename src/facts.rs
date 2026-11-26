@@ -201,6 +201,7 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
         site: Span::default(),
         require_sites: BTreeMap::new(),
         removal: None,
+        exports_escape: false,
         comments: program
             .comments
             .iter()
@@ -211,6 +212,16 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
         match node.kind() {
             AstKind::CallExpression(call) if analyzer.is_global(&call.callee, "require") => {
                 analyzer.require(node.id(), call);
+            }
+            // `setup(exports)`: the function can read any export.
+            AstKind::CallExpression(call)
+                if call.arguments.iter().any(|argument| {
+                    argument
+                        .as_expression()
+                        .is_some_and(|argument| analyzer.is_exports_object(argument))
+                }) =>
+            {
+                analyzer.exports_escape = true;
             }
             AstKind::AssignmentExpression(assignment) => analyzer.assignment(node.id(), assignment),
             AstKind::StaticMemberExpression(member) => analyzer.read(node.id(), member),
@@ -255,6 +266,8 @@ struct Analyzer<'s, 'a> {
     removal: Option<Removal>,
     /// Every comment, in source order.
     comments: Vec<Span>,
+    /// The file passes its own `exports` to a function, which can read any of them.
+    exports_escape: bool,
 }
 
 impl<'a> Analyzer<'_, 'a> {
@@ -263,6 +276,9 @@ impl<'a> Analyzer<'_, 'a> {
             if let Some(used) = self.exports.get_mut(path) {
                 *used = true;
             }
+        }
+        if self.exports_escape {
+            self.exports.values_mut().for_each(|used| *used = true);
         }
         let newlines: Vec<usize> = self.source.match_indices('\n').map(|(at, _)| at).collect();
         let line = |offset: u32| newlines.partition_point(|&at| at < offset as usize) as u32 + 1;
@@ -1395,6 +1411,20 @@ mod tests {
     #[test]
     fn a_member_of_the_require_call_is_used() {
         assert_eq!(uses_of(r#"require("./x").a();"#), [uses(&["a"], true)]);
+    }
+
+    #[test]
+    fn passing_its_own_exports_to_a_function_uses_them_all() {
+        for source in [
+            "exports.a = 1; exports.b = 2; module.exports = require('./common')(exports);",
+            "exports.a = 1; exports.b = 2; setup(module.exports);",
+        ] {
+            let found = facts(source);
+            assert!(!found.exports.is_empty(), "{source}");
+            assert!(found.exports.iter().all(|e| e.used_internally), "{source}");
+        }
+        let found = facts("exports.a = 1; exports.b = 2; log(exports.a);");
+        assert!(!found.exports.iter().all(|e| e.used_internally));
     }
 
     #[test]

@@ -1,5 +1,5 @@
 //! The test runners configured by their command line and conventions: `node --test`, tap, AVA,
-//! lab and borp. The folders, files or globs a script passes are test files; without any, the
+//! lab, tsd and borp. The folders, files or globs a script passes are test files; without any, the
 //! runner's defaults are.
 //!
 //! `node --test` needs no package, so this plugin is always enabled; each other runner counts
@@ -55,6 +55,12 @@ const RUNNERS: &[Runner] = &[
         package: Some("@hapi/lab"),
         flag: None,
         defaults: &["test/**"],
+    },
+    Runner {
+        binary: "tsd",
+        package: Some("tsd"),
+        flag: None,
+        defaults: &["test-d/**", "**/*.test-d.*", "index.test-d.*"],
     },
     Runner {
         binary: "borp",
@@ -141,5 +147,11 @@ mod tests {
         assert_eq!(found.packages, declared(&["@hapi/code"]));
         let found = setup(dir.path(), &declared(&[]), &json!({}));
         assert!(found.tests.is_empty());
+        let manifest = json!({ "scripts": { "test": "xo && tsd" } });
+        let found = setup(dir.path(), &declared(&["tsd"]), &manifest);
+        assert_eq!(
+            found.tests,
+            strings(&["test-d/**", "**/*.test-d.*", "index.test-d.*"])
+        );
     }
 }

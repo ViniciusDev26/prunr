@@ -179,6 +179,156 @@
       "repo": "npm/cli",
       "commit": "787f1520fa412e91a5792468f1c7f25b166867a6",
       "kind": "monorepo"
+    },
+    {
+      "name": "lodash",
+      "repo": "lodash/lodash",
+      "commit": "2b5e6f7399a7b48005140b5d5c6bc6c0e62919a8",
+      "kind": "cjs"
+    },
+    {
+      "name": "chalk",
+      "repo": "chalk/chalk",
+      "commit": "72110019e147683f60e13fa0ff5c14a0c27cd9fe",
+      "kind": "esm"
+    },
+    {
+      "name": "execa",
+      "repo": "sindresorhus/execa",
+      "commit": "6f856d55bd3ea8b3f240a7fc4502d2ac50697eec",
+      "kind": "esm"
+    },
+    {
+      "name": "nodemon",
+      "repo": "remy/nodemon",
+      "commit": "df00a4e463547383a4c1c5eaab280f395d439c23",
+      "kind": "cjs"
+    },
+    {
+      "name": "debug",
+      "repo": "debug-js/debug",
+      "commit": "666dbc50680933bde9e7fde3a6c3241102e8f60b",
+      "kind": "cjs"
+    },
+    {
+      "name": "pm2",
+      "repo": "Unitech/pm2",
+      "commit": "7a7fb4e22e9a26ec79c870ce8daafd2f78b648d1",
+      "kind": "cjs"
+    },
+    {
+      "name": "jsdom",
+      "repo": "jsdom/jsdom",
+      "commit": "a9029cfca4672f5d8e910b5b33938839a4b326ed",
+      "kind": "cjs"
+    },
+    {
+      "name": "cheerio",
+      "repo": "cheeriojs/cheerio",
+      "commit": "3a6b1ea548893882b27f993944b2c2d585ca2c71",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "bullmq",
+      "repo": "taskforcesh/bullmq",
+      "commit": "526668f2c5e6de9d5d664df577f09a6bdccac1b4",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "typeorm",
+      "repo": "typeorm/typeorm",
+      "commit": "b1e211fc2654d412612a08f8a7fb890f3352614f",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "ioredis",
+      "repo": "redis/ioredis",
+      "commit": "466f6be529e754e0177fc1f47455f41996cc8a06",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "dotenv",
+      "repo": "motdotla/dotenv",
+      "commit": "4c5450405612e4368e0d46d44da01942cf22a707",
+      "kind": "cjs"
+    },
+    {
+      "name": "helmet",
+      "repo": "helmetjs/helmet",
+      "commit": "269f7784beb0445431d4fc2a44fb02154006ef85",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "body-parser",
+      "repo": "expressjs/body-parser",
+      "commit": "67d27df4986c068e9ee051efa94c216062c5cdb8",
+      "kind": "cjs"
+    },
+    {
+      "name": "multer",
+      "repo": "expressjs/multer",
+      "commit": "2c380d06cdaacc68bbef8b36244493a3d33d6b88",
+      "kind": "cjs"
+    },
+    {
+      "name": "passport",
+      "repo": "jaredhanson/passport",
+      "commit": "217018dbc46dcd4118dd6f2c60c8d97010c587f8",
+      "kind": "cjs"
+    },
+    {
+      "name": "node-jsonwebtoken",
+      "repo": "auth0/node-jsonwebtoken",
+      "commit": "b924272f29192e12926b5414546f7c5bfcc9579d",
+      "kind": "cjs"
+    },
+    {
+      "name": "ws",
+      "repo": "websockets/ws",
+      "commit": "32e2e01f8725ff40e575040ea6334cc4479b2f09",
+      "kind": "cjs"
+    },
+    {
+      "name": "moment",
+      "repo": "moment/moment",
+      "commit": "c2a703a4d84aa57ee2722ff8fb4a8016279fb3c4",
+      "kind": "esm"
+    },
+    {
+      "name": "zod",
+      "repo": "colinhacks/zod",
+      "commit": "d40c329910436e528d3c26cb1b9179e05abebf05",
+      "kind": "monorepo"
+    },
+    {
+      "name": "ajv",
+      "repo": "ajv-validator/ajv",
+      "commit": "f177fe323420ccb23e1a79445fd470cbf80aee7c",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "node-semver",
+      "repo": "npm/node-semver",
+      "commit": "b37b033b585ad5e575afeccadb426ea41bc6cea4",
+      "kind": "cjs"
+    },
+    {
+      "name": "node-glob",
+      "repo": "isaacs/node-glob",
+      "commit": "c42e863920edddb574c3d73cf6bc24963b0f2f8f",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "gulp",
+      "repo": "gulpjs/gulp",
+      "commit": "61f22dc11bb14234b555253095fa1d224ce0eab1",
+      "kind": "cjs"
+    },
+    {
+      "name": "rollup",
+      "repo": "rollup/rollup",
+      "commit": "173cfd3ac9f35acd1defc2b2dfe075b9c2759df0",
+      "kind": "esm-ts"
     }
   ]
 }

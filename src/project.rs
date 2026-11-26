@@ -253,7 +253,7 @@ impl Manifest {
 }
 
 /// The folders a build usually writes to.
-const BUILD_FOLDERS: &[&str] = &["dist", "build", "lib", "out"];
+pub(crate) const BUILD_FOLDERS: &[&str] = &["dist", "build", "lib", "out"];
 
 /// The file `candidates` (relative to the package at `dir`) point to: the first that exists.
 fn package_file(
