@@ -211,6 +211,13 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
             .collect(),
     };
     for node in semantic.nodes().iter() {
+        // A `namespace` (or `declare module`) exports to itself, not to the module.
+        let in_namespace = || {
+            semantic
+                .nodes()
+                .ancestor_kinds(node.id())
+                .any(|kind| matches!(kind, AstKind::TSModuleBlock(_)))
+        };
         match node.kind() {
             AstKind::CallExpression(call) if analyzer.is_global(&call.callee, "require") => {
                 analyzer.require(node.id(), call);
@@ -222,9 +229,13 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
             AstKind::ImportDeclaration(import) => analyzer.import(import),
             AstKind::ImportExpression(import) => analyzer.dynamic_import(import),
             AstKind::TSImportEqualsDeclaration(import) => analyzer.import_equals(import),
-            AstKind::ExportNamedDeclaration(export) => analyzer.export_named(export),
+            AstKind::ExportNamedDeclaration(export) if !in_namespace() => {
+                analyzer.export_named(export)
+            }
             AstKind::ExportFromDeclaration(export) => analyzer.export_from(export),
-            AstKind::ExportDeclaration(export) => analyzer.export_declaration(export),
+            AstKind::ExportDeclaration(export) if !in_namespace() => {
+                analyzer.export_declaration(export)
+            }
             AstKind::ExportDefaultDeclaration(export) => analyzer.export_default(export),
             AstKind::ExportAllDeclaration(export) => analyzer.export_all(export),
             AstKind::TSExportAssignment(export) => {
@@ -1463,6 +1474,16 @@ mod tests {
         let found =
             facts("const api = { a: 1 }; module.exports = api; const other = {}; f(other);");
         assert!(!found.exports.iter().all(|e| e.used_internally));
+    }
+
+    #[test]
+    fn the_exports_of_a_namespace_are_its_members_not_the_module_s() {
+        let found = facts_at(
+            "socket.ts",
+            "export class Socket {}\nexport namespace Socket {\n  export type Reason = 'a';\n  export const LIMIT = 1;\n}\ndeclare module 'x' {\n  export const y: number;\n}\n",
+        );
+        let paths: Vec<Vec<String>> = found.exports.iter().map(|e| e.path.clone()).collect();
+        assert_eq!(paths, [vec!["Socket".to_string()]]);
     }
 
     #[test]

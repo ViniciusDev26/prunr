@@ -55,7 +55,9 @@ contra o Knip. É o teste de aceite do MVP em escala.
   - o que está em pastas de fixtures de testes não é reportado (as entradas de bundler do rollup e
     do webpack, as fixtures do codemod do TypeORM);
   - `require("..")` de uma pasta com `package.json` cujo `main` aponta para um build acha a entrada
-    no fonte, também sob `lib/` (socket.io, ajv).
+    no fonte, também sob `lib/` (socket.io, ajv);
+  - os `export` de dentro de um `namespace` (ou de um `declare module`) do TypeScript são membros
+    dele, não exports do módulo (`Socket.DisconnectReason` no socket.io).
 
   Com isso, os `missing-dependency` do corpus caíram de 2.429 para 452 e os `unresolved-require`
   sem explicação, de 447 para 60. O que sobrou, por categoria:
@@ -89,14 +91,15 @@ Diferenças conferidas em que o achado do prunr se sustenta, ou que é do Knip:
   de semântica: o prunr não reporta um export que o próprio arquivo usa, e o Knip reporta, a menos
   que se ligue o `ignoreExportsUsedInFile` dele.
 
-## Limitações conhecidas
+## Decisões e limitações
 
-- Um pacote publicado sem `exports` deixa quem instala importar qualquer arquivo
-  (`ajv/dist/2020`); o prunr só considera as entradas declaradas e aponta exports dos outros
-  arquivos.
-- Um tipo exportado de dentro de um `namespace` do TypeScript e usado pelo nome qualificado no
-  próprio arquivo (`Socket.DisconnectReason` no socket.io) aparece como export sem uso.
-- O `moduleNameMapper` do Jest e o `resolve.alias` do Vite não são lidos.
+- **Um pacote publicado sem `exports`** deixa quem instala importar qualquer arquivo por caminho
+  profundo (`ajv/dist/2020`). O prunr considera interface só as entradas que o `package.json`
+  declara (`exports`, `main`, `module`, `bin`), como o Knip: tratar todo arquivo como público
+  esconderia os exports mortos de qualquer biblioteca sem `exports`. Quem expõe caminhos
+  profundos de propósito marca os arquivos com `@public` ou os lista em `entries.production`.
+- **O `moduleNameMapper` do Jest e o `resolve.alias` do Vite** não são lidos: são cobertura de
+  plugin, da fase 2.
 
 ## Pendências
 
