@@ -9,6 +9,7 @@ que ainda resta, como o `check`. `prunr fix --dry-run` mostra o que ele faria, s
 | `unused-file` | Apaga o arquivo. |
 | `unused-export` | Tira o export e, quando nada mais no arquivo a usa, a declaração por trás dele (função, classe, constante, tipo), com o comentário colado em cima. Uma declaração com efeito colateral (`const x = criar()`) perde só o export: apagá-la mudaria o que o módulo faz ao carregar, então o Biome a aponta para você decidir. |
 | `unused-enum-member` | Tira o membro da lista do enum. |
+| `unused-class-member` | Apaga o método, com o comentário colado em cima. |
 | `unused-import` | Tira o binding do `import` ou da desestruturação; sem nenhum binding, tira a linha inteira. |
 | `unused-ignore` | Apaga o comentário. |
 | `unused-dependency` | Tira o pacote do `package.json`, sem reformatar o resto. |
