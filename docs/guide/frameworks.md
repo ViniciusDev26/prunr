@@ -217,3 +217,11 @@ configuração) a rota raiz (`root.tsx`), as rotas (`routes/**`), o `routes.ts` 
 `entry.client` e `entry.server` são entradas de produção; os exports delas (`loader`, `action`,
 `meta`, o componente) são a interface que o framework lê. Os tipos gerados (`./+types/...`) não
 viram achados, e `react-dom`, `isbot` e o adaptador de servidor contam como usados.
+
+## VitePress
+
+Com `vitepress` declarado, em cada pasta com `.vitepress/` (a raiz, a que um script passa a
+`vitepress dev`, ou `docs/`), o `theme/index` e a config são entradas de produção, e o
+`<script setup>` das páginas `.md` entra no grafo: os componentes que uma página importa estão
+em uso. Um `<script>` dentro de um bloco de código ou de código inline é texto. Os `.md` nunca
+são reportados como arquivos sem uso.

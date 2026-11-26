@@ -34,9 +34,9 @@ scripts.
   way Node does it.
 - **Knows your stack** with no setup: Jest, Vitest, Mocha, `node --test`, tap, AVA, Playwright,
   Cypress, Storybook, Vite, React, Next.js, NestJS, Nuxt, SvelteKit, Astro, React Router/Remix,
-  TypeScript (`tsconfig`), `.vue`/`.svelte`/`.astro`/`.mdx` files, ESLint, Prettier, Babel,
-  commitlint, husky, lint-staged, Tailwind, Prisma, tsup, Rollup, webpack, Drizzle Kit, PostCSS
-  and monorepos (npm, yarn, pnpm, bun, lerna, rush, nx, turbo).
+  VitePress, TypeScript (`tsconfig`), `.vue`/`.svelte`/`.astro`/`.mdx` files, ESLint, Prettier,
+  Babel, commitlint, husky, lint-staged, Tailwind, Prisma, tsup, Rollup, webpack, Drizzle Kit,
+  PostCSS and monorepos (npm, yarn, pnpm, bun, lerna, rush, nx, turbo).
 - **Fixes it for you:** `prunr fix` deletes what is dead and cleans up `package.json`.
 - **Built for CI:** annotations on the PR diff, only new findings with `--since`, and a baseline
   for adopting it on legacy code.

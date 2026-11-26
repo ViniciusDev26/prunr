@@ -34,9 +34,9 @@ depcheck + madge + scripts próprios.
   Node.
 - **Entende o seu stack** sem configuração: Jest, Vitest, Mocha, `node --test`, tap, AVA,
   Playwright, Cypress, Storybook, Vite, React, Next.js, NestJS, Nuxt, SvelteKit, Astro, React
-  Router/Remix, TypeScript (`tsconfig`), arquivos `.vue`/`.svelte`/`.astro`/`.mdx`, ESLint,
-  Prettier, Babel, commitlint, husky, lint-staged, Tailwind, Prisma, tsup, Rollup, webpack,
-  Drizzle Kit, PostCSS e monorepos (npm, yarn, pnpm, bun, lerna, rush, nx, turbo).
+  Router/Remix, VitePress, TypeScript (`tsconfig`), arquivos `.vue`/`.svelte`/`.astro`/`.mdx`,
+  ESLint, Prettier, Babel, commitlint, husky, lint-staged, Tailwind, Prisma, tsup, Rollup,
+  webpack, Drizzle Kit, PostCSS e monorepos (npm, yarn, pnpm, bun, lerna, rush, nx, turbo).
 - **Conserta sozinho:** `prunr fix` apaga o que está morto e limpa o `package.json`.
 - **Feito para CI:** anotações no diff do PR, só os achados novos com `--since`, e um baseline
   para adotar em código legado.
