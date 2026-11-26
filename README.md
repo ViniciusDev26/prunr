@@ -147,11 +147,56 @@ Cada achado novo vira uma anotação na linha certa do diff. Para um código leg
 
 O que vem depois está no [roadmap](docs/roadmap/).
 
-## Por que não o Knip
+## Por que o prunr, e não o Knip ou outras ferramentas
 
-O Knip é ótimo para ESM e TypeScript, mas não lida bem com CommonJS, e suportá-lo não está nos
-planos dele. O prunr começou pelo caminho oposto: Node puro em CommonJS primeiro, e ESM,
-TypeScript e frameworks depois, no mesmo grafo.
+O [Knip](https://knip.dev) é a referência para ESM e TypeScript, e ferramentas como o
+`ts-prune` e o `unimported` foram arquivadas recomendando ele. O prunr existe para o caso que o
+Knip trata como secundário: **código Node.js em CommonJS**, sozinho ou misturado com ESM.
+
+**CommonJS escrito como ele é escrito de verdade.** O Knip pede que o código siga uma convenção
+para entender os exports: pelo [guia de CommonJS dele](https://knip.dev/guides/working-with-commonjs),
+só `module.exports.x =` e um objeto com chaves curtas (`{ a, b }`) são exports nomeados;
+qualquer outro objeto em `module.exports` vira um único export default, e importar o módulo
+inteiro faz todos os exports nomeados aparecerem como sem uso. O prunr lê o código existente,
+sem pedir que ele mude:
+
+```js
+// invoices.js
+module.exports = {
+  total,
+  cancel: () => {},
+  format(value) { return value; },
+};
+
+// index.js
+const invoices = require("./invoices");
+invoices.format(invoices.total());
+const handler = require(`./handlers/${name}`);
+```
+
+O prunr reporta só `cancel`: lê cada chave do objeto, segue o uso por `invoices.x`, e o
+`require` montado em tempo de execução mantém vivos os arquivos de `handlers/`. Na dúvida (o
+módulo passado adiante, uma chave computada), ele considera tudo usado: é melhor deixar passar
+um export morto do que mandar apagar um vivo.
+
+**Uma ferramenta no lugar de várias.** Arquivos, exports, imports e dependências sem uso,
+dependências não declaradas ou no lugar errado e imports circulares saem do mesmo grafo, num
+comando. É o trabalho que costuma ficar dividido entre `depcheck`, `madge`, `unimported` e
+scripts próprios.
+
+**Rápido e sem executar nada.** É um binário nativo, em Rust, que lê e resolve os arquivos em
+paralelo; o pacote npm só baixa o binário da sua plataforma, sem script de instalação. Num
+monorepo de 13 mil arquivos, o check leva 0,6 s. As configurações das ferramentas (Jest,
+Vitest, Playwright, Vite...) são lidas como texto, nunca executadas.
+
+**Feito para adotar num código que já existe.** Baseline para não ter que resolver tudo de uma
+vez, `--since` e anotações no diff para barrar só o que é novo no PR, e um `prunr fix` que apaga
+o código morto e limpa o `package.json`.
+
+**Quando o Knip é a melhor escolha.** Num projeto só em ESM e TypeScript, o Knip tem bem mais
+plugins (o prunr conhece Jest, Vitest, Playwright, Vite, React, Next.js, NestJS, Drizzle Kit e
+PostCSS) e mais tempo de estrada. O prunr vale a pena quando há CommonJS no meio, ou quando a
+velocidade e uma ferramenta só pesam mais.
 
 ## Contribuindo
 
