@@ -341,7 +341,8 @@ fn dependencies(
     for id in live.union(tested) {
         let workspace = &project.workspaces[project.workspace_of(id)];
         let declared = |package: &String| {
-            workspace.declared_packages.contains(package)
+            workspace.name.as_ref() == Some(package)
+                || workspace.declared_packages.contains(package)
                 || root.declared_packages.contains(package)
                 || project.nested_declared.iter().any(|(dir, declared)| {
                     id.strip_prefix(dir.as_str())
