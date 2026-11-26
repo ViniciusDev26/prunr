@@ -1,0 +1,1 @@
+{ "extends": "@tsconfig/strictest/tsconfig.json", "compilerOptions": { "composite": true, "types": ["node"] } }

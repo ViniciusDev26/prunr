@@ -26,6 +26,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 24. [`prunr why`](24-why.md)
 - [x] 25. [SARIF, Code Climate e Markdown](25-report-formats.md)
 - [x] 26. [Modo produção](26-production-mode.md)
+- [x] 27. [Plugin de TypeScript](27-typescript-plugin.md)
 
 ## Fase 1: credibilidade (concluída)
 
@@ -39,6 +40,16 @@ O plano era provar que o prunr acerta e que é rápido, antes de ampliar a cober
 
 O que a triagem deixou para depois depende da fase 2 (o plugin de TypeScript, os compiladores de
 Vue, Svelte e Angular, os aliases de Jest e Vite) e está no item 23.
+
+## Fase 2: cobertura
+
+Os pacotes e arquivos que as ferramentas carregam sem import:
+
+- [x] Plugin de TypeScript ([27](27-typescript-plugin.md)).
+- [ ] `.vue`, `.svelte`, `.astro` e `.mdx`: o script de cada um passa pelo parser.
+- [ ] Plugins declarativos para ferramentas (ESLint, Prettier, Babel, Storybook, Cypress, husky,
+  lint-staged, commitlint, Tailwind, Prisma, tsup, Rollup, webpack...).
+- [ ] Plugins de frameworks (Nuxt, SvelteKit, Astro, Remix/React Router).
 
 ## Depois
 

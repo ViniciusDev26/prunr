@@ -20,6 +20,7 @@ mod postcss;
 mod react;
 mod runners;
 mod static_config;
+mod typescript;
 mod vite;
 mod vitest;
 
@@ -208,6 +209,7 @@ pub const PLUGINS: &[&dyn Plugin] = &[
     &postcss::PostCss,
     &vite::Vite,
     &react::React,
+    &typescript::TypeScript,
     &next::Next,
     &nest::Nest,
 ];
@@ -452,6 +454,7 @@ mod tests {
                 "postcss",
                 "vite",
                 "react",
+                "typescript",
                 "next",
                 "@nestjs/core"
             ]
