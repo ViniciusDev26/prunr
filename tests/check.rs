@@ -133,6 +133,14 @@ fn two_exports_of_the_same_binding_are_duplicates() {
          \n\
          errors: 1, warnings: 0\n"
     );
+    let run = prunr("duplicate-exports", &["check", "--github"]);
+    assert!(
+        run.stdout.contains(
+            "::error file=dates.js,line=4,title=duplicate-export::dates.js: format, formatDate\n"
+        ),
+        "{}",
+        run.stdout
+    );
 }
 
 #[test]

@@ -92,7 +92,8 @@ pub struct Facts {
     pub class_members: BTreeSet<Vec<String>>,
     /// The names of the properties the file reads (`a.b`, `const { b } = a`, `a["b"]`).
     pub properties: BTreeSet<String>,
-    /// Groups of exports that are the same local binding (`export { a, a as b }`), by name.
+    /// Groups of ESM exports that are the same local binding (`export { a, a as b }`), by
+    /// name; `default` is not one.
     pub duplicate_exports: Vec<Vec<String>>,
     /// The file has ESM `import` or `export` declarations.
     pub esm: bool,
@@ -224,6 +225,7 @@ fn analyze_with(source: &str, path: &std::path::Path, markup: bool) -> Result<Fa
         removal: None,
         exports_escape: false,
         exported_symbols: BTreeSet::new(),
+        exports_of: BTreeMap::new(),
         passed_symbols: BTreeSet::new(),
         comments: program
             .comments
@@ -314,6 +316,8 @@ struct Analyzer<'s, 'a> {
     /// The bindings that are the exported value (`module.exports = api`,
     /// `var God = module.exports = {...}`).
     exported_symbols: BTreeSet<SymbolId>,
+    /// The top-level exports of each local binding: more than one is a duplicate.
+    exports_of: BTreeMap<SymbolId, BTreeSet<String>>,
     /// The bindings the file passes to a function.
     passed_symbols: BTreeSet<SymbolId>,
 }
@@ -382,6 +386,13 @@ impl<'a> Analyzer<'_, 'a> {
                 self.facts.ignores.insert(path.clone(), ignore.clone());
             }
         }
+        // Only ESM: a CommonJS object is often a table (`{ "<a>": parse, "<b>": parse }`).
+        self.facts.duplicate_exports = self
+            .exports_of
+            .into_values()
+            .filter(|names| names.len() > 1 && self.facts.esm)
+            .map(|names| names.into_iter().collect())
+            .collect();
         self.facts.exports = self
             .exports
             .into_iter()
@@ -974,6 +985,15 @@ impl<'a> Analyzer<'_, 'a> {
     /// An export whose value is the local `symbol`, referenced at `site` by the export itself.
     /// Other exports of the same symbol are not uses either.
     fn export_symbol(&mut self, path: Path, symbol: SymbolId, site: Span) {
+        // `export default a` next to `export { a }` is the usual way to offer both.
+        if let [name] = path.as_slice()
+            && name != "default"
+        {
+            self.exports_of
+                .entry(symbol)
+                .or_default()
+                .insert(name.clone());
+        }
         let semantic = self.semantic;
         let nodes = semantic.nodes();
         let mut members = BTreeSet::new();
@@ -2142,9 +2162,9 @@ mod tests {
             "index.mjs",
             "function a() {} const c = 1; export { a, a as b, c }; export default a;",
         );
-        assert_eq!(esm.duplicate_exports, [path(&["a", "b", "default"])]);
+        assert_eq!(esm.duplicate_exports, [path(&["a", "b"])]);
         let commonjs = facts("function a() {} module.exports = { a, b: a, c: 1 };");
-        assert_eq!(commonjs.duplicate_exports, [path(&["a", "b"])]);
+        assert!(commonjs.duplicate_exports.is_empty());
         let nested = facts("class X {} module.exports = X; module.exports.X = X;");
         assert!(nested.duplicate_exports.is_empty());
     }
