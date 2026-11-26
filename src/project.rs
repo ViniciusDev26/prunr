@@ -16,6 +16,9 @@ pub struct Project {
     /// test harness with its own dependencies), by its directory: a file under it can import
     /// them, as Node.js looks for packages in every folder above the file.
     pub nested_declared: BTreeMap<String, BTreeSet<String>>,
+    /// The entry the root `package.json` declares (`exports`, `main`, `module`), found in the
+    /// source when it points to a build.
+    pub root_entry: Option<FileId>,
     /// The canonical project root.
     pub root: PathBuf,
     pub files: BTreeMap<FileId, File>,
@@ -229,10 +232,26 @@ impl Manifest {
             _ => {}
         }
         candidates.extend(self.main.iter().chain(&self.module).cloned());
+        // An entry in a build folder (`./dist/source/index.js`) is compiled from the same path
+        // without it (`source/index.ts`, which the resolver finds from `.js`).
+        let mut candidates: Vec<String> = candidates
+            .into_iter()
+            .flat_map(|entry| {
+                let source = entry
+                    .trim_start_matches("./")
+                    .split_once('/')
+                    .filter(|(folder, _)| BUILD_FOLDERS.contains(folder))
+                    .map(|(_, rest)| rest.to_string());
+                std::iter::once(entry).chain(source)
+            })
+            .collect();
         candidates.extend(["src/index".to_string(), "index".to_string()]);
         candidates
     }
 }
+
+/// The folders a build usually writes to.
+const BUILD_FOLDERS: &[&str] = &["dist", "build", "lib", "out"];
 
 /// The file `candidates` (relative to the package at `dir`) point to: the first that exists.
 fn package_file(
@@ -696,8 +715,16 @@ impl Project {
             });
         }
         let nested_declared = nested_manifests(&root, &dirs);
+        let root_entry = package_file(
+            &resolver,
+            &root,
+            "",
+            &manifests[0].entry_candidates(),
+            &paths,
+        );
         Ok(Self {
             nested_declared,
+            root_entry,
             root,
             parsed: files.len(),
             files,
@@ -1355,6 +1382,28 @@ mod tests {
         assert!(manifest.private && manifest.name.is_none() && manifest.main.is_none());
         let dir = project(&[("package.json", r#"{ "private": false }"#)]);
         assert!(!Manifest::load(dir.path(), "").unwrap().private);
+    }
+
+    #[test]
+    fn an_entry_in_a_build_folder_is_also_looked_for_in_the_source() {
+        let manifest = Manifest::from_value(&serde_json::json!({
+            "exports": { ".": { "default": "./dist/source/index.js" } },
+            "main": "build/main.js",
+            "module": "./lib/esm/index.mjs"
+        }));
+        assert_eq!(
+            manifest.entry_candidates(),
+            [
+                "./dist/source/index.js",
+                "source/index.js",
+                "build/main.js",
+                "main.js",
+                "./lib/esm/index.mjs",
+                "esm/index.mjs",
+                "src/index",
+                "index"
+            ]
+        );
     }
 
     fn set(ids: &[&str]) -> BTreeSet<FileId> {

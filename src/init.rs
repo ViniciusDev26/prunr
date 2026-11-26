@@ -42,6 +42,7 @@ pub fn init(root: &Path) -> Result<String, String> {
     let is_file = |path: &String| project.entries(std::slice::from_ref(path)).is_ok();
 
     let mut candidates = vec![manifest.main.unwrap_or_else(|| "index.js".into())];
+    candidates.extend(project.root_entry.clone());
     candidates.extend(TYPESCRIPT_ENTRIES.iter().map(|entry| entry.to_string()));
     // The files the scripts run, Next.js routes and the NestJS main are entries already.
     let covered = |path: &String| {
@@ -130,6 +131,22 @@ mod tests {
                     "test": ["__tests__/**", "**/*.test.*", "**/*.spec.*"]
                 }
             })
+        );
+    }
+
+    #[test]
+    fn the_entry_exports_names_is_found_in_the_source_a_build_compiles() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{ "exports": { "types": "./dist/source/index.d.ts", "default": "./dist/source/index.js" } }"#,
+            ),
+            ("source/index.ts", ""),
+        ]);
+        init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir)["entries"]["production"],
+            serde_json::json!(["source/index.ts"])
         );
     }
 
