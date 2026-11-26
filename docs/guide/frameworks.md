@@ -134,3 +134,15 @@ schematics contam como usados, e `reflect-metadata` e `rxjs` também, porque o N
 que o código os importe.
 
 Num projeto Vite, Next.js ou NestJS, `entries.production` pode ficar vazio (`[]`).
+
+## TypeScript
+
+Com `typescript` declarado, ou um `tsconfig.json` na raiz, os `tsconfig*.json` da raiz e os que
+os scripts passam a `tsc -p` são lidos, seguindo `extends` e `references`. Contam como usados:
+
+- os pacotes do `extends` (`@tsconfig/node20`, `@sindresorhus/tsconfig`...);
+- os de `compilerOptions.types` (`node` é `@types/node`; `vitest/globals` é `vitest`);
+- o de `compilerOptions.jsxImportSource`;
+- os plugins de `compilerOptions.plugins`.
+
+Os testes de tipo (`test-d/**` e `*.test-d.*`, do tsd ou do próprio `tsc`) são código de teste.
