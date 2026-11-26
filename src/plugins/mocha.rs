@@ -83,7 +83,11 @@ impl Plugin for Mocha {
         let mut spec: Vec<String> = Vec::new();
         let mut recursive = false;
         for config in &configs {
-            spec.extend(names(&config["spec"]).into_iter().map(str::to_string));
+            spec.extend(
+                names(&config["spec"])
+                    .into_iter()
+                    .map(|path| super::from_source(root, path)),
+            );
             recursive |= config["recursive"].as_bool() == Some(true);
             for option in ["require", "file"] {
                 for name in names(&config[option]) {
@@ -150,6 +154,7 @@ fn read(root: &Path, name: &str) -> Value {
         return yaml(&source);
     }
     if name.ends_with(".json") || name.ends_with(".jsonc") {
+        let source = crate::workspaces::without_comments(&source);
         return serde_json::from_str(&source).unwrap_or_default();
     }
     super::static_config(&source, Path::new(name)).unwrap_or_default()
@@ -157,14 +162,23 @@ fn read(root: &Path, name: &str) -> Value {
 
 /// A file the configuration names (`test/setup`, `./test/setup.js`) or else a package.
 fn load(root: &Path, name: &str, contribution: &mut Contribution) {
-    let path = name.trim_start_matches("./");
-    let exists = root.join(path).is_file()
-        || super::super::project::source_extensions()
-            .iter()
-            .any(|extension| root.join(format!("{path}.{extension}")).is_file());
-    match exists {
-        true => contribution.reference(&format!("./{path}")),
-        false => contribution.reference(name),
+    let path = super::from_source(root, name);
+    // A compiled `setup.js` is the `setup.ts` the source has.
+    let stem = path
+        .rsplit_once('.')
+        .map_or(path.as_str(), |(stem, _)| stem);
+    let found = std::iter::once(path.clone())
+        .chain(
+            super::super::project::source_extensions()
+                .iter()
+                .flat_map(|extension| {
+                    [format!("{path}.{extension}"), format!("{stem}.{extension}")]
+                }),
+        )
+        .find(|candidate| root.join(candidate).is_file());
+    match found {
+        Some(file) => contribution.reference(&format!("./{file}")),
+        None => contribution.reference(name),
     }
 }
 
@@ -247,12 +261,29 @@ mod tests {
             }
         });
         let found = setup(dir.path(), &declared(&["mocha"]), &manifest);
-        assert_eq!(found.tests, strings(&["spec/**/*.js", "spec/**/*.js"]));
-        assert_eq!(found.files, strings(&["./helpers", "./setup.js"]));
+        assert_eq!(found.tests, strings(&["spec/**/*.js", "spec/**", "spec/**/*.js"]));
+        assert_eq!(found.files, strings(&["./helpers.js", "./setup.js"]));
         assert_eq!(
             found.packages,
             declared(&["chai", "mocha-junit-reporter", "mochawesome", "ts-node"])
         );
+    }
+
+    #[test]
+    fn a_spec_in_a_build_folder_and_a_config_with_comments_are_read_from_the_source() {
+        let dir = project(&[(
+            ".mocharc.json",
+            r#"{
+                // the specs are compiled first
+                "file": ["./build/compiled/test/utils/setup.js"],
+                "spec": ["./build/compiled/test/**/*.test.{js,ts}"]
+            }"#,
+        )]);
+        std::fs::create_dir_all(dir.path().join("test/utils")).unwrap();
+        std::fs::write(dir.path().join("test/utils/setup.ts"), "").unwrap();
+        let found = setup(dir.path(), &declared(&["mocha"]), &json!({}));
+        assert_eq!(found.tests, strings(&["test/**/*.test.{js,ts}", "test/**"]));
+        assert_eq!(found.files, strings(&["./test/utils/setup.ts"]));
     }
 
     #[test]

@@ -25,6 +25,8 @@ impl Default for Resolver {
         let options = oxc_resolver::ResolveOptions {
             extensions: strings(&[
                 ".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx", ".json", ".node",
+                // A type import (also a JSDoc one) can point to a declaration file.
+                ".d.ts", ".d.mts", ".d.cts",
             ]),
             extension_alias: vec![
                 (".js".into(), strings(&[".js", ".ts", ".tsx", ".jsx"])),
@@ -117,6 +119,17 @@ mod tests {
 
     fn file(root: &Path, path: &str) -> Target {
         Target::File(dunce::canonicalize(root).unwrap().join(path))
+    }
+
+    #[test]
+    fn a_declaration_file_resolves() {
+        let dir = project();
+        std::fs::create_dir_all(dir.path().join("types")).unwrap();
+        std::fs::write(dir.path().join("types/index.d.ts"), "").unwrap();
+        assert_eq!(
+            resolve(dir.path(), "./types"),
+            file(dir.path(), "types/index.d.ts")
+        );
     }
 
     #[test]

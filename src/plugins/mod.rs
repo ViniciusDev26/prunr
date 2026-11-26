@@ -79,7 +79,9 @@ pub trait Plugin {
 
     /// Whether the project uses the tool: by default, when `package.json` declares the package.
     fn enabled(&self, context: &Context) -> bool {
+        // Also in the tool's own repository, which does not declare itself.
         context.declared.contains(self.name())
+            || context.manifest["name"].as_str() == Some(self.name())
     }
 
     /// Adds what the tool runs and loads.
@@ -112,6 +114,9 @@ pub fn contribution(context: &Context) -> Contribution {
     contribution
 }
 
+/// The folders that hold only test code when a runner reads specs from them.
+const TEST_FOLDERS: &[&str] = &["test", "tests", "__tests__", "spec", "e2e", "test-d"];
+
 /// The extensions a configuration file can have, in the order tools look for them.
 const CONFIG_EXTENSIONS: &[&str] = &["js", "ts", "mjs", "cjs", "mts", "cts", "json"];
 
@@ -128,6 +133,22 @@ pub(super) fn normalize(path: &Path) -> String {
         }
     }
     parts.join("/")
+}
+
+/// A path a tool's configuration gives in a build folder (`./build/compiled/test/**`), in the
+/// source it is compiled from: without the build folder and the folders after it that do not
+/// exist (`test/**`). Any other path, as it is, without its leading `./`.
+pub(super) fn from_source(root: &Path, path: &str) -> String {
+    let path = path.trim_start_matches("./");
+    let mut segments: Vec<&str> = path.split('/').collect();
+    if segments.len() < 2 || !crate::project::BUILD_FOLDERS.contains(&segments[0]) {
+        return path.to_string();
+    }
+    segments.remove(0);
+    while segments.len() > 1 && !root.join(segments[0]).is_dir() {
+        segments.remove(0);
+    }
+    segments.join("/")
 }
 
 /// The strings an option holds: itself, or each item of an array; an item can be a
@@ -206,11 +227,23 @@ impl Contribution {
                 }
             })
             .collect();
+        // A test folder the runner reads specs from holds test code only: helpers, fixtures.
+        let folders: Vec<String> = named
+            .iter()
+            .filter_map(|path| path.split('/').next())
+            .filter(|folder| TEST_FOLDERS.contains(folder))
+            .map(|folder| format!("{folder}/**"))
+            .collect();
         if named.is_empty() {
             self.tests
                 .extend(defaults.iter().map(|glob| glob.to_string()));
         } else {
             self.tests.extend(named);
+        }
+        for folder in folders {
+            if !self.tests.contains(&folder) {
+                self.tests.push(folder);
+            }
         }
     }
 
@@ -293,6 +326,13 @@ mod tests {
                 "@nestjs/core"
             ]
         );
+    }
+
+    #[test]
+    fn a_tool_repository_enables_its_own_plugin() {
+        let dir = project(&[]);
+        let found = setup(dir.path(), &declared(&[]), &json!({ "name": "mocha" }));
+        assert_eq!(found.tests, strings(&["test/*.*"]));
     }
 
     #[test]
