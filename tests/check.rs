@@ -1559,3 +1559,13 @@ fn vite_resolve_alias_resolves_its_names() {
     assert_eq!(run.code, 0, "{}", run.stdout);
     assert_eq!(run.stdout, "No findings.\n");
 }
+
+#[test]
+fn the_tsconfig_uses_the_packages_it_extends_types_and_plugins_and_runs_type_tests() {
+    let run = check("typescript-config");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     unused-dev\n\nerrors: 1, warnings: 0\n"
+    );
+}

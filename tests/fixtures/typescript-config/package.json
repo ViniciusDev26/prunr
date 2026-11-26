@@ -1,0 +1,14 @@
+{
+  "name": "ts-config",
+  "private": true,
+  "scripts": { "build": "tsc -p tsconfig.build.json" },
+  "devDependencies": {
+    "typescript": "5",
+    "@sindresorhus/tsconfig": "7",
+    "@tsconfig/strictest": "2",
+    "@types/jest": "29",
+    "typescript-plugin-css-modules": "5",
+    "@emotion/react": "11",
+    "unused-dev": "1"
+  }
+}
