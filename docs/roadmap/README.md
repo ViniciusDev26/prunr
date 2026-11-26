@@ -17,6 +17,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 9. [Next.js e NestJS](09-next-and-nest.md)
 - [x] 11. [Plugins internos](11-plugins.md)
 - [x] 12. [`prunr fix` apaga a declaração que fica sem uso](12-fix-removes-declarations.md)
+- [x] 14. [Ligar e desligar plugins no `prunr.json`](14-toggle-plugins.md)
 - [x] 16. [Vite e React](16-vite-and-react.md)
 - [x] 17. [Os arquivos que os scripts rodam são entradas](17-script-entries.md)
 - [x] 18. [Dependências exigidas como peer](18-peer-dependencies.md)
@@ -78,13 +79,12 @@ A fase 2 ampliou o que o prunr enxerga; a 3 amplia o que ele reporta e quem o ad
 3. Adoção:
    - [ ] GitHub Action ([38](38-github-action.md)).
    - [ ] `prunr init` a partir do Knip ([39](39-init-from-knip.md)).
-4. Os itens 15, 21 e 14 de "Depois".
+4. [x] Os itens 15, 21 e 14 de "Depois".
 
 ## Depois
 
 - [ ] 10. [Performance](10-performance.md)
 - [ ] 13. [`prunr fix --test-only`](13-fix-test-only.md)
-- [ ] 14. [Ligar e desligar plugins no `prunr.json`](14-toggle-plugins.md)
 - [ ] 15. [Pacotes carregados pelo nome por outra lib](15-packages-loaded-by-name.md)
 - [ ] 22. [Um pacote de cada vez num monorepo grande](22-one-package-at-a-time.md)
 

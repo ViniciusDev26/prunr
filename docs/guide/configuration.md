@@ -25,6 +25,7 @@ Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir
 | `$schema` | não | O JSON Schema do arquivo, para autocompletar e validar no editor. |
 | `entries.test` | não | Caminhos ou globs do código de teste, incluindo helpers e mocks. Código de teste nunca é reportado, e o que só ele alcança está morto em produção. Com Jest ou Vitest, liste só o que o runner não acha sozinho. |
 | `dependencies.ignore` | não | Pacotes que ficam de fora das verificações de dependência: os carregados de um jeito que nem o grafo nem os `scripts` mostram (um plugin citado no arquivo de configuração de outra ferramenta). |
+| `plugins` | não | Plugins desligados (`false`) ou ligados (`true`) pelo nome, como em `{ "jest": false, "mocha": true }`: cada um se liga sozinho quando o `package.json` declara o pacote dele, e esta chave vale mais. O nome é o do pacote que o liga (`jest`, `@playwright/test`, `eslint`, os da lista em [Frameworks](frameworks.md)); um nome desconhecido é erro. |
 | `baseline` | não | Arquivo de baseline, relativo à raiz. Veja [CI e código legado](ci.md#adotando-num-código-legado). |
 
 Caminhos e globs são relativos à raiz; num glob, `*` não atravessa `/` e `**` atravessa. Cada
