@@ -235,6 +235,15 @@ pub const PLUGINS: &[&dyn Plugin] = &[
     &tools::PRETTIER,
     &tools::BABEL,
     &tools::COMMITLINT,
+    &tools::TAILWIND,
+    &tools::STORYBOOK,
+    &tools::CYPRESS,
+    &tools::HUSKY,
+    &tools::LINT_STAGED,
+    &tools::PRISMA,
+    &tools::TSUP,
+    &tools::ROLLUP,
+    &tools::WEBPACK,
 ];
 
 /// What the plugins enabled in the project contribute.
@@ -489,7 +498,16 @@ mod tests {
                 "eslint",
                 "prettier",
                 "@babel/core",
-                "@commitlint/cli"
+                "@commitlint/cli",
+                "tailwindcss",
+                "storybook",
+                "cypress",
+                "husky",
+                "lint-staged",
+                "prisma",
+                "tsup",
+                "rollup",
+                "webpack"
             ]
         );
     }

@@ -1,6 +1,7 @@
-//! Tools described as data: where each keeps its configuration, and which keys of it name
-//! packages. A configuration in JavaScript is also a file the tool loads, so what it imports is
-//! used too (the `globals` an `eslint.config.js` imports).
+//! Tools described as data: where each keeps its configuration, which keys of it name packages,
+//! entries or commands, and which files are its tests. A configuration in JavaScript is also a
+//! file the tool loads, so what it imports is used too (the `globals` an `eslint.config.js`
+//! imports).
 //!
 //! A tool is enabled by its package or by one of its configuration files, and with a
 //! configuration its own package counts as used: editors and hooks run it without a script.
@@ -21,7 +22,27 @@ pub struct Tool {
     pub manifest_key: &'static str,
     /// Keys of the configuration, at any depth (`overrides`, `env`), whose values name packages.
     pub keys: &'static [Key],
+    /// Globs of its test files (`**/*.stories.*`, `cypress/**`).
+    pub tests: &'static [&'static str],
+    /// Keys whose values are production entries, relative to the package (tsup's `entry`).
+    pub entry_keys: &'static [&'static str],
+    /// Keys whose values are commands it runs (Prisma's `seed`); `*` for every value.
+    pub command_keys: &'static [&'static str],
+    /// Files of commands it runs, one per line (husky's hooks).
+    pub command_files: &'static [&'static str],
 }
+
+/// A tool with nothing: each tool fills what it has.
+const BASE: Tool = Tool {
+    name: "",
+    configs: &[],
+    manifest_key: "",
+    keys: &[],
+    tests: &[],
+    entry_keys: &[],
+    command_keys: &[],
+    command_files: &[],
+};
 
 /// A key of a configuration whose values are package names, maybe in the tool's shorthand.
 pub struct Key {
@@ -63,6 +84,7 @@ pub const ESLINT: Tool = Tool {
         key("plugins", "eslint-plugin", "eslint-plugin"),
         key("parser", "", ""),
     ],
+    ..BASE
 };
 
 pub const PRETTIER: Tool = Tool {
@@ -84,6 +106,7 @@ pub const PRETTIER: Tool = Tool {
     ],
     manifest_key: "prettier",
     keys: &[key("plugins", "", "")],
+    ..BASE
 };
 
 pub const BABEL: Tool = Tool {
@@ -105,6 +128,7 @@ pub const BABEL: Tool = Tool {
         key("presets", "babel-preset", "preset"),
         key("plugins", "babel-plugin", "plugin"),
     ],
+    ..BASE
 };
 
 pub const COMMITLINT: Tool = Tool {
@@ -129,6 +153,142 @@ pub const COMMITLINT: Tool = Tool {
         key("extends", "commitlint-config", "commitlint-config"),
         key("plugins", "commitlint-plugin", "commitlint-plugin"),
     ],
+    ..BASE
+};
+
+pub const TAILWIND: Tool = Tool {
+    name: "tailwindcss",
+    configs: &[
+        "tailwind.config.js",
+        "tailwind.config.cjs",
+        "tailwind.config.mjs",
+        "tailwind.config.ts",
+        "tailwind.config.cts",
+        "tailwind.config.mts",
+    ],
+    ..BASE
+};
+
+pub const STORYBOOK: Tool = Tool {
+    name: "storybook",
+    configs: &[
+        ".storybook/main.js",
+        ".storybook/main.cjs",
+        ".storybook/main.mjs",
+        ".storybook/main.ts",
+        ".storybook/main.cts",
+        ".storybook/main.mts",
+        ".storybook/preview.js",
+        ".storybook/preview.jsx",
+        ".storybook/preview.mjs",
+        ".storybook/preview.ts",
+        ".storybook/preview.tsx",
+    ],
+    keys: &[key("addons", "", ""), key("framework", "", "")],
+    tests: &["**/*.stories.*"],
+    ..BASE
+};
+
+pub const CYPRESS: Tool = Tool {
+    name: "cypress",
+    configs: &[
+        "cypress.config.js",
+        "cypress.config.cjs",
+        "cypress.config.mjs",
+        "cypress.config.ts",
+        "cypress.config.cts",
+        "cypress.config.mts",
+    ],
+    tests: &["cypress/**", "**/*.cy.*"],
+    ..BASE
+};
+
+pub const HUSKY: Tool = Tool {
+    name: "husky",
+    command_files: &[
+        ".husky/pre-commit",
+        ".husky/prepare-commit-msg",
+        ".husky/commit-msg",
+        ".husky/post-commit",
+        ".husky/pre-push",
+        ".husky/pre-rebase",
+        ".husky/post-checkout",
+        ".husky/post-merge",
+        ".husky/post-rewrite",
+    ],
+    ..BASE
+};
+
+pub const LINT_STAGED: Tool = Tool {
+    name: "lint-staged",
+    configs: &[
+        ".lintstagedrc",
+        ".lintstagedrc.json",
+        ".lintstagedrc.yaml",
+        ".lintstagedrc.yml",
+        ".lintstagedrc.js",
+        ".lintstagedrc.cjs",
+        ".lintstagedrc.mjs",
+        "lint-staged.config.js",
+        "lint-staged.config.cjs",
+        "lint-staged.config.mjs",
+    ],
+    manifest_key: "lint-staged",
+    command_keys: &["*"],
+    ..BASE
+};
+
+pub const PRISMA: Tool = Tool {
+    name: "prisma",
+    configs: &["prisma.config.ts", "prisma/schema.prisma"],
+    manifest_key: "prisma",
+    command_keys: &["seed"],
+    ..BASE
+};
+
+pub const TSUP: Tool = Tool {
+    name: "tsup",
+    configs: &[
+        "tsup.config.ts",
+        "tsup.config.cts",
+        "tsup.config.mts",
+        "tsup.config.js",
+        "tsup.config.cjs",
+        "tsup.config.mjs",
+        "tsup.config.json",
+    ],
+    manifest_key: "tsup",
+    entry_keys: &["entry"],
+    ..BASE
+};
+
+pub const ROLLUP: Tool = Tool {
+    name: "rollup",
+    configs: &[
+        "rollup.config.js",
+        "rollup.config.cjs",
+        "rollup.config.mjs",
+        "rollup.config.ts",
+        "rollup.config.cts",
+        "rollup.config.mts",
+    ],
+    entry_keys: &["input"],
+    ..BASE
+};
+
+pub const WEBPACK: Tool = Tool {
+    name: "webpack",
+    configs: &[
+        "webpack.config.js",
+        "webpack.config.cjs",
+        "webpack.config.mjs",
+        "webpack.config.ts",
+        "webpack.config.cts",
+        "webpack.config.mts",
+    ],
+    keys: &[key("loader", "", ""), key("use", "", "")],
+    entry_keys: &["entry"],
+    ..BASE
 };
 
 impl Tool {
@@ -137,6 +297,7 @@ impl Tool {
             || self
                 .configs
                 .iter()
+                .chain(self.command_files)
                 .any(|name| context.root.join(name).is_file())
     }
 }
@@ -155,6 +316,17 @@ impl Plugin for Tool {
             return;
         }
         contribution.packages.insert(self.name.to_string());
+        contribution
+            .tests
+            .extend(self.tests.iter().map(|glob| glob.to_string()));
+        for name in self.command_files {
+            let source = std::fs::read_to_string(context.root.join(name)).unwrap_or_default();
+            // Not the shebang, comments, or husky 8's `. "$(dirname -- "$0")/_/husky.sh"`.
+            let commands = source.lines().map(str::trim).filter(|line| {
+                !line.is_empty() && !line.starts_with('#') && !line.starts_with(". ")
+            });
+            contribution.scripts.extend(commands.map(str::to_string));
+        }
         let mut configs = vec![context.manifest[self.manifest_key].clone()];
         for name in self.configs {
             configs.extend(load(context.root, name, contribution));
@@ -187,9 +359,22 @@ impl Tool {
             Value::Object(object) => {
                 for (name, value) in object {
                     if let Some(key) = self.keys.iter().find(|key| key.name == name) {
-                        for item in names(value) {
+                        for item in named(value) {
                             contribution.packages.extend(expand(item, key, context));
                         }
+                    }
+                    if self.entry_keys.contains(&name.as_str()) {
+                        contribution
+                            .production
+                            .extend(strings(value).into_iter().flat_map(entry));
+                    }
+                    if self
+                        .command_keys
+                        .iter()
+                        .any(|key| *key == "*" || key == name)
+                    {
+                        let commands = strings(value).into_iter().map(str::to_string);
+                        contribution.scripts.extend(commands);
                     }
                     self.uses_in(value, context, contribution);
                 }
@@ -201,6 +386,41 @@ impl Tool {
             }
             _ => {}
         }
+    }
+}
+
+/// The names in a value: a name, a `[name, options]` pair, an object with a `name`
+/// (`{ name: "@storybook/react-vite", options }`), or a list of them.
+fn named(value: &Value) -> Vec<&str> {
+    let items: Vec<&Value> = match value {
+        Value::Array(items) => items.iter().collect(),
+        value => vec![value],
+    };
+    items
+        .into_iter()
+        .filter_map(|item| match item {
+            Value::Object(object) => object.get("name")?.as_str(),
+            item => names(item).first().copied(),
+        })
+        .collect()
+}
+
+/// Every string in a value, at any depth (the entries of webpack's `{ app: "./src/app" }`).
+fn strings(value: &Value) -> Vec<&str> {
+    match value {
+        Value::String(text) => vec![text.as_str()],
+        Value::Array(items) => items.iter().flat_map(strings).collect(),
+        Value::Object(object) => object.values().flat_map(strings).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The globs of an entry path: itself, and with any extension when it has none (`./src/app`).
+fn entry(path: &str) -> Vec<String> {
+    let path = path.trim_start_matches("./");
+    match Path::new(path).extension() {
+        Some(_) => vec![path.to_string()],
+        None => vec![path.to_string(), format!("{path}.*")],
     }
 }
 
@@ -261,7 +481,7 @@ fn candidates(name: &str, key: &Key) -> Vec<String> {
 /// A configuration file: JavaScript (also recorded as a file the tool loads), JSON with
 /// comments, or else YAML. `None` when there is no such file.
 fn load(root: &Path, name: &str, contribution: &mut Contribution) -> Option<Value> {
-    let javascript = [".js", ".cjs", ".mjs", ".ts", ".cts", ".mts"];
+    let javascript = [".js", ".cjs", ".mjs", ".jsx", ".ts", ".cts", ".mts", ".tsx"];
     if javascript.iter().any(|extension| name.ends_with(extension)) {
         return contribution.read(root, name);
     }
@@ -276,6 +496,54 @@ mod tests {
     use super::super::testing::*;
     use super::{expand, key};
     use serde_json::json;
+
+    #[test]
+    fn hooks_commands_entries_tests_and_named_objects_are_read() {
+        let dir = project(&[
+            (
+                ".lintstagedrc",
+                "{ \"*.js\": [\"eslint --fix\", \"prettier -w\"] }",
+            ),
+            (
+                "webpack.config.js",
+                r#"module.exports = { entry: { app: "./src/app", vendor: ["./src/v.js"], other: process.env.ENTRY }, module: { rules: [{ use: ["css-loader", { loader: "x-loader" }] }] } };"#,
+            ),
+        ]);
+        std::fs::create_dir_all(dir.path().join(".husky")).unwrap();
+        std::fs::create_dir_all(dir.path().join(".storybook")).unwrap();
+        std::fs::write(
+            dir.path().join(".husky/pre-push"),
+            "#!/bin/sh\n. \"$(dirname -- \"$0\")/_/husky.sh\"\n\nnpm test\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join(".storybook/main.ts"),
+            r#"export default { framework: { name: "@storybook/vue3-vite" }, addons: [{ name: "a" }, "b", ["c", {}], {}], stories: [] };"#,
+        )
+        .unwrap();
+        let manifest = json!({ "prisma": { "seed": "node seed.js", "schema": 1 } });
+        let found = setup(dir.path(), &declared(&[]), &manifest);
+        assert_eq!(
+            found.scripts,
+            strings(&["npm test", "eslint --fix", "prettier -w", "node seed.js"])
+        );
+        assert_eq!(
+            found.production,
+            strings(&["src/app", "src/app.*", "src/v.js"])
+        );
+        assert_eq!(found.tests, strings(&["**/*.stories.*"]));
+        for package in [
+            "@storybook/vue3-vite",
+            "a",
+            "b",
+            "c",
+            "css-loader",
+            "x-loader",
+            "husky",
+        ] {
+            assert!(found.packages.contains(package), "{package}");
+        }
+    }
 
     #[test]
     fn a_key_without_a_prefix_names_whole_packages() {
