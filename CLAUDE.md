@@ -60,13 +60,13 @@ uma:
    que o ativa; `contribute` lê a configuração com `static_config` (nunca a executa) e acrescenta
    à `Contribution`. Os testes unitários ficam no próprio arquivo.
 3. O plugin entra em `PLUGINS`, e o teste que fixa essa lista é atualizado.
+4. A `Contribution` tem arquivos e pacotes de teste e entradas e pacotes de produção. Se o
+   plugin precisa de outra coisa, o campo nasce junto com ele, e o núcleo passa a usá-lo nesse
+   mesmo PR.
 
 Uma ferramenta cuja configuração só nomeia pacotes (ESLint, Babel...) não precisa de código: é
 um `Tool` em `src/plugins/tools.rs`, com os arquivos de configuração e as chaves que nomeiam
 pacotes.
-4. A `Contribution` tem arquivos e pacotes de teste e entradas e pacotes de produção. Se o
-   plugin precisa de outra coisa, o campo nasce junto com ele, e o núcleo passa a usá-lo nesse
-   mesmo PR.
 
 ## Commits e PRs
 
