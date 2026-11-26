@@ -1367,7 +1367,6 @@ fn why_explains_test_files_dead_importers_and_what_needs_a_package() {
         why("undeclared"),
         "undeclared is used by:\n  index.js:1 (production)\n"
     );
-    );
 }
 
 #[test]
