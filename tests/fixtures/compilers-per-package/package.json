@@ -1,0 +1,1 @@
+{ "name": "compilers-per-package", "private": true, "workspaces": ["packages/*"] }
