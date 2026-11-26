@@ -1,0 +1,25 @@
+{
+  "name": "tool-configs",
+  "main": "index.js",
+  "devDependencies": {
+    "@babel/core": "^7.0.0",
+    "@babel/preset-env": "^7.0.0",
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "babel-plugin-macros": "^3.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-airbnb": "^19.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-react": "^7.0.0",
+    "globals": "^15.0.0",
+    "prettier": "^3.0.0",
+    "prettier-plugin-tailwindcss": "^0.6.0",
+    "unused-dev": "^1.0.0"
+  },
+  "babel": {
+    "presets": [["@babel/env", { "targets": "node 20" }]],
+    "plugins": ["macros"]
+  }
+}

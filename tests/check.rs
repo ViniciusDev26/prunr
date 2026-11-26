@@ -1579,3 +1579,13 @@ fn the_scripts_of_vue_svelte_astro_and_mdx_files_are_part_of_the_graph() {
         "unused-file           src/Orphan.vue\nunused-export         src/util.ts: unused\n\nerrors: 2, warnings: 0\n"
     );
 }
+
+#[test]
+fn the_packages_eslint_prettier_babel_and_commitlint_configs_name_are_used() {
+    let run = check("tool-configs");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     unused-dev\n\nerrors: 1, warnings: 0\n"
+    );
+}
