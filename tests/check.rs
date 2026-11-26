@@ -166,6 +166,18 @@ fn a_script_binary_from_an_undeclared_package_is_missing() {
 }
 
 #[test]
+fn the_paths_written_in_a_config_built_at_runtime_are_edges() {
+    let run = check("config-paths");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           packages/kit/orphan.ts\n\
+         \n\
+         errors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
 fn a_require_that_cannot_be_followed_is_a_warning() {
     let run = check("unresolved-require");
     assert_eq!(run.code, 0, "warnings do not fail the check");

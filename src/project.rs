@@ -1483,6 +1483,31 @@ mod tests {
     }
 
     #[test]
+    fn the_paths_a_config_and_its_local_imports_write_are_edges() {
+        let dir = project(&[
+            ("package.json", r#"{ "devDependencies": { "vitest": "3" } }"#),
+            (
+                "vitest.config.ts",
+                "import { s } from './tools/s'; import x from 'vitest'; export default () => s;",
+            ),
+            (
+                "tools/s.ts",
+                "export const s = ['./kit/setup.ts', './gone.ts', '../outside.ts', 'kit/x.ts'];",
+            ),
+            ("kit/setup.ts", ""),
+            ("src/a.ts", "export const p = '../kit/setup.ts';"),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        let edges = |id: &str| -> Vec<&str> {
+            let file = &project.files[id];
+            file.edges.iter().map(|edge| edge.target.as_str()).collect()
+        };
+        assert_eq!(edges("tools/s.ts"), ["kit/setup.ts"]);
+        assert_eq!(project.files["tools/s.ts"].edge_lines["kit/setup.ts"], 1);
+        assert!(edges("src/a.ts").is_empty());
+    }
+
+    #[test]
     fn the_test_runners_name_test_files_and_packages() {
         let dir = project(&[
             (
