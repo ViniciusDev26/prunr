@@ -59,6 +59,21 @@ Os pacotes e arquivos que as ferramentas carregam sem import:
 - [x] Astro e React Router/Remix ([31](31-astro-and-react-router.md)).
 - [x] VitePress ([32](32-vitepress.md)).
 
+## Fase 3: profundidade
+
+A fase 2 ampliou o que o prunr enxerga; a 3 amplia o que ele reporta e quem o adota, na ordem:
+
+1. [ ] Triagem do que só o Knip aponta ([33](33-knip-only-triage.md)).
+2. Achados novos:
+   - [ ] Membros de enum sem uso ([34](34-unused-enum-members.md)).
+   - [ ] Membros de classe sem uso ([35](35-unused-class-members.md)).
+   - [ ] Exports duplicados ([36](36-duplicate-exports.md)).
+   - [ ] Binários não declarados ([37](37-unlisted-binaries.md)).
+3. Adoção:
+   - [ ] GitHub Action ([38](38-github-action.md)).
+   - [ ] `prunr init` a partir do Knip ([39](39-init-from-knip.md)).
+4. Os itens 15, 21 e 14 de "Depois".
+
 ## Depois
 
 - [ ] 10. [Performance](10-performance.md)
