@@ -173,4 +173,14 @@ mod tests {
         let found = setup(dir.path(), &declared(&[]), &json!({}));
         assert!(found.tests.is_empty());
     }
+
+    #[test]
+    fn a_tsconfig_uses_typescript() {
+        let dir = project(&[("tsconfig.json", "{}")]);
+        let found = setup(dir.path(), &declared(&["typescript"]), &json!({}));
+        assert_eq!(found.packages, declared(&["typescript"]));
+        let dir = project(&[]);
+        let found = setup(dir.path(), &declared(&["typescript"]), &json!({}));
+        assert!(found.packages.is_empty());
+    }
 }
