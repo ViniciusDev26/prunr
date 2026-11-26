@@ -78,7 +78,7 @@ A fase 2 ampliou o que o prunr enxerga; a 3 amplia o que ele reporta e quem o ad
    - [x] Binários não declarados ([37](37-unlisted-binaries.md)).
 3. Adoção:
    - [x] GitHub Action ([38](38-github-action.md)).
-   - [ ] `prunr init` a partir do Knip ([39](39-init-from-knip.md)).
+   - [x] `prunr init` a partir do Knip ([39](39-init-from-knip.md)).
 4. [x] Os itens 15, 21 e 14 de "Depois".
 
 ## Depois
