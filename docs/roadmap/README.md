@@ -22,6 +22,10 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 18. [Dependências exigidas como peer](18-peer-dependencies.md)
 - [x] 19. [Playwright, Drizzle Kit, PostCSS e Vitest `projects`](19-tooling-plugins.md)
 - [x] 20. [Imports em folhas de estilo](20-stylesheet-imports.md)
+- [x] 23. [Corpus de validação](23-validation-corpus.md)
+- [x] 24. [`prunr why`](24-why.md)
+- [x] 25. [SARIF, Code Climate e Markdown](25-report-formats.md)
+- [x] 26. [Modo produção](26-production-mode.md)
 
 ## Depois
 
