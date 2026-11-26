@@ -80,8 +80,16 @@ pub fn run(args: &[String], root: &Path, out: &mut impl Write, err: &mut impl Wr
         ["fix", "--dry-run"] => fix_command(root, true, out),
         ["baseline"] => baseline_command(root, out),
         ["why", target] => why_command(root, target, out),
-        ["init"] => crate::init::init(root).map(|_| {
-            let _ = writeln!(out, "created {}", crate::config::FILE_NAME);
+        ["init"] => crate::init::init(root).map(|created| {
+            let from = match &created.from {
+                Some(from) => format!(" from {from}"),
+                None => String::new(),
+            };
+            let _ = writeln!(out, "created {}{from}", crate::config::FILE_NAME);
+            if !created.left_out.is_empty() {
+                let left_out = created.left_out.join(", ");
+                let _ = writeln!(out, "not translated (no equivalent in prunr): {left_out}");
+            }
             0
         }),
         ["--version"] => {

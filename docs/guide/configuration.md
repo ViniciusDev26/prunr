@@ -3,6 +3,18 @@
 Crie um `prunr.json` na raiz do projeto (`prunr init` gera um primeiro, a partir do
 `package.json`) e rode `prunr check` nela.
 
+Vindo do Knip, o `prunr init` traduz a config dele (`knip.json`, `knip.jsonc`, `knip.ts`,
+`knip.config.ts`... ou a chave `knip` do `package.json`, lida sem ser executada):
+
+- `entry` vira `entries.production`, ou `entries.test` quando o padrão é de teste
+  (`test/**/*.test.ts`); o `!` no fim, que marca produção no Knip, sai;
+- as `entry` de cada pacote em `workspaces` ganham a pasta dele na frente;
+- `ignoreDependencies` vira `dependencies.ignore`.
+
+O que não tem equivalente (`ignore`, `project`, `rules`, as opções dos plugins, os padrões
+negados) sai listado depois de `created prunr.json from knip.json`, para você decidir: o prunr
+lê todo arquivo-fonte, e um arquivo de propósito sem uso pede um `// prunr-ignore-file`.
+
 ```json
 {
   "$schema": "https://unpkg.com/@prunr/prunr/schema.json",

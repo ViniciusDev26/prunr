@@ -95,7 +95,7 @@ on its own. Every option is in [Configuration](docs/guide/configuration.md).
 | `prunr check` | Lists the findings. `--json` for machines, `--github` for PR annotations, `--sarif` for code scanning, `--codeclimate` for GitLab Code Quality, `--markdown` for a PR comment, `--since <ref>` for only what is new, `--production` for only what ships. |
 | `prunr fix` | Removes dead code and unused dependencies. `--dry-run` shows the changes without making them. |
 | `prunr why <target>` | Explains a file (the chain of imports from an entry), a `file:export` (who uses it) or a package (the files, scripts and tools that need it). |
-| `prunr init` | Creates a `prunr.json` from `package.json`. |
+| `prunr init` | Creates a `prunr.json` from `package.json`, and from the Knip config when there is one. |
 | `prunr baseline` | Records the current findings, to adopt prunr without fixing everything at once. |
 | `prunr schema` | Prints the JSON Schema of `prunr.json`. |
 

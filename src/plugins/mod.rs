@@ -308,7 +308,7 @@ pub(super) fn from_source(root: &Path, path: &str) -> String {
 
 /// The strings an option holds: itself, or each item of an array; an item can be a
 /// `[name, options]` pair.
-fn names(option: &Value) -> Vec<&str> {
+pub(crate) fn names(option: &Value) -> Vec<&str> {
     let items = match option {
         Value::Array(items) => items.iter().collect(),
         option => vec![option],

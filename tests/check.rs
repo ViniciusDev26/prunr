@@ -430,6 +430,24 @@ fn init_writes_a_config_that_check_can_run() {
 }
 
 #[test]
+fn init_translates_a_knip_config_and_says_what_it_left_out() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("knip.json"),
+        r#"{ "entry": ["index.js"], "ignore": ["dist/**"] }"#,
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("index.js"), "").unwrap();
+    let run = run_in(dir.path(), &["init"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "created prunr.json from knip.json\n\
+         not translated (no equivalent in prunr): ignore\n"
+    );
+}
+
+#[test]
 fn schema_prints_the_published_schema() {
     let run = prunr("clean", &["schema"]);
     assert_eq!(run.code, 0);

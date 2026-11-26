@@ -1,5 +1,6 @@
-//! `prunr init`: a first `prunr.json`, guessed from `package.json`. From then on the file is
-//! edited by hand; nothing is guessed when the check runs.
+//! `prunr init`: a first `prunr.json`, guessed from `package.json` and translated from a Knip
+//! config when there is one. From then on the file is edited by hand; nothing is guessed when
+//! the check runs.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -27,8 +28,116 @@ struct Manifest {
     main: Option<String>,
 }
 
-/// Writes `prunr.json` at `root` and returns its contents.
-pub fn init(root: &Path) -> Result<String, String> {
+/// Knip's config files, in the order it looks for them; then the `knip` key of `package.json`.
+const KNIP_CONFIGS: &[&str] = &[
+    "knip.json",
+    "knip.jsonc",
+    ".knip.json",
+    ".knip.jsonc",
+    "knip.ts",
+    "knip.js",
+    "knip.config.ts",
+    "knip.config.js",
+];
+
+/// What a Knip config translates to.
+#[derive(Default)]
+struct Knip {
+    production: BTreeSet<String>,
+    test: BTreeSet<String>,
+    ignore: Vec<String>,
+    left_out: Vec<String>,
+}
+
+/// The Knip config of the project and the file it is in, read without running it.
+fn knip_config(root: &Path) -> Result<Option<(String, serde_json::Value)>, String> {
+    for name in KNIP_CONFIGS {
+        let Ok(text) = std::fs::read_to_string(root.join(name)) else {
+            continue;
+        };
+        let config = match name.ends_with(".json") || name.ends_with(".jsonc") {
+            true => {
+                let text = crate::workspaces::without_comments(&text);
+                let trailing = regex::Regex::new(r",(\s*[}\]])").expect("the pattern compiles");
+                serde_json::from_str(&trailing.replace_all(&text, "$1")).ok()
+            }
+            false => crate::plugins::static_config(&text, Path::new(name)),
+        };
+        return match config {
+            Some(config) => Ok(Some((name.to_string(), config))),
+            None => Err(format!("invalid {name}")),
+        };
+    }
+    let manifest: serde_json::Value = std::fs::read_to_string(root.join("package.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default();
+    Ok(manifest
+        .get("knip")
+        .map(|config| ("package.json".to_string(), config.clone())))
+}
+
+/// Whether a Knip entry pattern names test code.
+fn is_test(pattern: &str) -> bool {
+    let folders = ["test", "tests", "__tests__", "spec", "e2e"];
+    pattern.split('/').any(|segment| folders.contains(&segment))
+        || [".test.", ".spec.", ".test-d."]
+            .iter()
+            .any(|infix| pattern.contains(infix))
+}
+
+/// Translates one level of a Knip config: the root, or a workspace at `prefix`. `at` names
+/// where its keys are, for what is left out.
+fn translate(config: &serde_json::Value, prefix: &str, at: &str, knip: &mut Knip) {
+    let empty = serde_json::Map::new();
+    for (key, value) in config.as_object().unwrap_or(&empty) {
+        match key.as_str() {
+            "$schema" => {}
+            "entry" => {
+                for pattern in crate::plugins::names(value) {
+                    if pattern.starts_with('!') {
+                        knip.left_out.push(format!("{at}entry {pattern}"));
+                        continue;
+                    }
+                    // A trailing `!` marks a production entry in Knip.
+                    let production = pattern.ends_with('!');
+                    let pattern = pattern.trim_end_matches('!').trim_start_matches("./");
+                    let pattern = format!("{prefix}{pattern}");
+                    match production || !is_test(&pattern) {
+                        true => knip.production.insert(pattern),
+                        false => knip.test.insert(pattern),
+                    };
+                }
+            }
+            "ignoreDependencies" => knip
+                .ignore
+                .extend(crate::plugins::names(value).into_iter().map(str::to_string)),
+            "workspaces" if prefix.is_empty() && at.is_empty() => {
+                for (dir, workspace) in value.as_object().unwrap_or(&empty) {
+                    let prefix = match dir.as_str() {
+                        "." => String::new(),
+                        dir => format!("{}/", dir.trim_end_matches('/')),
+                    };
+                    translate(workspace, &prefix, &format!("workspaces.{dir}."), knip);
+                }
+            }
+            _ => knip.left_out.push(format!("{at}{key}")),
+        }
+    }
+}
+
+/// What `init` wrote.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Created {
+    pub contents: String,
+    /// The Knip config it was translated from.
+    pub from: Option<String>,
+    /// What of that config has no equivalent in prunr.
+    pub left_out: Vec<String>,
+}
+
+/// Writes `prunr.json` at `root` and returns what it wrote.
+pub fn init(root: &Path) -> Result<Created, String> {
     if root.join(FILE_NAME).exists() {
         return Err(format!("{FILE_NAME} already exists"));
     }
@@ -38,6 +147,11 @@ pub fn init(root: &Path) -> Result<String, String> {
         }
         Err(_) => Manifest::default(),
     };
+    let knip_config = knip_config(root)?;
+    let mut knip = Knip::default();
+    if let Some((_, config)) = &knip_config {
+        translate(config, "", "", &mut knip);
+    }
     let project = Project::load(root).map_err(|e| e.to_string())?;
     let is_file = |path: &String| project.entries(std::slice::from_ref(path)).is_ok();
 
@@ -49,10 +163,11 @@ pub fn init(root: &Path) -> Result<String, String> {
         let id = path.trim_start_matches("./");
         project.production_files.iter().any(|file| file == id)
     };
-    let production: BTreeSet<String> = candidates
+    let mut production: BTreeSet<String> = candidates
         .into_iter()
         .filter(|path| is_file(path) && !covered(path))
         .collect();
+    production.extend(knip.production);
     if production.is_empty() && project.production_files.is_empty() {
         return Err(format!(
             "no entry found: create {FILE_NAME} with entries.production by hand"
@@ -60,20 +175,28 @@ pub fn init(root: &Path) -> Result<String, String> {
     }
     // Jest and Vitest find their own test files.
     let runner = !project.test_files.is_empty();
-    let test: Vec<String> = TEST_GLOBS
+    let mut test: Vec<String> = TEST_GLOBS
         .iter()
         .map(|glob| glob.to_string())
         .filter(|glob| !runner && is_file(glob))
         .collect();
+    test.extend(knip.test);
 
     let mut entries = serde_json::json!({ "production": production });
     if !test.is_empty() {
         entries["test"] = serde_json::json!(test);
     }
-    let config = serde_json::json!({ "$schema": SCHEMA_URL, "entries": entries });
+    let mut config = serde_json::json!({ "$schema": SCHEMA_URL, "entries": entries });
+    if !knip.ignore.is_empty() {
+        config["dependencies"] = serde_json::json!({ "ignore": knip.ignore });
+    }
     let contents = serde_json::to_string_pretty(&config).expect("the config serializes") + "\n";
     std::fs::write(root.join(FILE_NAME), &contents).map_err(|e| e.to_string())?;
-    Ok(contents)
+    Ok(Created {
+        contents,
+        from: knip_config.map(|(from, _)| from),
+        left_out: knip.left_out,
+    })
 }
 
 #[cfg(test)]
@@ -117,9 +240,10 @@ mod tests {
             ("__tests__/index.test.js", ""),
             ("lib/util.spec.js", ""),
         ]);
-        let contents = init(dir.path()).unwrap();
+        let created = init(dir.path()).unwrap();
+        assert_eq!(created.from, None);
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&contents).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&created.contents).unwrap(),
             written(&dir)
         );
         assert_eq!(
@@ -234,6 +358,76 @@ mod tests {
             written(&dir)["entries"]["production"],
             serde_json::json!(["index.js"])
         );
+    }
+
+    #[test]
+    fn a_knip_config_gives_its_entries_and_ignored_dependencies() {
+        let dir = project(&[
+            ("package.json", r#"{ "main": "index.js" }"#),
+            ("index.js", ""),
+            (
+                "knip.jsonc",
+                r#"{
+                    // Knip's config, with comments and trailing commas
+                    "$schema": "https://unpkg.com/knip@5/schema.json",
+                    "entry": ["src/server.ts!", "./scripts/*.ts", "test/**/*.test.ts", "!src/gen/**"],
+                    "ignoreDependencies": ["left-pad", 1],
+                    "ignore": ["dist/**"],
+                    "rules": { "types": "off" },
+                }"#,
+            ),
+        ]);
+        let created = init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir),
+            serde_json::json!({
+                "$schema": "https://unpkg.com/@prunr/prunr/schema.json",
+                "entries": {
+                    "production": ["scripts/*.ts", "src/server.ts"],
+                    "test": ["test/**/*.test.ts"]
+                },
+                "dependencies": { "ignore": ["left-pad"] }
+            })
+        );
+        assert_eq!(created.from.as_deref(), Some("knip.jsonc"));
+        assert_eq!(
+            created.left_out,
+            ["entry !src/gen/**", "ignore", "rules"].map(String::from)
+        );
+    }
+
+    #[test]
+    fn the_knip_key_of_package_json_and_its_workspaces_are_read() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{ "knip": { "workspaces": { ".": { "entry": "main.js" }, "packages/a": { "entry": ["cli.js"], "project": ["**"] }, "packages/b": 1 } } }"#,
+            ),
+            ("main.js", ""),
+        ]);
+        let created = init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir)["entries"],
+            serde_json::json!({ "production": ["main.js", "packages/a/cli.js"] })
+        );
+        assert_eq!(created.from.as_deref(), Some("package.json"));
+        assert_eq!(
+            created.left_out,
+            ["workspaces.packages/a.project"].map(String::from)
+        );
+    }
+
+    #[test]
+    fn a_knip_config_in_typescript_is_read_without_running_it() {
+        let dir = project(&[("knip.ts", "export default { entry: ['src/app.ts'] };")]);
+        let created = init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir)["entries"],
+            serde_json::json!({ "production": ["src/app.ts"] })
+        );
+        assert_eq!(created.from.as_deref(), Some("knip.ts"));
+        let dir = project(&[("knip.json", "{ nope")]);
+        assert_eq!(init(dir.path()), Err("invalid knip.json".into()));
     }
 
     #[test]
