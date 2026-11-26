@@ -123,8 +123,38 @@ pub fn check(
             });
         }
     }
+    // Test fixtures are data the tests read: what is in them is not a finding.
+    findings.retain(|finding| match finding {
+        Finding::CircularImport { cycle } => !cycle.iter().all(|file| in_test_fixture(file)),
+        Finding::UnusedFile { file, .. }
+        | Finding::UnusedExport { file, .. }
+        | Finding::UnusedImport { file, .. }
+        | Finding::UnusedIgnore { file, .. }
+        | Finding::MissingDependency { file, .. }
+        | Finding::UnresolvedRequire { file, .. }
+        | Finding::UnparsedFile { file, .. } => !in_test_fixture(file),
+        Finding::UnusedDependency { .. } | Finding::MisplacedDependency { .. } => true,
+    });
     findings.sort();
     findings
+}
+
+/// The folders that hold tests, and the ones inside them that hold the data tests read.
+const TEST_FOLDERS: &[&str] = &["test", "tests", "__tests__", "spec", "e2e"];
+const FIXTURE_FOLDERS: &[&str] = &["fixtures", "__fixtures__", "fixture", "samples"];
+
+/// Whether `file` is in a fixtures folder of a test folder (`test/fixtures/a.js`).
+fn in_test_fixture(file: &str) -> bool {
+    let folders: Vec<&str> = file.split('/').collect();
+    let folders = &folders[..folders.len() - 1];
+    folders
+        .iter()
+        .position(|folder| TEST_FOLDERS.contains(folder))
+        .is_some_and(|at| {
+            folders[at + 1..]
+                .iter()
+                .any(|f| FIXTURE_FOLDERS.contains(f))
+        })
 }
 
 /// Whether a finding is about what goes to production (`prunr check --production`): unused
@@ -358,7 +388,10 @@ fn dependencies(
                 })
         };
         for package in &project.files[id].packages {
-            if !declared(package) && !declared(&types_of(package)) {
+            if !declared(package)
+                && !declared(&types_of(package))
+                && !project.vendored.contains(package)
+            {
                 findings.push(Finding::MissingDependency {
                     file: id.clone(),
                     package: package.clone(),

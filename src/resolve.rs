@@ -29,9 +29,12 @@ impl Default for Resolver {
                 ".d.ts", ".d.mts", ".d.cts",
             ]),
             extension_alias: vec![
-                (".js".into(), strings(&[".js", ".ts", ".tsx", ".jsx"])),
-                (".mjs".into(), strings(&[".mjs", ".mts"])),
-                (".cjs".into(), strings(&[".cjs", ".cts"])),
+                (
+                    ".js".into(),
+                    strings(&[".js", ".ts", ".tsx", ".jsx", ".d.ts"]),
+                ),
+                (".mjs".into(), strings(&[".mjs", ".mts", ".d.mts"])),
+                (".cjs".into(), strings(&[".cjs", ".cts", ".d.cts"])),
             ],
             tsconfig: Some(oxc_resolver::TsconfigDiscovery::Auto),
             condition_names: strings(&["node", "import", "require", "default"]),
@@ -54,9 +57,11 @@ impl Resolver {
     pub fn resolve(&self, from: &Path, specifier: &str) -> Target {
         // `/x` is a path on every system, even where an absolute path needs a drive (Windows).
         let local = specifier.starts_with(['.', '#', '/']) || Path::new(specifier).is_absolute();
-        // Bun's modules (`bun:test`, `bun:sqlite`) are built in, like Node's.
+        // Bun's modules (`bun`, `bun:test`) are built in, like Node's, and a specifier with a
+        // scheme (`data:`, `virtual:`, `https:`) is no package either.
         if !local
-            && (specifier.starts_with("bun:")
+            && (specifier == "bun"
+                || has_scheme(specifier)
                 || nodejs_built_in_modules::is_nodejs_builtin_module(specifier))
         {
             return Target::Builtin;
@@ -78,6 +83,17 @@ impl Resolver {
             _ => Target::Package(package_name(specifier).to_string()),
         }
     }
+}
+
+/// `data:...`, `virtual:...`: a URL scheme before anything else.
+fn has_scheme(specifier: &str) -> bool {
+    specifier.split_once(':').is_some_and(|(scheme, _)| {
+        scheme.len() > 1
+            && scheme.starts_with(|c: char| c.is_ascii_alphabetic())
+            && scheme
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    })
 }
 
 fn in_node_modules(path: &Path) -> bool {
