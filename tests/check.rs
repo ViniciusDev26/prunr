@@ -1626,3 +1626,23 @@ fn storybook_cypress_husky_lint_staged_tailwind_prisma_and_bundlers_are_read() {
         "unused-file           src/orphan.ts\nunused-dependency     unused-dev\n\nerrors: 2, warnings: 0\n"
     );
 }
+
+#[test]
+fn astro_content_collections_middleware_and_config_are_part_of_the_graph() {
+    let run = check("astro");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/components/Orphan.astro\n\nerrors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
+fn react_router_routes_root_and_generated_types_are_part_of_the_graph() {
+    let run = check("react-router");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           app/orphan.ts\nunused-export         app/lib/greet.ts: unused\n\nerrors: 2, warnings: 0\n"
+    );
+}
