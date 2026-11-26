@@ -18,6 +18,14 @@
     "dependencies": {
       "$ref": "#/$defs/Dependencies"
     },
+    "plugins": {
+      "description": "Plugins turned off (`false`) or on (`true`) by name, whatever `package.json` declares:\neach one is turned on by the package it is named after.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "default": {}
+    },
     "baseline": {
       "description": "The baseline file, relative to the root: findings the project already had. They do not\nfail the check, and `prunr baseline` rewrites the file.",
       "type": [

@@ -215,7 +215,7 @@ fn graph(
     root: &Path,
     config: &Config,
 ) -> Result<(Project, BTreeSet<FileId>, BTreeSet<FileId>), String> {
-    let mut project = Project::load(root).map_err(|e| e.to_string())?;
+    let mut project = Project::load_with(root, &config.plugins).map_err(|e| e.to_string())?;
     project.ignore_packages(&config.dependencies.ignore);
     let mut production = project.entries(&config.entries.production)?;
     production.extend(project.production_files.iter().cloned());

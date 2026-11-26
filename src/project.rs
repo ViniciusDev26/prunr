@@ -709,6 +709,11 @@ impl Project {
     /// Reads every `.js` and `.cjs` file under `root`, skipping `node_modules` and what
     /// `.gitignore` ignores.
     pub fn load(root: &Path) -> Result<Self, ProjectError> {
+        Self::load_with(root, &BTreeMap::new())
+    }
+
+    /// `load`, with plugins turned off or on by name (the `plugins` of `prunr.json`).
+    pub fn load_with(root: &Path, plugins: &BTreeMap<String, bool>) -> Result<Self, ProjectError> {
         let root = crate::resolve::canonical(root);
         let dirs: Vec<String> = std::iter::once(String::new())
             .chain(crate::workspaces::discover(&root))
@@ -737,11 +742,14 @@ impl Project {
             .zip(&manifests)
             .zip(&visible)
             .map(|((dir, manifest), visible)| {
-                crate::plugins::contribution(&crate::plugins::Context {
-                    root: &root.join(dir),
-                    declared: visible,
-                    manifest: &manifest.raw,
-                })
+                crate::plugins::contribution(
+                    &crate::plugins::Context {
+                        root: &root.join(dir),
+                        declared: visible,
+                        manifest: &manifest.raw,
+                    },
+                    plugins,
+                )
             })
             .collect();
         // The files of every package that a plugin compiles (`.vue`) are sources too.

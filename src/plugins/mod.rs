@@ -250,11 +250,13 @@ pub const PLUGINS: &[&dyn Plugin] = &[
     &tools::WEBPACK,
 ];
 
-/// What the plugins enabled in the project contribute.
-pub fn contribution(context: &Context) -> Contribution {
+/// What the plugins enabled in the project contribute. `toggles` turns a plugin off or on by
+/// name, whatever the project declares.
+pub fn contribution(context: &Context, toggles: &BTreeMap<String, bool>) -> Contribution {
     let mut contribution = Contribution::default();
     for plugin in PLUGINS {
-        if plugin.enabled(context) {
+        let enabled = toggles.get(plugin.name()).copied();
+        if enabled.unwrap_or_else(|| plugin.enabled(context)) {
             plugin.contribute(context, &mut contribution);
         }
     }
@@ -452,11 +454,14 @@ pub(crate) mod testing {
 
     /// What the plugins contribute for a project with these packages and `package.json`.
     pub fn setup(root: &Path, packages: &BTreeSet<String>, manifest: &Value) -> Contribution {
-        contribution(&Context {
-            root,
-            declared: packages,
-            manifest,
-        })
+        contribution(
+            &Context {
+                root,
+                declared: packages,
+                manifest,
+            },
+            &BTreeMap::new(),
+        )
     }
 
     pub const JEST_DEFAULTS: &[&str] = &[

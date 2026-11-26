@@ -86,7 +86,17 @@ impl Config {
         }
         let text =
             std::fs::read_to_string(&path).map_err(|e| ConfigError::Invalid(e.to_string()))?;
-        serde_json::from_str(&text).map_err(|e| ConfigError::Invalid(e.to_string()))
+        let config: Self =
+            serde_json::from_str(&text).map_err(|e| ConfigError::Invalid(e.to_string()))?;
+        let known: Vec<&str> = crate::plugins::PLUGINS.iter().map(|p| p.name()).collect();
+        if let Some(name) = config
+            .plugins
+            .keys()
+            .find(|name| !known.contains(&name.as_str()))
+        {
+            return Err(ConfigError::Invalid(format!("unknown plugin `{name}`")));
+        }
+        Ok(config)
     }
 }
 
@@ -145,8 +155,8 @@ mod tests {
             r#"{ "entries": { "production": [] }, "plugins": { "jest": false, "@playwright/test": true } }"#,
         );
         let plugins = Config::load(dir.path()).unwrap().plugins;
-        assert_eq!(plugins["jest"], false);
-        assert_eq!(plugins["@playwright/test"], true);
+        assert!(!plugins["jest"]);
+        assert!(plugins["@playwright/test"]);
         let dir = project(r#"{ "entries": { "production": [] }, "plugins": { "jets": false } }"#);
         assert_eq!(
             Config::load(dir.path()).unwrap_err().to_string(),
