@@ -49,9 +49,11 @@ asserções) conta como uso.
 
 ### Vitest com `projects`
 
-Os itens de `test.projects` são lidos também: um arquivo de configuração, ou uma pasta (ou um
-glob de pastas, `packages/*`) com o seu `vitest.config.*` ou `vite.config.*`. Os globs e os
-arquivos de setup de cada projeto são relativos à pasta da configuração dele.
+Os itens de `test.projects` são lidos também: um arquivo de configuração, uma pasta (ou um glob
+de pastas, `packages/*`) com o seu `vitest.config.*` ou `vite.config.*`, ou um projeto escrito
+na própria lista (`{ test: { include: [...] } }`). Os globs e os arquivos de setup de cada
+projeto são relativos à pasta da configuração dele, e o `include` parte do `test.dir` quando ele
+existe.
 
 ## Playwright
 
