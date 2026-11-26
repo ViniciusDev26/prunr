@@ -199,7 +199,7 @@ pub(crate) fn reachable(project: &Project, entries: &BTreeSet<FileId>) -> BTreeS
     seen
 }
 
-type Uses<'p> = BTreeMap<&'p FileId, BTreeSet<Use>>;
+pub(crate) type Uses<'p> = BTreeMap<&'p FileId, BTreeSet<Use>>;
 
 /// What `files` use of each file they require. An entry is used whole: its exports are its
 /// interface. Uses of a file that reexports others are forwarded to them.
@@ -222,6 +222,11 @@ fn uses<'p>(
             whole: true,
         });
     }
+    forwarded(project, uses)
+}
+
+/// `uses` with the uses of each file that reexports others forwarded to them.
+pub(crate) fn forwarded<'p>(project: &'p Project, mut uses: Uses<'p>) -> Uses<'p> {
     let mut queue: Vec<&FileId> = uses.keys().copied().collect();
     while let Some(id) = queue.pop() {
         let file = &project.files[id];
@@ -338,7 +343,7 @@ fn unused_exports(
 
 /// Whether `used` keeps `export` alive. Reading a member uses its parent too, and a whole use
 /// covers every member below it. A default export's uses are relative to `default`.
-fn covers(used: &Use, export: &[String], default_export: bool) -> bool {
+pub(crate) fn covers(used: &Use, export: &[String], default_export: bool) -> bool {
     let mut path = Vec::new();
     if default_export {
         path.push("default".to_string());
@@ -482,7 +487,7 @@ fn runtime_edges<'p>(project: &'p Project, id: &FileId) -> impl Iterator<Item = 
 }
 
 /// The package `@types/<typed>` gives types to: `scope__name` → `@scope/name`.
-fn typed_package(typed: &str) -> String {
+pub(crate) fn typed_package(typed: &str) -> String {
     match typed.split_once("__") {
         Some((scope, name)) => format!("@{scope}/{name}"),
         None => typed.to_string(),
