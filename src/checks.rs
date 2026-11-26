@@ -340,8 +340,15 @@ fn dependencies(
     let root = &project.workspaces[0];
     for id in live.union(tested) {
         let workspace = &project.workspaces[project.workspace_of(id)];
+        // The root of a monorepo is not published, and package managers link the packages of
+        // the repository into it: its files can import them without declaring them.
+        let at_root = workspace.dir.is_empty();
         let declared = |package: &String| {
             workspace.name.as_ref() == Some(package)
+                || (at_root
+                    && project.workspaces[1..]
+                        .iter()
+                        .any(|other| other.name.as_ref() == Some(package)))
                 || workspace.declared_packages.contains(package)
                 || root.declared_packages.contains(package)
                 || project.nested_declared.iter().any(|(dir, declared)| {

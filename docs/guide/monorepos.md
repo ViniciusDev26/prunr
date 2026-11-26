@@ -15,7 +15,9 @@ pacote. Ele acha os pacotes pela declaração de cada ferramenta, somando o que 
 - Um import de outro pacote do repositório pelo nome (`@app/shared`, `@app/shared/x`) vira
   aresta para os arquivos dele, mesmo sem `node_modules`: pelo `exports`, `main` ou `module`, ou
   pelo fonte (`src/index`) quando eles apontam para um build que não existe. Quem importa precisa
-  declarar o pacote (`workspace:*` vale).
+  declarar o pacote (`workspace:*` vale), com duas exceções: um pacote que importa a si mesmo
+  pelo nome, e os arquivos do pacote raiz (testes de integração, scripts de desenvolvimento),
+  porque a raiz não é publicada e o gerenciador linka nela os pacotes do repositório.
 - As dependências de cada pacote são checadas nele: `unused-dependency` e `misplaced-dependency`
   dizem o pacote (`left-pad (packages/shared)`), e o `prunr fix` edita o `package.json` dele. O
   que o `package.json` raiz declara vale para todos os pacotes (dependências içadas e
