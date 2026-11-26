@@ -30,6 +30,15 @@ Só valores literais são lidos. Uma configuração montada em tempo de execuç�
 variável importada) cai nos padrões do runner; cubra o resto com `entries.test`. `testRegex`
 não é lido.
 
+### Configs montadas por função
+
+O prunr lê as configurações sem executá-las. Uma config montada em tempo de execução (uma função
+que devolve os projetos do Vitest, um `defineConfig(() => ...)`) não pode ser lida, mas os
+arquivos que ela carrega continuam escritos nela como texto: cada caminho relativo
+(`"./packages/kit/setup.ts"`) numa config que um plugin reconhece, ou num arquivo que ela importa
+diretamente, que aponta para um arquivo do projeto conta como código de teste que a ferramenta
+carrega. Só lá: no resto do código, uma string que parece caminho não prova uso.
+
 ## Mocha
 
 Com `mocha` declarado, o prunr lê a configuração do Mocha (`.mocharc.js`, `.cjs`, `.yaml`,
