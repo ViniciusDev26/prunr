@@ -354,7 +354,8 @@ pub(crate) fn covers(used: &Use, export: &[String], default_export: bool) -> boo
 
 /// The dependency checks, per package of the repository. The root package is the whole
 /// repository's: what it declares is available to every package, and every file, script and
-/// tool counts as using it. Any other package only counts its own.
+/// tool counts as using it, unless the package that uses it declares it too. Any other package
+/// only counts its own.
 fn dependencies(
     project: &Project,
     live: &BTreeSet<FileId>,
@@ -410,33 +411,63 @@ fn dependencies(
         } else {
             vec![workspace]
         };
-        let required = |files: &BTreeSet<FileId>| -> BTreeSet<&String> {
-            files
-                .iter()
-                .filter(|id| index == 0 || project.workspace_of(id) == index)
-                .flat_map(|id| &project.files[id].packages)
-                .collect()
+        // The root's dependencies serve the packages of the repository too, but not one a
+        // package declares itself: its own declaration is the one that installs it.
+        let serves = |member: usize, package: &String| {
+            let declares = |at: usize| {
+                let other = &project.workspaces[at];
+                other.dependencies.contains(package) || other.dev_dependencies.contains(package)
+            };
+            member == index || !declares(member)
         };
-        let mut in_production = required(live);
-        let mut in_tests = required(tested);
-        let mut in_scripts = BTreeSet::new();
-        for member in &scope {
-            in_production.extend(&member.production_packages);
-            in_tests.extend(&member.test_packages);
-            in_scripts.extend(&member.script_packages);
-        }
-        // A package needs its peers: whoever uses it uses them, the same way.
-        for used in [&mut in_production, &mut in_tests, &mut in_scripts] {
-            with_peers(used, &scope);
-        }
+        // What production, tests and scripts use; `served` leaves out what a package uses but
+        // declares itself, for the root.
+        let collect = |served: bool| {
+            let keep = |member: usize, package: &String| !served || serves(member, package);
+            let required = |files: &BTreeSet<FileId>| -> BTreeSet<&String> {
+                files
+                    .iter()
+                    .filter(|id| index == 0 || project.workspace_of(id) == index)
+                    .flat_map(|id| {
+                        let member = project.workspace_of(id);
+                        project.files[id]
+                            .packages
+                            .iter()
+                            .filter(move |package| keep(member, package))
+                    })
+                    .collect()
+            };
+            let mut used = [required(live), required(tested), BTreeSet::new()];
+            // The scope of the root is every package, in order; another package's is itself.
+            for (at, member) in scope.iter().enumerate() {
+                let at = if index == 0 { at } else { index };
+                let packages = [
+                    &member.production_packages,
+                    &member.test_packages,
+                    &member.script_packages,
+                ];
+                for (set, packages) in used.iter_mut().zip(packages) {
+                    set.extend(packages.iter().filter(|p| keep(at, p)));
+                }
+            }
+            // A package needs its peers: whoever uses it uses them, the same way.
+            for set in &mut used {
+                with_peers(set, &scope);
+            }
+            used
+        };
+        let [in_production, in_tests, in_scripts] = collect(true);
         let used = |package: &String| {
             in_production.contains(package)
                 || in_tests.contains(package)
                 || in_scripts.contains(package)
         };
+        // `@types/x` at the root gives types to an `x` a package declares itself.
+        let anywhere = collect(false);
+        let used_anywhere = |package: &String| anywhere.iter().any(|set| set.contains(package));
         let types_used = |package: &String| match package.strip_prefix("@types/") {
             Some("node") => typescript || builtins,
-            Some(typed) => used(&typed_package(typed)),
+            Some(typed) => used_anywhere(&typed_package(typed)),
             None => false,
         };
         let at = (index > 0).then(|| workspace.dir.clone());

@@ -2,7 +2,8 @@
 //! service `plugins`, its `types` and its `jsxImportSource`), following `extends` and
 //! `references`, and the type tests `tsc` or tsd check (`test-d/`, `*.test-d.ts`).
 //!
-//! A project with a `tsconfig.json` enables it even when `typescript` comes from elsewhere.
+//! A project with a `tsconfig.json` enables it even when `typescript` comes from elsewhere, and
+//! uses its `typescript`: `tsc` and the editor read it.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -29,6 +30,10 @@ impl Plugin for TypeScript {
         contribution
             .tests
             .extend(TYPE_TESTS.iter().map(|glob| glob.to_string()));
+        // `tsc` and the editor read the package's `tsconfig.json` with its `typescript`.
+        if context.root.join("tsconfig.json").is_file() {
+            contribution.reference("typescript");
+        }
         let mut pending: Vec<PathBuf> = std::fs::read_dir(context.root)
             .into_iter()
             .flatten()
@@ -144,7 +149,10 @@ mod tests {
         )
         .unwrap();
         let found = setup(dir.path(), &declared(&["typescript"]), &json!({}));
-        assert_eq!(found.packages, declared(&["@tsconfig/node20", "ts-plugin"]));
+        assert_eq!(
+            found.packages,
+            declared(&["@tsconfig/node20", "ts-plugin", "typescript"])
+        );
         assert_eq!(
             found.production_packages,
             declared(&[
@@ -172,5 +180,15 @@ mod tests {
         let dir = project(&[]);
         let found = setup(dir.path(), &declared(&[]), &json!({}));
         assert!(found.tests.is_empty());
+    }
+
+    #[test]
+    fn a_tsconfig_uses_typescript() {
+        let dir = project(&[("tsconfig.json", "{}")]);
+        let found = setup(dir.path(), &declared(&["typescript"]), &json!({}));
+        assert_eq!(found.packages, declared(&["typescript"]));
+        let dir = project(&[]);
+        let found = setup(dir.path(), &declared(&["typescript"]), &json!({}));
+        assert!(found.packages.is_empty());
     }
 }
