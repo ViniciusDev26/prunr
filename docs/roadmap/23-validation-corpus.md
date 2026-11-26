@@ -60,9 +60,11 @@ contra o Knip. É o teste de aceite do MVP em escala.
     dele, não exports do módulo (`Socket.DisconnectReason` no socket.io).
 
   - um `import("./x")` num exemplo de código de um comentário JSDoc não é import: só conta o de
-    dentro de uma expressão de tipo (`@type {import("./x").Y}`) (webpack, tRPC).
+    dentro de uma expressão de tipo (`@type {import("./x").Y}`) (webpack, tRPC);
+  - o `moduleNameMapper` e os `__mocks__` do Jest e o `resolve.alias` do Vite resolvem os nomes
+    deles (Jest: de 43 achados por alias para 16).
 
-  Com isso, os `missing-dependency` do corpus caíram de 2.429 para 448.
+  Com isso, os `missing-dependency` do corpus caíram de 2.429 para 421.
 
 - A triagem item a item: [`corpus/triage.mjs`](../../corpus/triage.mjs) confere cada
   `missing-dependency` e `unresolved-require` do último run no disco e escreve a categoria e a
@@ -72,7 +74,7 @@ contra o Knip. É o teste de aceite do MVP em escala.
   |---|---|---|---|
   | `missing-dependency` | pacote irmão sem declaração | 240 | o `package.json` do irmão tem esse `name` |
   | `missing-dependency` | declarado por outro pacote do repositório | 43 | o `package.json` que declara |
-  | `missing-dependency` | módulo local que um alias resolve | 43 | o arquivo com esse nome (`moduleNameMapper` do Jest) |
+  | `missing-dependency` | módulo local que um alias resolve | 16 | o arquivo com esse nome (o Haste do próprio Jest, aliases dos casos de teste do webpack) |
   | `missing-dependency` | import de JSR do Deno | 5 | o mapa de imports do Deno |
   | `missing-dependency` | sem declaração | 117 | nenhum `package.json` do repositório o declara |
   | `unresolved-require` | caminho montado | 438 | o caminho só existe em tempo de execução |
@@ -112,8 +114,9 @@ Diferenças conferidas em que o achado do prunr se sustenta, ou que é do Knip:
   declara (`exports`, `main`, `module`, `bin`), como o Knip: tratar todo arquivo como público
   esconderia os exports mortos de qualquer biblioteca sem `exports`. Quem expõe caminhos
   profundos de propósito marca os arquivos com `@public` ou os lista em `entries.production`.
-- **O `moduleNameMapper` do Jest e o `resolve.alias` do Vite** não são lidos: são cobertura de
-  plugin, da fase 2.
+- **O Haste do Jest** (os módulos pelo nome nas fixtures internas do próprio Jest) e os aliases
+  da configuração de cada caso de teste do webpack não são lidos: ferramentas desses próprios
+  repositórios.
 
 ## Pendências
 

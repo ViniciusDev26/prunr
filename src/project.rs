@@ -654,8 +654,27 @@ impl Project {
             Some((name.to_string(), file))
         };
         // Where a specifier points: a project file, else what `link` records.
-        let target_of =
-            |file: &mut File, from: &Path, specifier: &str| match workspace_file(specifier) {
+        // A name a tool maps (Jest's `moduleNameMapper` and `__mocks__`, Vite's `resolve.alias`):
+        // to a file of the package, as an absolute path, or to another specifier.
+        let aliased = |from: &Path, specifier: &str| -> Option<String> {
+            let index = workspace_index(&dir_names, paths.get(from)?);
+            let target = contributions[index]
+                .aliases
+                .iter()
+                .find_map(|alias| alias.apply(specifier))?;
+            Some(match target.strip_prefix("./") {
+                Some(path) => root
+                    .join(&dirs[index])
+                    .join(path)
+                    .to_string_lossy()
+                    .into_owned(),
+                None => target,
+            })
+        };
+        let target_of = |file: &mut File, from: &Path, specifier: &str| {
+            let aliased = aliased(from, specifier);
+            let specifier = aliased.as_deref().unwrap_or(specifier);
+            match workspace_file(specifier) {
                 Some((package, target)) => {
                     file.packages.insert(package);
                     Some(target)
@@ -702,7 +721,8 @@ impl Project {
                     }
                     file.link(target, specifier, &paths)
                 }
-            };
+            }
+        };
         // Each file is linked on its own, in parallel: the resolver is shared and caches.
         let jobs: Vec<(&PathBuf, &FileId, Facts)> = paths
             .iter()

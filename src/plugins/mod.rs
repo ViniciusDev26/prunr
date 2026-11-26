@@ -130,6 +130,55 @@ pub struct Contribution {
     /// Commands the tools run (Playwright's web servers), read like the `scripts` of
     /// `package.json` that run test code.
     pub scripts: Vec<String>,
+    /// Names a tool resolves itself (Jest's `moduleNameMapper` and `__mocks__`, Vite's
+    /// `resolve.alias`), tried before a specifier is resolved as Node.js would.
+    pub aliases: Vec<Alias>,
+}
+
+/// A name a tool maps to a file (`./src/lib/x`, relative to the package) or to a package.
+#[derive(Debug, Clone)]
+pub struct Alias {
+    pattern: Pattern,
+    target: String,
+}
+
+#[derive(Debug, Clone)]
+enum Pattern {
+    /// The name itself, or the name followed by a subpath (`@` matches `@/utils/a`).
+    Prefix(String),
+    /// A regular expression whose groups the target uses as `$1`.
+    Regex(regex::Regex),
+}
+
+impl PartialEq for Alias {
+    fn eq(&self, other: &Self) -> bool {
+        let key = |alias: &Alias| match &alias.pattern {
+            Pattern::Prefix(prefix) => format!("prefix:{prefix}"),
+            Pattern::Regex(regex) => format!("regex:{}", regex.as_str()),
+        };
+        key(self) == key(other) && self.target == other.target
+    }
+}
+
+impl Eq for Alias {}
+
+impl Alias {
+    /// What `specifier` becomes, if the alias matches it.
+    pub fn apply(&self, specifier: &str) -> Option<String> {
+        match &self.pattern {
+            Pattern::Prefix(prefix) => {
+                let rest = specifier.strip_prefix(prefix.as_str())?;
+                (rest.is_empty() || rest.starts_with('/'))
+                    .then(|| format!("{}{rest}", self.target.trim_end_matches('/')))
+            }
+            // The whole name becomes the target, with the groups it matched.
+            Pattern::Regex(regex) => regex.captures(specifier).map(|groups| {
+                let mut target = String::new();
+                groups.expand(&self.target, &mut target);
+                target
+            }),
+        }
+    }
 }
 
 /// A tool or framework prunr knows.
@@ -307,6 +356,27 @@ impl Contribution {
         }
     }
 
+    /// An alias for a name and the names under it.
+    fn alias(&mut self, name: &str, target: &str) {
+        self.aliases.push(Alias {
+            pattern: Pattern::Prefix(name.to_string()),
+            target: target.to_string(),
+        });
+    }
+
+    /// An alias for the names a regular expression matches; one that does not compile is none.
+    fn alias_regex(&mut self, pattern: &str, target: &str) {
+        // `$1a` would be a group named `1a` for the regex crate; `${1}a` is not.
+        let groups = regex::Regex::new(r"\$(\d+)").expect("the pattern compiles");
+        let target = groups.replace_all(target, "$${$1}").into_owned();
+        if let Ok(regex) = regex::Regex::new(pattern) {
+            self.aliases.push(Alias {
+                pattern: Pattern::Regex(regex),
+                target,
+            });
+        }
+    }
+
     /// The test globs an option lists, or `defaults` when it lists none.
     fn tests(&mut self, patterns: &Value, defaults: &[&str]) {
         let patterns: Vec<String> = names(patterns)
@@ -393,6 +463,22 @@ mod tests {
         let dir = project(&[]);
         let found = setup(dir.path(), &declared(&[]), &json!({ "name": "mocha" }));
         assert_eq!(found.tests, strings(&["test/*.*"]));
+    }
+
+    #[test]
+    fn aliases_are_equal_when_their_pattern_and_target_are() {
+        let mut a = Contribution::default();
+        a.alias("@", "./src");
+        a.alias_regex("^x$", "./x");
+        let b = Contribution {
+            aliases: a.aliases.clone(),
+            ..Contribution::default()
+        };
+        assert_eq!(a, b);
+        let mut c = Contribution::default();
+        c.alias("@", "./lib");
+        c.alias_regex("^y$", "./x");
+        assert_ne!(a, c);
     }
 
     #[test]
