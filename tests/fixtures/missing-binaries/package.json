@@ -1,0 +1,14 @@
+{
+  "name": "missing-binaries",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p .",
+    "lint": "cross-env CI=1 eslint . && eslint --fix .",
+    "tool": "pnpm exec scoped-tool",
+    "deploy": "git push && docker build .",
+    "new": "npx create-thing"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

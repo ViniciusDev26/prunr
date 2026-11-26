@@ -105,6 +105,10 @@ const RULES: &[(&str, &str)] = &[
         "missing-dependency",
         "The code imports a package package.json does not declare.",
     ),
+    (
+        "missing-binary",
+        "A script runs a binary of a package package.json does not declare.",
+    ),
     ("circular-import", "There is an import cycle."),
     ("unresolved-require", "A require prunr cannot follow."),
     ("unparsed-file", "A file the graph reaches does not parse."),
@@ -274,6 +278,9 @@ fn position(finding: &Finding, project: &Project) -> (String, Option<u32>) {
         Finding::UnusedIgnore { file, line } => (file.clone(), Some(*line)),
         Finding::UnusedDependency { package, workspace }
         | Finding::MisplacedDependency { package, workspace } => manifest(package, workspace),
+        Finding::MissingBinary {
+            script, workspace, ..
+        } => manifest(script, workspace),
         Finding::MissingDependency { file, package } => {
             let line = facts(file)
                 .require_lines
@@ -385,6 +392,18 @@ fn describe(finding: &Finding) -> (&'static str, String) {
         Finding::MissingDependency { file, package } => {
             ("missing-dependency", format!("{file}: {package}"))
         }
+        Finding::MissingBinary {
+            script,
+            binary,
+            package,
+            workspace,
+        } => (
+            "missing-binary",
+            format!(
+                "{script}: {binary}, from {package}, which {} does not declare",
+                manifest_path(workspace)
+            ),
+        ),
         Finding::CircularImport { cycle } => ("circular-import", cycle.join(" -> ")),
         Finding::UnresolvedRequire { file, specifier } => {
             ("unresolved-require", format!("{file}: {specifier}"))

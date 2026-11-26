@@ -116,6 +116,7 @@ rodar.
 | `unused-dependency` | Nada importa o pacote e nenhum script o roda. |
 | `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o usam. |
 | `missing-dependency` | O código importa um pacote que o `package.json` não declara. |
+| `missing-binary` | Um script roda o binário de um pacote que o `package.json` não declara. |
 | `circular-import` | Há um ciclo de imports. |
 | `unused-ignore` | Um comentário `prunr-ignore` que não ignora mais nada. |
 | `unresolved-require` | Aviso: um `require` que não dá para seguir. |

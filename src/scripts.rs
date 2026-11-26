@@ -26,6 +26,48 @@ pub fn packages(script: &str, bins: &BTreeMap<String, String>) -> BTreeSet<Strin
     used
 }
 
+/// The binaries a script runs itself, in order: not the ones a runner downloads (`npx x`,
+/// `pnpm dlx x`) nor the package manager's own commands (`npm run x`).
+pub fn binaries(script: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    for words in commands(script) {
+        let words: Vec<&str> = words.iter().map(String::as_str).collect();
+        let mut words = words.as_slice();
+        loop {
+            words = skip(words, is_assignment);
+            let Some((&first, rest)) = words.split_first() else {
+                break;
+            };
+            if RUNNERS.contains(&first) {
+                break;
+            }
+            if MANAGERS.contains(&first) {
+                match rest.first() {
+                    Some(&"exec") => {
+                        words = skip(&rest[1..], |word| word.starts_with('-'));
+                        continue;
+                    }
+                    Some(sub) if first != "npm" && !EXEC.contains(sub) => {
+                        words = rest;
+                        continue;
+                    }
+                    _ => break,
+                }
+            }
+            found.push(first.to_string());
+            match first {
+                "cross-env" => words = rest,
+                "dotenv" => match rest.iter().position(|word| *word == "--") {
+                    Some(end) => words = &rest[end + 1..],
+                    None => break,
+                },
+                _ => break,
+            }
+        }
+    }
+    found
+}
+
 /// The configuration files a script passes to `runner` with `--config`/`-c`.
 pub fn configs(script: &str, runner: &str) -> Vec<String> {
     let installed = format!("node_modules/{runner}/");
@@ -376,6 +418,26 @@ fn preloads(words: &[&str], used: &mut BTreeSet<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_binaries_a_script_runs_itself() {
+        let script = "A=1 tsc -p . && cross-env CI=1 eslint . | yarn jest; pnpm exec vitest; \
+                      npx create-x; pnpm dlx y; bun x z; dotenv -e .env -- node a.js; npm run b; \
+                      yarn; pnpm exec; dotenv -e .env";
+        assert_eq!(
+            binaries(script),
+            [
+                "tsc",
+                "cross-env",
+                "eslint",
+                "jest",
+                "vitest",
+                "dotenv",
+                "node",
+                "dotenv"
+            ]
+        );
+    }
 
     fn run(package: Option<&str>, preloads: &[&str], candidates: &[&str]) -> Run {
         Run {
