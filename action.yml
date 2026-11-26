@@ -1,0 +1,74 @@
+name: prunr
+description: Dead code detector for Node.js, with CommonJS as a first-class citizen
+author: ViniciusDev26
+branding:
+  icon: scissors
+  color: green
+
+inputs:
+  version:
+    description: The version of @prunr/prunr to run.
+    default: latest
+  working-directory:
+    description: The project's folder, the one with prunr.json.
+    default: .
+  format:
+    description: >-
+      github: annotations on the diff. sarif: the code scanning of the repository (needs the
+      security-events write permission). markdown: a table in the job summary.
+    default: github
+  since:
+    description: Report only what this ref did not have (checkout with fetch-depth 0).
+    default: ""
+  production:
+    description: Only what goes to production (prunr check --production).
+    default: "false"
+
+outputs:
+  exit-code:
+    description: The exit code of prunr check (0 clean, 1 findings, 2 error).
+    value: ${{ steps.check.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PRUNR_VERSION: ${{ inputs.version }}
+        PRUNR_FORMAT: ${{ inputs.format }}
+        PRUNR_SINCE: ${{ inputs.since }}
+        PRUNR_PRODUCTION: ${{ inputs.production }}
+      run: |
+        args=(check)
+        case "$PRUNR_FORMAT" in
+          github | sarif | markdown) args+=("--$PRUNR_FORMAT") ;;
+          *)
+            echo "::error title=prunr::format must be github, sarif or markdown, not $PRUNR_FORMAT"
+            exit 2
+            ;;
+        esac
+        if [ -n "$PRUNR_SINCE" ]; then args+=(--since "$PRUNR_SINCE"); fi
+        if [ "$PRUNR_PRODUCTION" = true ]; then args+=(--production); fi
+        set +e
+        npx --yes "@prunr/prunr@$PRUNR_VERSION" "${args[@]}" > "$RUNNER_TEMP/prunr-output"
+        code=$?
+        set -e
+        case "$PRUNR_FORMAT" in
+          github) cat "$RUNNER_TEMP/prunr-output" ;;
+          sarif) mv "$RUNNER_TEMP/prunr-output" "$RUNNER_TEMP/prunr.sarif" ;;
+          markdown) cat "$RUNNER_TEMP/prunr-output" >> "$GITHUB_STEP_SUMMARY" ;;
+        esac
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+    - if: inputs.format == 'sarif' && steps.check.outputs.exit-code != '2'
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ runner.temp }}/prunr.sarif
+        category: prunr
+
+    - shell: bash
+      env:
+        PRUNR_EXIT_CODE: ${{ steps.check.outputs.exit-code }}
+      run: exit "$PRUNR_EXIT_CODE"
