@@ -23,7 +23,7 @@ impl Plugin for Vue {
     }
 }
 
-fn compile(source: &str) -> Compiled {
+pub(super) fn compile(source: &str) -> Compiled {
     let (scripts, typescript) = script_blocks(source);
     Compiled {
         source: keep(source, &scripts),
