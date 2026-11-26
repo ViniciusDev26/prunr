@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.6.0](https://github.com/ViniciusDev26/prunr/compare/v0.5.0...v0.6.0) (2026-11-26)
+
+
+### Features
+
+* a github action that runs prunr check ([#91](https://github.com/ViniciusDev26/prunr/issues/91)) ([e894060](https://github.com/ViniciusDev26/prunr/commit/e89406061b13466ea89fe932b050ef3b8492afdd))
+* astro conventions and react router plugin ([#80](https://github.com/ViniciusDev26/prunr/issues/80)) ([b1f35ad](https://github.com/ViniciusDev26/prunr/commit/b1f35adff63ea17a8147520d430a67223acf0110))
+* compile vue, svelte, astro and mdx files to their scripts ([#75](https://github.com/ViniciusDev26/prunr/issues/75)) ([cf87ad4](https://github.com/ViniciusDev26/prunr/commit/cf87ad41446be88b537bfda1d65cc1d1a6f222df))
+* declarative tool plugins for eslint, prettier, babel and commitlint ([#76](https://github.com/ViniciusDev26/prunr/issues/76)) ([0eb96ef](https://github.com/ViniciusDev26/prunr/commit/0eb96efc3ba179ccccd60ccd307fe01758222a35))
+* init translates a knip config ([#93](https://github.com/ViniciusDev26/prunr/issues/93)) ([ba9cff0](https://github.com/ViniciusDev26/prunr/commit/ba9cff027b04a4273e66833c9e5be06030c944a5))
+* packages a library loads by the names passed to it are used ([#95](https://github.com/ViniciusDev26/prunr/issues/95)) ([ab67260](https://github.com/ViniciusDev26/prunr/commit/ab6726011e329285678abd98ef5a945052bf48f5))
+* report the esm exports of the same binding under two names ([#90](https://github.com/ViniciusDev26/prunr/issues/90)) ([6c6b016](https://github.com/ViniciusDev26/prunr/commit/6c6b0168c603743e530915b9e740437843e877d7))
+* report the script binaries only an undeclared package provides ([#92](https://github.com/ViniciusDev26/prunr/issues/92)) ([998fec0](https://github.com/ViniciusDev26/prunr/commit/998fec057dca9a4558d3719b7ee6217e05923651))
+* report the uncalled methods of exported classes in applications ([#89](https://github.com/ViniciusDev26/prunr/issues/89)) ([b04232e](https://github.com/ViniciusDev26/prunr/commit/b04232e80260f48f703b3bc157839eecfbba4a33))
+* report the unused members of exported enums ([#88](https://github.com/ViniciusDev26/prunr/issues/88)) ([35a22dd](https://github.com/ViniciusDev26/prunr/commit/35a22dd3098441099311d394c62052cf5b15db84))
+* sveltekit and nuxt plugins ([#79](https://github.com/ViniciusDev26/prunr/issues/79)) ([b99b5e5](https://github.com/ViniciusDev26/prunr/commit/b99b5e5e65d7e2e08be6942ac03b0e52be60f408))
+* the paths written in a config are the files the tool loads ([#94](https://github.com/ViniciusDev26/prunr/issues/94)) ([92da45a](https://github.com/ViniciusDev26/prunr/commit/92da45a3aa7a38960340794e5968d0fa44f1da0a))
+* tool plugins for storybook, cypress, husky, lint-staged, tailwind, prisma, tsup, rollup and webpack ([#78](https://github.com/ViniciusDev26/prunr/issues/78)) ([e2298dc](https://github.com/ViniciusDev26/prunr/commit/e2298dc213e1b65109facfdee2f610942fc63112))
+* turn plugins off or on in prunr.json ([#96](https://github.com/ViniciusDev26/prunr/issues/96)) ([db1d085](https://github.com/ViniciusDev26/prunr/commit/db1d0850816ce90e12f9ced12ee8cbb3dc4d31ab))
+* typescript plugin reads tsconfig extends, types, plugins and references ([#73](https://github.com/ViniciusDev26/prunr/issues/73)) ([adc1748](https://github.com/ViniciusDev26/prunr/commit/adc17484a7442adbfb010cd058b52e4e9b18f03f))
+* vitepress plugin ([#81](https://github.com/ViniciusDev26/prunr/issues/81)) ([97057de](https://github.com/ViniciusDev26/prunr/commit/97057defa8956a85d063f1a2b25cf73bdc8a4a34))
+
+
+### Bug Fixes
+
+* a root dependency that the packages using it declare themselves is unused ([#86](https://github.com/ViniciusDev26/prunr/issues/86)) ([77ffe5b](https://github.com/ViniciusDev26/prunr/commit/77ffe5b16bab78f3a331381b6993eb0139ddc039))
+* compile single-file components per package and skip svelte prop exports ([#77](https://github.com/ViniciusDev26/prunr/issues/77)) ([dc859a5](https://github.com/ViniciusDev26/prunr/commit/dc859a5ca9a6c9f0e3cd78e56e5d2d6728d68ae5))
+* **mocha:** skip the values of the watch, parallel and node flags ([#84](https://github.com/ViniciusDev26/prunr/issues/84)) ([fc99f25](https://github.com/ViniciusDev26/prunr/commit/fc99f25b6e497e2bad73c23d651bc6036912e2f7))
+* **why:** follow reexports and explain entries, own-file uses and [@types](https://github.com/types) ([#85](https://github.com/ViniciusDev26/prunr/issues/85)) ([fbc8d14](https://github.com/ViniciusDev26/prunr/commit/fbc8d147def4dfe001c15fc14e35cfd2ad291a66))
+
+
+### Documentation
+
+* close phase 3 in the roadmap and refresh the benchmark ([#97](https://github.com/ViniciusDev26/prunr/issues/97)) ([44c8b09](https://github.com/ViniciusDev26/prunr/commit/44c8b0993221a79f528abc0eb036e761fcb41df0))
+* plan phase 3 in the roadmap ([#83](https://github.com/ViniciusDev26/prunr/issues/83)) ([507668f](https://github.com/ViniciusDev26/prunr/commit/507668f67bf3aadf1a65684bee709787065e15e1))
+* triage what only knip reports ([#87](https://github.com/ViniciusDev26/prunr/issues/87)) ([fee5b31](https://github.com/ViniciusDev26/prunr/commit/fee5b31c26e0e658f61159a115e0c129fcec9fed))
+* update the knip agreement after phase 2 ([#82](https://github.com/ViniciusDev26/prunr/issues/82)) ([1830c81](https://github.com/ViniciusDev26/prunr/commit/1830c813e15cc56bc0d90673dba508398a789745))
+
 ## [0.5.0](https://github.com/ViniciusDev26/prunr/compare/v0.4.0...v0.5.0) (2026-11-26)
 
 
