@@ -57,6 +57,8 @@ pub struct File {
     pub packages: BTreeSet<String>,
     /// Requires that point nowhere: dynamic ones by their source, missing files by specifier.
     pub unresolved: Vec<String>,
+    /// Why the file could not be parsed, if it could not: then it has no facts.
+    pub parse_error: Option<String>,
     /// `export ... from` other project files: uses of this file that they forward there.
     pub reexports: Vec<(FileId, ReexportKind)>,
     /// The file requires a Node.js builtin module.
@@ -110,14 +112,12 @@ pub fn as_commonjs(used: &Use) -> Use {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProjectError {
-    Parse { file: FileId, message: String },
     PackageJson(String),
 }
 
 impl std::fmt::Display for ProjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Parse { file, message } => write!(f, "{file}: {message}"),
             Self::PackageJson(reason) => write!(f, "invalid package.json: {reason}"),
         }
     }
@@ -460,7 +460,7 @@ impl Project {
             })
             .collect();
         // Each file is read and analyzed on its own, in parallel; the results keep the order of
-        // `paths`, so the error reported is always the one of the first file that has one.
+        // `paths`.
         use rayon::prelude::*;
         let results: Vec<(FileId, Result<Facts, String>)> = paths
             .par_iter()
@@ -469,12 +469,15 @@ impl Project {
                 (id.clone(), analyze(&source, path))
             })
             .collect();
+        // A file that does not parse (a fixture broken on purpose, a syntax prunr does not read)
+        // is in the graph without facts; the checks warn when something reaches it.
         let mut analyzed = BTreeMap::new();
+        let mut parse_errors = BTreeMap::new();
         for (id, facts) in results {
-            let facts = facts.map_err(|message| ProjectError::Parse {
-                file: id.clone(),
-                message,
-            })?;
+            let facts = facts.unwrap_or_else(|message| {
+                parse_errors.insert(id.clone(), message);
+                Facts::default()
+            });
             analyzed.insert(id, facts);
         }
         let esm: BTreeSet<FileId> = analyzed
@@ -589,6 +592,7 @@ impl Project {
                 }
                 file.unresolved
                     .extend(facts.dynamic_requires.iter().cloned());
+                file.parse_error = parse_errors.get(id).cloned();
                 file.facts = facts;
                 (id.clone(), file)
             })
@@ -1289,14 +1293,12 @@ mod tests {
     }
 
     #[test]
-    fn a_file_that_does_not_parse_is_an_error() {
+    fn a_file_that_does_not_parse_is_in_the_graph_without_facts() {
         let dir = project(&[("lib/broken.js", "const = ;")]);
-        let error = Project::load(dir.path()).unwrap_err();
-        assert!(
-            matches!(&error, ProjectError::Parse { file, .. } if file == "lib/broken.js"),
-            "{error:?}"
-        );
-        assert!(error.to_string().starts_with("lib/broken.js: "), "{error}");
+        let project = Project::load(dir.path()).unwrap();
+        let broken = &project.files["lib/broken.js"];
+        assert!(broken.parse_error.as_ref().is_some_and(|e| !e.is_empty()));
+        assert!(broken.edges.is_empty());
     }
 
     #[test]

@@ -82,4 +82,4 @@ pacote declarado (`docker`, `git`) não é `missing-dependency`.
 |---|---|
 | `0` | Nenhum achado, ou só avisos. |
 | `1` | Há achados novos, ou entradas obsoletas no baseline. |
-| `2` | O comando não pôde rodar: `prunr.json` ausente ou inválido, `package.json` inválido, arquivo com erro de sintaxe ou argumento desconhecido. |
+| `2` | O comando não pôde rodar: `prunr.json` ausente ou inválido, `package.json` inválido ou argumento desconhecido. Um arquivo com erro de sintaxe não impede o check (veja `unparsed-file` em [Achados](checks.md)). |

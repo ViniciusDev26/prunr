@@ -1,0 +1,184 @@
+{
+  "repositories": [
+    {
+      "name": "express",
+      "repo": "expressjs/express",
+      "commit": "43fca52d28a422c8be48fd489cbd4f2d6152bab6",
+      "kind": "cjs"
+    },
+    {
+      "name": "koa",
+      "repo": "koajs/koa",
+      "commit": "b22416f966ce453a35725fcd168096d7c5da9b09",
+      "kind": "cjs"
+    },
+    {
+      "name": "fastify",
+      "repo": "fastify/fastify",
+      "commit": "a94dc370a08975eeb41597e4aa7f4202bcf8942c",
+      "kind": "cjs"
+    },
+    {
+      "name": "hapi",
+      "repo": "hapijs/hapi",
+      "commit": "849671300603c6899882cd12143a84555f5250e7",
+      "kind": "cjs"
+    },
+    {
+      "name": "undici",
+      "repo": "nodejs/undici",
+      "commit": "245306dc31b22316600bc963120f34714ebcdd0a",
+      "kind": "cjs"
+    },
+    {
+      "name": "mocha",
+      "repo": "mochajs/mocha",
+      "commit": "04eb516fe73eb3da0ac2a057dd9349d210c19b5f",
+      "kind": "cjs"
+    },
+    {
+      "name": "eslint",
+      "repo": "eslint/eslint",
+      "commit": "1429546afcaae2321cc47df90ba7024958c2d46b",
+      "kind": "cjs"
+    },
+    {
+      "name": "webpack",
+      "repo": "webpack/webpack",
+      "commit": "c41cf5cc8881ecfe4d4dce11b28ced706c8592b9",
+      "kind": "cjs"
+    },
+    {
+      "name": "yargs",
+      "repo": "yargs/yargs",
+      "commit": "9588a764365c0fd9a6b5dd2f76f2e1be805c5426",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "axios",
+      "repo": "axios/axios",
+      "commit": "71c87d506567e2fe37ba9f6fae6a4fc9411583d0",
+      "kind": "esm"
+    },
+    {
+      "name": "nodemailer",
+      "repo": "nodemailer/nodemailer",
+      "commit": "2c0920938da17ed50eaa3d68f28fcb873c2ae388",
+      "kind": "cjs"
+    },
+    {
+      "name": "mongoose",
+      "repo": "Automattic/mongoose",
+      "commit": "e34f6001eee6054e2c15e25b2e60b22264f29f2a",
+      "kind": "cjs"
+    },
+    {
+      "name": "pino",
+      "repo": "pinojs/pino",
+      "commit": "b5fac264351ca662b0961becc657743a23feb0c4",
+      "kind": "cjs"
+    },
+    {
+      "name": "winston",
+      "repo": "winstonjs/winston",
+      "commit": "ff0b79de8562bb322c390fbc82fe71c11f373428",
+      "kind": "cjs"
+    },
+    {
+      "name": "commander",
+      "repo": "tj/commander.js",
+      "commit": "a5a7dc084d4d2b7932e85ca049c5204e50a2c721",
+      "kind": "cjs"
+    },
+    {
+      "name": "json-server",
+      "repo": "typicode/json-server",
+      "commit": "89a34a44b7a6a5311dc84f3b8a1b8b45c0905aea",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "socket.io",
+      "repo": "socketio/socket.io",
+      "commit": "c04ce00d380af51cec92d136cd6fb6631d8d8c41",
+      "kind": "monorepo"
+    },
+    {
+      "name": "prettier",
+      "repo": "prettier/prettier",
+      "commit": "da84d5342bf0cc285136c73709468525bb9c1b01",
+      "kind": "esm"
+    },
+    {
+      "name": "got",
+      "repo": "sindresorhus/got",
+      "commit": "c196ad006b5c5c21717bafb93a384e68d2f33998",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "date-fns",
+      "repo": "date-fns/date-fns",
+      "commit": "a9739fb3e5384a810e90d7376446f6d84ecc5029",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "nest",
+      "repo": "nestjs/nest",
+      "commit": "a4c2a51ae9e206a21da27a6af565180a33daa809",
+      "kind": "monorepo"
+    },
+    {
+      "name": "vite",
+      "repo": "vitejs/vite",
+      "commit": "adc761d6e123c1fd0917c8b80e0d1050689ccbcd",
+      "kind": "monorepo"
+    },
+    {
+      "name": "trpc",
+      "repo": "trpc/trpc",
+      "commit": "f6d113b3aa64ac07533a727fbf81774e8de81e67",
+      "kind": "monorepo"
+    },
+    {
+      "name": "query",
+      "repo": "TanStack/query",
+      "commit": "635aad6a95b08dffc91ba1973c043b219f085cd6",
+      "kind": "monorepo"
+    },
+    {
+      "name": "excalidraw",
+      "repo": "excalidraw/excalidraw",
+      "commit": "dabd83c4aa6b9e42d0dd0a42be62200eb8e3cce9",
+      "kind": "monorepo"
+    },
+    {
+      "name": "jest",
+      "repo": "jestjs/jest",
+      "commit": "aa88f7cf0bfc7a3a2efbfcab97914886b22d4454",
+      "kind": "monorepo"
+    },
+    {
+      "name": "node-red",
+      "repo": "node-red/node-red",
+      "commit": "cb41af94cd1e0bece24280e49b846ec5d6e85e47",
+      "kind": "cjs"
+    },
+    {
+      "name": "sequelize",
+      "repo": "sequelize/sequelize",
+      "commit": "6f4cca6a74639b5d057f3823359489b52902191e",
+      "kind": "monorepo"
+    },
+    {
+      "name": "knex",
+      "repo": "knex/knex",
+      "commit": "e25d54bcb707714a17f5a5744eba5c4246bb4d1d",
+      "kind": "cjs"
+    },
+    {
+      "name": "cli",
+      "repo": "npm/cli",
+      "commit": "787f1520fa412e91a5792468f1c7f25b166867a6",
+      "kind": "monorepo"
+    }
+  ]
+}
