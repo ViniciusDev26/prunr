@@ -261,7 +261,10 @@ mod tests {
             }
         });
         let found = setup(dir.path(), &declared(&["mocha"]), &manifest);
-        assert_eq!(found.tests, strings(&["spec/**/*.js", "spec/**", "spec/**/*.js"]));
+        assert_eq!(
+            found.tests,
+            strings(&["spec/**/*.js", "spec/**", "spec/**/*.js"])
+        );
         assert_eq!(found.files, strings(&["./helpers.js", "./setup.js"]));
         assert_eq!(
             found.packages,
