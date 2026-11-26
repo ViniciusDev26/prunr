@@ -32,8 +32,9 @@ scripts.
   `require` with a built path (`` require(`./handlers/${name}`) ``).
 - **ESM and TypeScript in the same graph**, with `tsconfig.json` `paths` and CJS/ESM interop the
   way Node does it.
-- **Knows your stack** with no setup: Jest, Vitest, Playwright, Vite, React, Next.js, NestJS,
-  Drizzle Kit, PostCSS and monorepos (npm, yarn, pnpm, bun, lerna, rush, nx, turbo).
+- **Knows your stack** with no setup: Jest, Vitest, Mocha, `node --test`, tap, AVA, Playwright,
+  Vite, React, Next.js, NestJS, Drizzle Kit, PostCSS and monorepos (npm, yarn, pnpm, bun, lerna,
+  rush, nx, turbo).
 - **Fixes it for you:** `prunr fix` deletes what is dead and cleans up `package.json`.
 - **Built for CI:** annotations on the PR diff, only new findings with `--since`, and a baseline
   for adopting it on legacy code.

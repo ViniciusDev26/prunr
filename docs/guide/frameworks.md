@@ -25,6 +25,28 @@ Só valores literais são lidos. Uma configuração montada em tempo de execuç�
 variável importada) cai nos padrões do runner; cubra o resto com `entries.test`. `testRegex`
 não é lido.
 
+## Mocha
+
+Com `mocha` declarado, o prunr lê a configuração do Mocha (`.mocharc.js`, `.cjs`, `.yaml`,
+`.yml`, `.jsonc` ou `.json`, a chave `mocha` do `package.json`, ou a que um script passa com
+`--config`) e a linha de comando de cada script que roda `mocha`:
+
+- **Arquivos de teste:** o `spec` da configuração e os caminhos (pastas, arquivos, globs) que o
+  script passa; sem nenhum, o padrão do Mocha (`test/*`, ou `test/**` com `recursive`).
+- **Carregados antes:** `require` e `file` (também `-r`/`--require` e `--file` no script) são
+  código de teste quando são arquivos do projeto, e uso de teste quando são pacotes
+  (`ts-node/register`, `should`).
+- **Reporters** que não vêm com o Mocha contam como uso de teste.
+
+## `node --test`, tap, AVA, lab e borp
+
+Um script que roda `node --test`, `tap`, `ava`, `lab` ou `borp` (os quatro últimos quando o
+pacote está declarado) roda como teste os caminhos que passa: pastas, arquivos e globs. Sem
+nenhum, valem os padrões de cada runner (no `node --test`, `*.test.*`, `*-test.*`, `test.*` e
+`test/**`, entre outros). Um argumento só conta como caminho se existe ou tem glob, então o
+valor de uma flag (`--import tsx`) não esconde os padrões. O `-a` do lab (a biblioteca de
+asserções) conta como uso.
+
 ### Vitest com `projects`
 
 Os itens de `test.projects` são lidos também: um arquivo de configuração, ou uma pasta (ou um
