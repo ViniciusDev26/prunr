@@ -19,7 +19,7 @@ use oxc_ast::ast::{
     TSModuleReference, TemplateLiteral, UnaryOperator,
 };
 use oxc_ast::{AstKind, Comment};
-use oxc_parser::Parser;
+use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::{NodeId, Semantic, SemanticBuilder, SymbolId};
 use oxc_span::{GetSpan, SourceType, Span};
 
@@ -170,7 +170,19 @@ pub enum Ignore {
 pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(path).unwrap_or(SourceType::cjs());
-    let parsed = Parser::new(&allocator, source, source_type).parse();
+    // JSX is common in `.js` files (Create React App, webpack examples), and a CommonJS module
+    // can `return` at its top level.
+    let source_type = match source_type.is_typescript() {
+        true => source_type,
+        false => source_type.with_jsx(true),
+    };
+    let options = ParseOptions {
+        allow_return_outside_function: true,
+        ..ParseOptions::default()
+    };
+    let parsed = Parser::new(&allocator, source, source_type)
+        .with_options(options)
+        .parse();
     if let Some(error) = parsed.diagnostics.first() {
         return Err(error.to_string());
     }

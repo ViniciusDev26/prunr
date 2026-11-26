@@ -198,13 +198,29 @@ fn a_missing_config_is_an_error() {
 }
 
 #[test]
-fn a_file_that_does_not_parse_is_an_error() {
+fn a_file_that_does_not_parse_and_is_reached_is_a_warning() {
     let run = check("syntax-error");
-    assert_eq!(run.code, 2);
+    assert_eq!(run.code, 0, "{}", run.stderr);
     assert!(
-        run.stderr.starts_with("error: index.js: "),
+        run.stdout.starts_with("unparsed-file         index.js: "),
         "{}",
-        run.stderr
+        run.stdout
+    );
+    assert!(
+        run.stdout
+            .ends_with("(warning)\n\nerrors: 0, warnings: 1\n"),
+        "{}",
+        run.stdout
+    );
+}
+
+#[test]
+fn jsx_in_js_files_top_level_return_and_unreached_broken_files_do_not_stop_the_check() {
+    let run = check("unparsable");
+    assert_eq!(run.code, 1, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "unused-file           fixtures/broken.js\n\nerrors: 1, warnings: 0\n"
     );
 }
 
@@ -1219,24 +1235,5 @@ fn the_output_is_the_same_with_any_number_of_threads() {
             check(fixture).stdout,
             "{fixture}"
         );
-    }
-}
-
-#[test]
-fn the_syntax_error_reported_is_the_one_of_the_first_file() {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("package.json"), "{}").unwrap();
-    std::fs::write(
-        dir.path().join("prunr.json"),
-        r#"{ "entries": { "production": ["a.js"] } }"#,
-    )
-    .unwrap();
-    for name in ["a.js", "b.js", "c.js", "d.js"] {
-        std::fs::write(dir.path().join(name), "const = ;").unwrap();
-    }
-    for _ in 0..5 {
-        let run = run_in(dir.path(), &["check"]);
-        assert_eq!(run.code, 2);
-        assert!(run.stderr.contains("a.js"), "{}", run.stderr);
     }
 }
