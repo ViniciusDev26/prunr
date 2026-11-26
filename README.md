@@ -179,6 +179,12 @@ O prunr reporta só `cancel`: lê cada chave do objeto, segue o uso por `invoice
 módulo passado adiante, uma chave computada), ele considera tudo usado: é melhor deixar passar
 um export morto do que mandar apagar um vivo.
 
+Não é um caso teórico. O prunr nasceu num projeto Node.js de produção, todo em CommonJS, que
+adotou o Knip, ajustou os entry points, apagou o que ele apontou, e acabou removendo a ferramenta
+por excesso de falsos positivos. No mesmo projeto, o prunr apontou 26 problemas reais (arquivos e
+exports mortos, dependências sem uso e um encerramento de fila que nunca era chamado), todos
+resolvidos, e hoje roda no CI sem achados pendentes.
+
 **Uma ferramenta no lugar de várias.** Arquivos, exports, imports e dependências sem uso,
 dependências não declaradas ou no lugar errado e imports circulares saem do mesmo grafo, num
 comando. É o trabalho que costuma ficar dividido entre `depcheck`, `madge`, `unimported` e
