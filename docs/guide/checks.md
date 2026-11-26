@@ -11,10 +11,14 @@ todas as verificações sobre esse mesmo grafo.
 | `unused-ignore` | Um comentário `prunr-ignore-next-line` ou `prunr-ignore-file` não impede nenhum achado. Veja [Ignorar no código](ignore.md). |
 | `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa, nenhum script do `package.json` o roda e nenhum pacote usado o exige como `peerDependencies`. |
 | `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o importam: ele pertence a `devDependencies`. |
-| `missing-dependency` | O arquivo importa um pacote que nenhum `package.json` acima dele declara: o do pacote, o da raiz, ou um aninhado com dependências próprias (um harness de testes em `tests/smoke/package.json`), como o Node procura em cada pasta acima do arquivo. Os módulos nativos do Node (`fs`, `node:fs`) e do Bun (`bun:test`) não contam. |
+| `missing-dependency` | O arquivo importa um pacote que nenhum `package.json` acima dele declara: o do pacote, o da raiz, ou um aninhado com dependências próprias (um harness de testes em `tests/smoke/package.json`), como o Node procura em cada pasta acima do arquivo. Os módulos nativos do Node (`fs`, `node:fs`) e do Bun (`bun`, `bun:test`), os especificadores com esquema (`data:...`, `virtual:...`) e os pacotes que o repositório versiona em `node_modules` (um helper em `test/node_modules/`) não contam. |
 | `circular-import` | Há um ciclo de `require` ou `import`. Cada grupo de arquivos em ciclo é reportado uma vez, pelo caminho mais curto. Imports só de tipo (`import type`) não contam: somem na compilação. |
 | `unparsed-file` | **Aviso:** um arquivo que o grafo alcança não faz parse (um erro de sintaxe, ou uma sintaxe que o prunr não lê, como Flow). O que ele importa e exporta fica desconhecido, então o resto do grafo pode estar incompleto. Não falha o check. Um arquivo quebrado que nada alcança (uma fixture de teste com erro de propósito) é só `unused-file`. |
 | `unresolved-require` | **Aviso:** um `require` com caminho dinâmico (`require(nome)`), com um padrão que não alcança nenhum arquivo ou que aponta para um arquivo que não existe. Não falha o check. |
+
+Os arquivos de uma pasta de fixtures de uma pasta de teste (`test/fixtures/`, `__tests__/__fixtures__/`,
+`test/samples/`) são dados que os testes leem: o que eles importam conta como uso, mas nada
+neles é reportado.
 
 Teste não mantém código vivo: o que só os testes usam está morto em produção. Um arquivo que
 nem produção nem testes alcançam não gera outros achados nem mantém nada vivo. No JSON, os

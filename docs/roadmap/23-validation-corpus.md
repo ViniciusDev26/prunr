@@ -47,6 +47,27 @@ contra o Knip. É o teste de aceite do MVP em escala.
   vindo de outro módulo (pm2), propriedades do objeto exportado que ninguém lê (nodemon), e
   exports usados só por arquivos que nenhuma entrada alcança.
 
+- Na triagem completa dos `unresolved-require` e `missing-dependency` do corpus:
+  - um import `.js` resolve para o `.d.ts` ao lado (fastify);
+  - especificadores com esquema (`data:`, `virtual:`) e o módulo nativo `bun` não são pacotes;
+  - um pacote que o repositório versiona em `node_modules` (`test/node_modules/nr-test-utils`
+    no node-red) não precisa ser declarado;
+  - o que está em pastas de fixtures de testes não é reportado (as entradas de bundler do rollup e
+    do webpack, as fixtures do codemod do TypeORM);
+  - `require("..")` de uma pasta com `package.json` cujo `main` aponta para um build acha a entrada
+    no fonte, também sob `lib/` (socket.io, ajv).
+
+  Com isso, os `missing-dependency` do corpus caíram de 2.429 para 452 e os `unresolved-require`
+  sem explicação, de 447 para 60. O que sobrou, por categoria:
+
+  | Achado | Quantos | Por quê |
+  |---|---|---|
+  | `unresolved-require` com caminho montado | 438 | Aviso legítimo: o prunr não sabe o caminho. |
+  | `unresolved-require` para saídas de build (`dist/`, `generated/`, `built/`) | 502 | Aviso legítimo: só existem depois do build. |
+  | `unresolved-require` para arquivos que não são fonte | 25 | Aviso legítimo. |
+  | `unresolved-require` restantes | 60 | Imports quebrados de propósito em testes de resolução (Jest), casos do `test/configCases` do webpack, `require` de caminhos fora do repositório. |
+  | `missing-dependency` | 452 | Pacotes irmãos sem declaração (Excalidraw, Sequelize, socket.io, Nest), dependências opcionais não declaradas (pm2, node-red), aliases do `moduleNameMapper` do Jest e do `resolve.alias` do Vite, imports de JSR do Deno (axios). |
+
 ## O que a triagem decidiu manter
 
 Diferenças conferidas em que o achado do prunr se sustenta, ou que é do Knip:
@@ -67,6 +88,15 @@ Diferenças conferidas em que o achado do prunr se sustenta, ou que é do Knip:
   tipo do mesmo arquivo usa (`UmdAmdContainer = DottedIdentifier`). Esse último é uma diferença
   de semântica: o prunr não reporta um export que o próprio arquivo usa, e o Knip reporta, a menos
   que se ligue o `ignoreExportsUsedInFile` dele.
+
+## Limitações conhecidas
+
+- Um pacote publicado sem `exports` deixa quem instala importar qualquer arquivo
+  (`ajv/dist/2020`); o prunr só considera as entradas declaradas e aponta exports dos outros
+  arquivos.
+- Um tipo exportado de dentro de um `namespace` do TypeScript e usado pelo nome qualificado no
+  próprio arquivo (`Socket.DisconnectReason` no socket.io) aparece como export sem uso.
+- O `moduleNameMapper` do Jest e o `resolve.alias` do Vite não são lidos.
 
 ## Pendências
 

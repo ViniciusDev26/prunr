@@ -1529,3 +1529,16 @@ fn node_test_tap_and_lab_run_their_default_test_files() {
         "unused-file           src/only-tests.js (only tests use it)\n\nerrors: 1, warnings: 0\n"
     );
 }
+
+#[test]
+fn declaration_files_non_packages_vendored_packages_and_test_fixtures_are_not_findings() {
+    let run = check("test-data");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           client/src/index.ts (only tests use it)\n\
+         unused-file           src/dead.js\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
+}

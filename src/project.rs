@@ -12,6 +12,8 @@ pub type FileId = String;
 
 #[derive(Debug)]
 pub struct Project {
+    /// The packages the repository versions in a `node_modules` folder.
+    pub vendored: BTreeSet<String>,
     /// The packages each `package.json` that is not a package of the repository declares (a
     /// test harness with its own dependencies), by its directory: a file under it can import
     /// them, as Node.js looks for packages in every folder above the file.
@@ -280,8 +282,8 @@ fn targets(value: &serde_json::Value) -> Vec<String> {
 
 /// An entry and, when it is in a build folder (`./dist/cjs/index.js`), the paths of the source
 /// it may be compiled from: without the build folder and the folders after it, as they are and
-/// under `src/` (`cjs/index.js`, `src/cjs/index.js`, `index.js`, `src/index.js`). The resolver
-/// finds the `.ts` of a `.js`.
+/// under `src/` and `lib/` (`cjs/index.js`, `src/cjs/index.js`, ..., `src/index.js`,
+/// `lib/index.js`). The resolver finds the `.ts` of a `.js`.
 fn from_build(entry: &str) -> Vec<String> {
     let mut candidates = vec![entry.to_string()];
     let segments: Vec<&str> = entry.trim_start_matches("./").split('/').collect();
@@ -290,6 +292,7 @@ fn from_build(entry: &str) -> Vec<String> {
             let rest = segments[start..].join("/");
             candidates.push(rest.clone());
             candidates.push(format!("src/{rest}"));
+            candidates.push(format!("lib/{rest}"));
         }
     }
     candidates
@@ -440,6 +443,33 @@ fn is_declaration(path: &Path) -> bool {
 }
 
 /// Every source file under `root`, without `node_modules`, declarations and ignored files.
+/// The files git tracks under `root`, relative to it; none outside a repository.
+fn tracked(root: &Path) -> Vec<String> {
+    let output = std::process::Command::new("git")
+        .args(["ls-files", "-z"])
+        .current_dir(root)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| output.stdout)
+        .unwrap_or_default();
+    output
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .map(|path| String::from_utf8_lossy(path).into_owned())
+        .collect()
+}
+
+/// The packages the repository keeps in a `node_modules` folder it versions (a test helper in
+/// `test/node_modules/`): part of the project, not dependencies to declare.
+fn vendored(root: &Path) -> BTreeSet<String> {
+    tracked(root)
+        .iter()
+        .filter_map(|path| path.rsplit_once("node_modules/").map(|(_, inside)| inside))
+        .map(|inside| crate::resolve::package_name(inside).to_string())
+        .collect()
+}
+
 fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
     let walker = ignore::WalkBuilder::new(root)
         .require_git(false)
@@ -448,18 +478,7 @@ fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
     let walked = walker.flatten().map(|entry| entry.into_path());
     // A file git tracks is part of the project even when an ignore pattern matches it
     // (`mocha.js` in .gitignore, for a bundle at the root, also matches `bin/mocha.js`).
-    let tracked = std::process::Command::new("git")
-        .args(["ls-files", "-z"])
-        .current_dir(root)
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| output.stdout)
-        .unwrap_or_default();
-    let tracked = tracked
-        .split(|byte| *byte == 0)
-        .filter(|path| !path.is_empty())
-        .map(|path| root.join(String::from_utf8_lossy(path).as_ref()));
+    let tracked = tracked(root).into_iter().map(|path| root.join(path));
     let mut files = BTreeMap::new();
     for path in walked.chain(tracked) {
         let source = path
@@ -663,6 +682,24 @@ impl Project {
                             target = found;
                         }
                     }
+                    // A folder with a package.json whose entry points to a build that does not
+                    // exist (`require("..")` from a package's tests): its entry in the source.
+                    if target == Target::Unresolved
+                        && specifier.starts_with('.')
+                        && let Some(dir) = from.parent().map(|dir| dir.join(specifier))
+                        && dir.join("package.json").is_file()
+                        && let Some(dir) = file_id(&root, &crate::resolve::canonical(&dir))
+                        && let Ok(manifest) = Manifest::load(&root, &dir)
+                        && let Some(id) = package_file(
+                            &resolver,
+                            &root,
+                            &dir,
+                            &manifest.entry_candidates(),
+                            &paths,
+                        )
+                    {
+                        target = Target::File(root.join(id));
+                    }
                     file.link(target, specifier, &paths)
                 }
             };
@@ -818,6 +855,7 @@ impl Project {
         let mut root_entries = package_entries(&resolver, &root, "", &manifests[0], &paths);
         root_entries.extend(package_bins(&resolver, &root, "", &manifests[0], &paths));
         Ok(Self {
+            vendored: vendored(&root),
             nested_declared,
             root_entries,
             root,
@@ -1511,16 +1549,21 @@ mod tests {
                 "./dist/source/index.js",
                 "source/index.js",
                 "src/source/index.js",
+                "lib/source/index.js",
                 "index.js",
                 "src/index.js",
+                "lib/index.js",
                 "build/main.js",
                 "main.js",
                 "src/main.js",
+                "lib/main.js",
                 "./lib/esm/index.mjs",
                 "esm/index.mjs",
                 "src/esm/index.mjs",
+                "lib/esm/index.mjs",
                 "index.mjs",
                 "src/index.mjs",
+                "lib/index.mjs",
                 "src/index",
                 "index"
             ]
