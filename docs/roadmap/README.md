@@ -22,6 +22,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 18. [Dependências exigidas como peer](18-peer-dependencies.md)
 - [x] 19. [Playwright, Drizzle Kit, PostCSS e Vitest `projects`](19-tooling-plugins.md)
 - [x] 20. [Imports em folhas de estilo](20-stylesheet-imports.md)
+- [x] 21. [Caminhos citados como texto em configs montadas por função](21-paths-in-runtime-configs.md)
 - [x] 23. [Corpus de validação](23-validation-corpus.md)
 - [x] 24. [`prunr why`](24-why.md)
 - [x] 25. [SARIF, Code Climate e Markdown](25-report-formats.md)
@@ -85,7 +86,6 @@ A fase 2 ampliou o que o prunr enxerga; a 3 amplia o que ele reporta e quem o ad
 - [ ] 13. [`prunr fix --test-only`](13-fix-test-only.md)
 - [ ] 14. [Ligar e desligar plugins no `prunr.json`](14-toggle-plugins.md)
 - [ ] 15. [Pacotes carregados pelo nome por outra lib](15-packages-loaded-by-name.md)
-- [ ] 21. [Caminhos citados como texto em configs montadas por função](21-paths-in-runtime-configs.md)
 - [ ] 22. [Um pacote de cada vez num monorepo grande](22-one-package-at-a-time.md)
 
 ## Decidido não fazer

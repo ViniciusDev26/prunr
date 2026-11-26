@@ -92,6 +92,9 @@ pub struct Facts {
     pub class_members: BTreeSet<Vec<String>>,
     /// The names of the properties the file reads (`a.b`, `const { b } = a`, `a["b"]`).
     pub properties: BTreeSet<String>,
+    /// The relative paths written as strings (`"./setup.ts"`), with their lines: in a config a
+    /// tool reads, they name the files it loads.
+    pub path_strings: Vec<(String, u32)>,
     /// Groups of ESM exports that are the same local binding (`export { a, a as b }`), by
     /// name; `default` is not one.
     pub duplicate_exports: Vec<Vec<String>>,
@@ -225,6 +228,7 @@ fn analyze_with(source: &str, path: &std::path::Path, markup: bool) -> Result<Fa
         removal: None,
         exports_escape: false,
         exported_symbols: BTreeSet::new(),
+        path_strings: Vec::new(),
         exports_of: BTreeMap::new(),
         passed_symbols: BTreeSet::new(),
         comments: program
@@ -251,6 +255,12 @@ fn analyze_with(source: &str, path: &std::path::Path, markup: bool) -> Result<Fa
             AstKind::StaticMemberExpression(member) => {
                 analyzer.property(&member.property.name);
                 analyzer.read(node.id(), member)
+            }
+            AstKind::StringLiteral(literal) => {
+                let value = literal.value.display().to_string();
+                if value.starts_with("./") || value.starts_with("../") {
+                    analyzer.path_strings.push((value, literal.span.start));
+                }
             }
             AstKind::ComputedMemberExpression(member) => {
                 if let Expression::StringLiteral(name) = &member.expression {
@@ -316,6 +326,8 @@ struct Analyzer<'s, 'a> {
     /// The bindings that are the exported value (`module.exports = api`,
     /// `var God = module.exports = {...}`).
     exported_symbols: BTreeSet<SymbolId>,
+    /// The relative paths written as strings, with their offsets.
+    path_strings: Vec<(String, u32)>,
     /// The top-level exports of each local binding: more than one is a duplicate.
     exports_of: BTreeMap<SymbolId, BTreeSet<String>>,
     /// The bindings the file passes to a function.
@@ -349,6 +361,11 @@ impl<'a> Analyzer<'_, 'a> {
             .sites
             .iter()
             .map(|(path, site)| (path.clone(), line(site.start)))
+            .collect();
+        self.facts.path_strings = self
+            .path_strings
+            .iter()
+            .map(|(path, offset)| (path.clone(), line(*offset)))
             .collect();
         self.facts.require_lines = self
             .require_sites
