@@ -55,9 +55,11 @@ express is used by:
 - Um arquivo: a cadeia mais curta de imports desde uma entrada de produção, ou desde um teste
   quando só os testes o alcançam; se nada o alcança, quem o importa.
 - `arquivo:export` (com `.` para um método estático, `Money.format`): os arquivos que o usam,
-  cada um marcado `production`, `test` ou `unreached`.
+  cada um marcado `production`, `test` ou `unreached`, e `through <arquivo>` quando o uso chega
+  por um arquivo que reexporta. Também diz quando o export é de uma entrada (a interface dela)
+  ou usado no próprio arquivo, os dois casos que nunca são reportados.
 - Um pacote: os arquivos que o importam, os scripts que o rodam, as ferramentas e frameworks
-  que o carregam e os pacotes que o exigem como peer.
+  que o carregam e os pacotes que o exigem como peer. Um `@types/x` fica enquanto `x` é usado.
 
 ## Folhas de estilo
 
