@@ -82,6 +82,10 @@ const RULES: &[(&str, &str)] = &[
         "No production code calls the method of the exported class.",
     ),
     (
+        "duplicate-export",
+        "The same binding is exported under more than one name.",
+    ),
+    (
         "unused-import",
         "A require or import brings in a name the file never uses.",
     ),
@@ -252,6 +256,14 @@ fn position(finding: &Finding, project: &Project) -> (String, Option<u32>) {
             let path: Vec<String> = symbol.split('.').map(str::to_string).collect();
             (file.clone(), facts(file).export_lines.get(&path).copied())
         }
+        Finding::DuplicateExport { file, exports } => {
+            let lines = &facts(file).export_lines;
+            let line = exports
+                .iter()
+                .filter_map(|name| lines.get(&vec![name.clone()]))
+                .max();
+            (file.clone(), line.copied())
+        }
         Finding::UnusedImport {
             file, specifier, ..
         }
@@ -348,6 +360,10 @@ fn describe(finding: &Finding) -> (&'static str, String) {
         Finding::UnusedClassMember { file, symbol, .. } => {
             ("unused-class-member", format!("{file}: {symbol}"))
         }
+        Finding::DuplicateExport { file, exports } => (
+            "duplicate-export",
+            format!("{file}: {}", exports.join(", ")),
+        ),
         Finding::UnusedImport {
             file,
             name,
