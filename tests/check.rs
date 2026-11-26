@@ -1499,3 +1499,13 @@ fn production_mode_reports_only_what_goes_to_production() {
          errors: 2, warnings: 0\n"
     );
 }
+
+#[test]
+fn the_root_package_can_import_the_packages_of_the_repository_without_declaring_them() {
+    let run = check("workspace-root-imports");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "missing-dependency    packages/app/src/index.js: @x/lib\n\nerrors: 1, warnings: 0\n"
+    );
+}
