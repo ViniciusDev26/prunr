@@ -12,23 +12,23 @@ Para reproduzir: `cargo build --release && node corpus/run.mjs --install --knip`
 |---|---|---|
 | webpack | 0,78 s | 7,19 s |
 | date-fns | 0,07 s | 4,87 s |
-| mongoose | | 0,02 s | 3,30 s |
-| express | | 0,01 s | 2,98 s |
-| npm cli | | 0,09 s | 2,85 s |
-| fastify | | 0,01 s | 2,82 s |
-| pino | | 0,01 s | 2,42 s |
-| undici | | 0,02 s | 2,37 s |
-| mocha | | 0,01 s | 2,35 s |
-| got | | 0,01 s | 2,17 s |
-| axios | | 0,02 s | 2,15 s |
-| knex | | 0,02 s | 1,99 s |
-| nodemailer | | 0,01 s | 1,98 s |
-| commander | | 0,01 s | 1,90 s |
-| yargs | | 0,01 s | 1,75 s |
-| winston | | 0,01 s | 1,55 s |
-| koa | | 0,01 s | 1,50 s |
-| hapi | | 0,01 s | 1,42 s |
-| json-server | | < 0,01 s | 1,37 s |
+| mongoose | 0,02 s | 3,30 s |
+| express | 0,01 s | 2,98 s |
+| npm cli | 0,09 s | 2,85 s |
+| fastify | 0,01 s | 2,82 s |
+| pino | 0,01 s | 2,42 s |
+| undici | 0,02 s | 2,37 s |
+| mocha | 0,01 s | 2,35 s |
+| got | 0,01 s | 2,17 s |
+| axios | 0,02 s | 2,15 s |
+| knex | 0,02 s | 1,99 s |
+| nodemailer | 0,01 s | 1,98 s |
+| commander | 0,01 s | 1,90 s |
+| yargs | 0,01 s | 1,75 s |
+| winston | 0,01 s | 1,55 s |
+| koa | 0,01 s | 1,50 s |
+| hapi | 0,01 s | 1,42 s |
+| json-server | < 0,01 s | 1,37 s |
 
 O webpack tem mais de 24 mil arquivos-fonte. Num monorepo privado de 13 mil arquivos, fora do
 corpus, o check leva 0,6 s.
