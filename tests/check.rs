@@ -1201,3 +1201,42 @@ fn the_stylesheets_a_file_imports_use_packages_too() {
         "unused-dependency     unused-lib\n\nerrors: 1, warnings: 0\n"
     );
 }
+
+#[test]
+fn the_output_is_the_same_with_any_number_of_threads() {
+    for fixture in ["example", "workspaces-pnpm", "script-entries", "vite-react"] {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(fixture);
+        let one = Command::new(env!("CARGO_BIN_EXE_prunr"))
+            .arg("check")
+            .env("RAYON_NUM_THREADS", "1")
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(one.stdout).unwrap(),
+            check(fixture).stdout,
+            "{fixture}"
+        );
+    }
+}
+
+#[test]
+fn the_syntax_error_reported_is_the_one_of_the_first_file() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("package.json"), "{}").unwrap();
+    std::fs::write(
+        dir.path().join("prunr.json"),
+        r#"{ "entries": { "production": ["a.js"] } }"#,
+    )
+    .unwrap();
+    for name in ["a.js", "b.js", "c.js", "d.js"] {
+        std::fs::write(dir.path().join(name), "const = ;").unwrap();
+    }
+    for _ in 0..5 {
+        let run = run_in(dir.path(), &["check"]);
+        assert_eq!(run.code, 2);
+        assert!(run.stderr.contains("a.js"), "{}", run.stderr);
+    }
+}
