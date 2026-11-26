@@ -111,6 +111,7 @@ findings, and `2` when it cannot run.
 | `circular-import` | There is an import cycle. |
 | `unused-ignore` | A `prunr-ignore` comment that no longer ignores anything. |
 | `unresolved-require` | Warning: a `require` prunr cannot follow. |
+| `unparsed-file` | Warning: a file the graph reaches does not parse, so what it uses is unknown. |
 
 When the only use comes from the tests, the finding says `(only tests use it)`. The details of
 each are in [Findings](docs/guide/checks.md).
