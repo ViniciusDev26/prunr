@@ -329,6 +329,276 @@
       "repo": "rollup/rollup",
       "commit": "173cfd3ac9f35acd1defc2b2dfe075b9c2759df0",
       "kind": "esm-ts"
+    },
+    {
+      "name": "superagent",
+      "repo": "ladjs/superagent",
+      "commit": "d26bf6ae1a181a00dc71b756d03e8120b92207c4",
+      "kind": "cjs"
+    },
+    {
+      "name": "supertest",
+      "repo": "ladjs/supertest",
+      "commit": "aff97e7c8eed2ff88d650f6b451f04a321790f88",
+      "kind": "cjs"
+    },
+    {
+      "name": "sinon",
+      "repo": "sinonjs/sinon",
+      "commit": "617dadd2004a51f505b79434706153d0306b6e5c",
+      "kind": "cjs"
+    },
+    {
+      "name": "chai",
+      "repo": "chaijs/chai",
+      "commit": "0bcfca43f0b685ca387b58ef59f4192408e382d0",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "nyc",
+      "repo": "istanbuljs/nyc",
+      "commit": "908620475199fa7b9ea0ea8b21d6d8ad6921e3ae",
+      "kind": "cjs"
+    },
+    {
+      "name": "ava",
+      "repo": "avajs/ava",
+      "commit": "8988a7298fef56dc208ccf10932ecd97f27b9d73",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "postcss",
+      "repo": "postcss/postcss",
+      "commit": "5a8174feb01de7a1fac6ccbb4ecd3376ebb3834a",
+      "kind": "cjs"
+    },
+    {
+      "name": "less",
+      "repo": "less/less.js",
+      "commit": "713331655e437401dfea6cd233893a69762734e1",
+      "kind": "cjs"
+    },
+    {
+      "name": "browserify",
+      "repo": "browserify/browserify",
+      "commit": "cd60f059d7a8432f2c3acea7d4dfcb81b97e7a3d",
+      "kind": "cjs"
+    },
+    {
+      "name": "grunt",
+      "repo": "gruntjs/grunt",
+      "commit": "50a8a686522b0cf1938df344b9684e843f9eae9c",
+      "kind": "cjs"
+    },
+    {
+      "name": "bull",
+      "repo": "OptimalBits/bull",
+      "commit": "73d065506931fc876c67c721bc424b2bd76b520b",
+      "kind": "cjs"
+    },
+    {
+      "name": "agenda",
+      "repo": "agenda/agenda",
+      "commit": "2b51bbe6f46ec4f65e3cc44c004f91eab680c996",
+      "kind": "cjs"
+    },
+    {
+      "name": "node-schedule",
+      "repo": "node-schedule/node-schedule",
+      "commit": "6d5ad4b31dc5fc530a810489f482dd59cabc9803",
+      "kind": "cjs"
+    },
+    {
+      "name": "node-cron",
+      "repo": "kelektiv/node-cron",
+      "commit": "3c71f58f11abd721280b52004e9b3e7e12a2148f",
+      "kind": "cjs"
+    },
+    {
+      "name": "node-postgres",
+      "repo": "brianc/node-postgres",
+      "commit": "2a5850fb0db18f5e40a642bbb4a4743de412ab54",
+      "kind": "monorepo"
+    },
+    {
+      "name": "mysql",
+      "repo": "mysqljs/mysql",
+      "commit": "dc9c152a87ec51a1f647447268917243d2eab1fd",
+      "kind": "cjs"
+    },
+    {
+      "name": "node-mysql2",
+      "repo": "sidorares/node-mysql2",
+      "commit": "9f99d418fb66ddeb49b127adc0b1a13dc6513679",
+      "kind": "cjs"
+    },
+    {
+      "name": "node-mongodb-native",
+      "repo": "mongodb/node-mongodb-native",
+      "commit": "2ed780df2a57884c3fa597da9ebbb6256ae0a5ea",
+      "kind": "cjs"
+    },
+    {
+      "name": "node-redis",
+      "repo": "redis/node-redis",
+      "commit": "5d745504ebc28fff9d471f0e427c8faf64b52c26",
+      "kind": "monorepo"
+    },
+    {
+      "name": "node-fetch",
+      "repo": "node-fetch/node-fetch",
+      "commit": "8b3320d2a7c07bce4afc6b2bf6c3bbddda85b01f",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "node-http-proxy",
+      "repo": "http-party/node-http-proxy",
+      "commit": "9b96cd725127a024dabebec6c7ea8c807272223d",
+      "kind": "cjs"
+    },
+    {
+      "name": "http-proxy-middleware",
+      "repo": "chimurai/http-proxy-middleware",
+      "commit": "c149920a3f3224fe5545307d58c5f1e6d3a9d8b5",
+      "kind": "cjs"
+    },
+    {
+      "name": "cors",
+      "repo": "expressjs/cors",
+      "commit": "5317ebe670db2aaebc1d496eb5d33493deefb3ed",
+      "kind": "cjs"
+    },
+    {
+      "name": "session",
+      "repo": "expressjs/session",
+      "commit": "8947e169ae838b22cc1af198e50e370e6fc09f96",
+      "kind": "cjs"
+    },
+    {
+      "name": "morgan",
+      "repo": "expressjs/morgan",
+      "commit": "b1272e70812dbc504321eeb5a43d14b0822c150d",
+      "kind": "cjs"
+    },
+    {
+      "name": "path-to-regexp",
+      "repo": "pillarjs/path-to-regexp",
+      "commit": "c439054f178ae93a09e30f902c3976ee5a2434a5",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "uuid",
+      "repo": "uuidjs/uuid",
+      "commit": "766d0d29c1646f37cb2261bbee723f0daf94e44a",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "nanoid",
+      "repo": "ai/nanoid",
+      "commit": "ad8bc48da1da1e07398c8ad830c9020f6a8d10d2",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "ramda",
+      "repo": "ramda/ramda",
+      "commit": "f4b2e35ff433e18c751326b82acc3c6ab3585e18",
+      "kind": "cjs"
+    },
+    {
+      "name": "redux",
+      "repo": "reduxjs/redux",
+      "commit": "ce8d8362218b43219437badba5ec23e3cfaa918e",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "dayjs",
+      "repo": "iamkun/dayjs",
+      "commit": "d3e43be0489ff1d010aca42b3115b6059215ed60",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "luxon",
+      "repo": "moment/luxon",
+      "commit": "f427515a38f6a671f8de663e6bcc040ed81f114e",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "validator",
+      "repo": "validatorjs/validator.js",
+      "commit": "9ff342479591ca5a43cb30000195bcf55c1bbed9",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "joi",
+      "repo": "hapijs/joi",
+      "commit": "7cfb3ce20017a4289f7efdcd8803625d4be889df",
+      "kind": "cjs"
+    },
+    {
+      "name": "yup",
+      "repo": "jquense/yup",
+      "commit": "ff31eee8a2b10c938bb3a22544d9e33957a8cf01",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "node-bunyan",
+      "repo": "trentm/node-bunyan",
+      "commit": "5c2258ecb1d33ba34bd7fbd6167e33023dc06e40",
+      "kind": "cjs"
+    },
+    {
+      "name": "log4js-node",
+      "repo": "log4js-node/log4js-node",
+      "commit": "b3759be628719fe96eb52e606905b0238837e6db",
+      "kind": "cjs"
+    },
+    {
+      "name": "core",
+      "repo": "oclif/core",
+      "commit": "50a4bc0ecd123733cd974866f8db0f1cb5a6a06f",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "node-restify",
+      "repo": "restify/node-restify",
+      "commit": "71e09da528112619ec42b600a2bbab240e3eff60",
+      "kind": "cjs"
+    },
+    {
+      "name": "handlebars",
+      "repo": "handlebars-lang/handlebars.js",
+      "commit": "13a7a679910d2adbfe7f6fad61ce8f98426b0378",
+      "kind": "cjs"
+    },
+    {
+      "name": "ejs",
+      "repo": "mde/ejs",
+      "commit": "f40249b8a853cf52d39f7183bda8b494002f83d8",
+      "kind": "cjs"
+    },
+    {
+      "name": "nunjucks",
+      "repo": "mozilla/nunjucks",
+      "commit": "a3e90a92a1e38217bd9631f4cf60b010780d41a7",
+      "kind": "cjs"
+    },
+    {
+      "name": "marked",
+      "repo": "markedjs/marked",
+      "commit": "393e1dc2acc2f8a28a0a685d51ef0838327fec86",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "markdown-it",
+      "repo": "markdown-it/markdown-it",
+      "commit": "a8c00d474ec9b304fad9b71c16d6fa8b4909279e",
+      "kind": "esm-ts"
+    },
+    {
+      "name": "nock",
+      "repo": "nock/nock",
+      "commit": "3e817ab5415606cc44eab247691d4035c037c322",
+      "kind": "cjs"
     }
   ]
 }

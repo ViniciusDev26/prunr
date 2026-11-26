@@ -7,7 +7,7 @@ contra o Knip. É o teste de aceite do MVP em escala.
 
 ## Feito
 
-- [`corpus/`](../../corpus/README.md): 55 projetos open source fixados num commit (CommonJS
+- [`corpus/`](../../corpus/README.md): 100 projetos open source fixados num commit (CommonJS
   clássico, middlewares do Express, ESM e TypeScript, monorepos), um harness que roda o prunr e o
   Knip em paralelo e compara arquivos, exports e dependências, e um [benchmark](../benchmark.md).
 - Na primeira rodada, 11 projetos nem rodavam. A triagem virou fixtures e correções:
@@ -68,20 +68,20 @@ contra o Knip. É o teste de aceite do MVP em escala.
 
 - A triagem item a item: [`corpus/triage.mjs`](../../corpus/triage.mjs) confere cada
   `missing-dependency` e `unresolved-require` do último run no disco e escreve a categoria e a
-  evidência de cada um. No run final:
+  evidência de cada um. No run final, com os 100 projetos:
 
   | Achado | Categoria | Quantos | Evidência conferida |
   |---|---|---|---|
-  | `missing-dependency` | pacote irmão sem declaração | 240 | o `package.json` do irmão tem esse `name` |
-  | `missing-dependency` | declarado por outro pacote do repositório | 43 | o `package.json` que declara |
-  | `missing-dependency` | módulo local que um alias resolve | 16 | o arquivo com esse nome (o Haste do próprio Jest, aliases dos casos de teste do webpack) |
+  | `missing-dependency` | pacote irmão sem declaração | 243 | o `package.json` do irmão tem esse `name` |
+  | `missing-dependency` | declarado por outro pacote do repositório | 44 | o `package.json` que declara |
+  | `missing-dependency` | módulo local que um alias resolve | 21 | o arquivo com esse nome (o Haste do próprio Jest, aliases dos casos de teste do webpack) |
   | `missing-dependency` | import de JSR do Deno | 5 | o mapa de imports do Deno |
-  | `missing-dependency` | sem declaração | 117 | nenhum `package.json` do repositório o declara |
-  | `unresolved-require` | caminho montado | 438 | o caminho só existe em tempo de execução |
-  | `unresolved-require` | saída de build | 502 | a pasta para onde o build escreve |
+  | `missing-dependency` | sem declaração | 151 | nenhum `package.json` do repositório o declara |
+  | `unresolved-require` | caminho montado | 474 | o caminho só existe em tempo de execução |
+  | `unresolved-require` | saída de build | 534 | a pasta para onde o build escreve |
   | `unresolved-require` | submódulo git não clonado | 23 | o `.gitmodules`; o corpus clona raso |
   | `unresolved-require` | sintaxe de loader | 1 | `loader!arquivo` do webpack |
-  | `unresolved-require` | não existe | 54 | nada no caminho: imports quebrados de propósito nos testes de resolução do Jest, configs locais ignoradas pelo git, dados gerados por script, caminhos escritos para o teste compilado |
+  | `unresolved-require` | não existe | 185 | nada no caminho: imports quebrados de propósito nos testes de resolução do Jest, configs locais ignoradas pelo git, dados gerados por script, caminhos escritos para o teste compilado |
 
   Nenhuma categoria esconde um falso positivo do prunr: os que existiam viraram as correções
   acima.
@@ -106,6 +106,14 @@ Diferenças conferidas em que o achado do prunr se sustenta, ou que é do Knip:
   tipo do mesmo arquivo usa (`UmdAmdContainer = DottedIdentifier`). Esse último é uma diferença
   de semântica: o prunr não reporta um export que o próprio arquivo usa, e o Knip reporta, a menos
   que se ligue o `ignoreExportsUsedInFile` dele.
+
+- Na ampliação para 100 projetos (superagent, sinon, chai, postcss, less, bull, node-postgres,
+  mysql2, o driver do MongoDB, node-redis, redux, dayjs, luxon, joi, yup, handlebars, marked,
+  nock e outros): a entrada de uma biblioteca cujo `main` só o build escreve é achada pelo nome
+  do pacote em `src/` ou `lib/` (`lib/chai.js`). Os 39 exports novos que só o prunr aponta foram
+  conferidos um a um e se sustentam; 24 deles são constantes de protocolo do mysql2 em
+  `module.exports = { CONNECT: 0x0b, ... }` que ninguém lê, e que o Knip não aponta porque trata
+  o objeto como um export default único.
 
 ## Decisões e limitações
 

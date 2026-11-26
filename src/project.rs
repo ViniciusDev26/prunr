@@ -234,7 +234,12 @@ impl Manifest {
         let mut entries = self.dot_export().map(targets).unwrap_or_default();
         entries.extend(self.main.iter().chain(&self.module).cloned());
         let mut candidates: Vec<String> = entries.iter().flat_map(|e| from_build(e)).collect();
-        candidates.extend(["src/index".to_string(), "index".to_string()]);
+        // The source of an entry a build writes elsewhere (`./index.js` from `lib/chai.js`).
+        candidates.extend(["src/index", "index", "lib/index"].map(str::to_string));
+        if let Some(name) = &self.name {
+            let name = name.rsplit('/').next().unwrap_or(name);
+            candidates.extend([format!("src/{name}"), format!("lib/{name}")]);
+        }
         candidates
     }
 
@@ -1585,8 +1590,34 @@ mod tests {
                 "src/index.mjs",
                 "lib/index.mjs",
                 "src/index",
-                "index"
+                "index",
+                "lib/index"
             ]
+        );
+    }
+
+    #[test]
+    fn a_library_whose_main_a_build_writes_is_found_by_its_name() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{ "name": "@scope/chai", "main": "./index.js" }"#,
+            ),
+            ("lib/chai.js", ""),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.root_entries.iter().collect::<Vec<_>>(),
+            ["lib/chai.js"]
+        );
+        let dir = project_private();
+        std::fs::remove_file(dir.path().join("src/index.ts")).unwrap();
+        std::fs::create_dir_all(dir.path().join("lib")).unwrap();
+        std::fs::write(dir.path().join("lib/index.ts"), "").unwrap();
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.root_entries.iter().collect::<Vec<_>>(),
+            ["lib/index.ts"]
         );
     }
 
