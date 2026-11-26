@@ -11,13 +11,19 @@ cargo build --release
 node corpus/run.mjs                      # todos os projetos, só o prunr
 node corpus/run.mjs --only express,koa   # alguns
 node corpus/run.mjs --install --knip     # instala as dependências e compara com o Knip
+node corpus/run.mjs --reinit             # gera de novo os prunr.json do `prunr init`
+node corpus/run.mjs --jobs 1             # um projeto por vez: para os tempos do benchmark
 ```
+
+Os projetos rodam em paralelo, um por núcleo (`--jobs` muda isso). Em paralelo, as ferramentas
+disputam a CPU e os tempos medidos sobem: para os números do benchmark, use `--jobs 1`.
 
 - Os checkouts e os resultados ficam fora do repositório, em `$PRUNR_CORPUS_DIR` (por padrão
   `~/.cache/prunr-corpus`): `repos/<nome>/` e `results/<nome>/{prunr,knip,diff}.json`, mais um
   `report.md` e um `results.json` com o resumo.
 - Cada projeto é clonado com profundidade 1, no commit de [`repos.json`](repos.json).
-- A configuração vem de `configs/<nome>.json` quando existe; senão, do `prunr init`. Uma
+- A configuração vem de `configs/<nome>.json` quando existe; senão, do `prunr init`, que fica
+  salvo no checkout até um `--reinit`. Uma
   configuração do corpus só existe quando o `init` não basta, e diz o que um usuário teria de
   escrever.
 - `--install` instala as dependências com o gerenciador do projeto, sem rodar scripts; o prunr
