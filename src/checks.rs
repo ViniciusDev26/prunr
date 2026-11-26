@@ -351,8 +351,8 @@ fn covers(used: &Use, export: &[String], default_export: bool) -> bool {
 /// repository's: what it declares is available to every package, and every file, script and
 /// tool counts as using it, unless the package that uses it declares it too. Any other package
 /// only counts its own.
-fn dependencies<'p>(
-    project: &'p Project,
+fn dependencies(
+    project: &Project,
     live: &BTreeSet<FileId>,
     tested: &BTreeSet<FileId>,
     findings: &mut Vec<Finding>,
