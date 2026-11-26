@@ -24,8 +24,10 @@ achado (e as edições do `prunr fix`) são as do arquivo original.
 `lang="ts"` faz o script ser lido como TypeScript. Um import de um arquivo compilado nunca é
 reportado como sem uso, e o que ele importa conta como usado: o template pode usar o nome.
 
-O Vue fica desligado num projeto Nuxt, e o Svelte num projeto SvelteKit, até os plugins desses
-frameworks conhecerem as convenções deles (componentes e rotas achados sem import).
+Cada pacote de um monorepo compila só os próprios arquivos: um pacote com Svelte não faz das
+rotas de um app SvelteKit vizinho fontes do projeto. No script de instância de um componente
+Svelte, `export let` declara uma prop, não um export do módulo. O Nuxt e o SvelteKit têm plugins
+próprios ([30](30-sveltekit-and-nuxt.md)).
 
 ## Critérios de aceite
 
