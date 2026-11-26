@@ -83,7 +83,9 @@ fn position(finding: &Finding, project: &Project) -> (String, Option<u32>) {
         (file, line)
     };
     match finding {
-        Finding::UnusedFile { file, .. } => (file.clone(), None),
+        Finding::UnusedFile { file, .. } | Finding::UnparsedFile { file, .. } => {
+            (file.clone(), None)
+        }
         Finding::UnusedExport { file, symbol, .. } => {
             let path: Vec<String> = symbol.split('.').map(str::to_string).collect();
             (file.clone(), facts(file).export_lines.get(&path).copied())
@@ -197,6 +199,7 @@ fn describe(finding: &Finding) -> (&'static str, String) {
         Finding::UnresolvedRequire { file, specifier } => {
             ("unresolved-require", format!("{file}: {specifier}"))
         }
+        Finding::UnparsedFile { file, message } => ("unparsed-file", format!("{file}: {message}")),
     }
 }
 
