@@ -44,6 +44,9 @@ pub enum Finding {
         #[serde(rename = "testOnly", default, skip_serializing_if = "is_false")]
         test_only: bool,
     },
+    /// Two or more exports of a file that are the same local binding (`export { a, a as b }`):
+    /// whoever imports it picks one name, and the others are interface for nothing.
+    DuplicateExport { file: FileId, exports: Vec<String> },
     /// A binding a require declares that its file never references. The require still runs the
     /// module, so the edge stays until the import is deleted.
     UnusedImport {
@@ -65,6 +68,15 @@ pub enum Finding {
     /// Declared in `dependencies`, but only tests require it (and no script runs it): it belongs
     /// in `devDependencies`.
     MisplacedDependency {
+        package: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace: Option<String>,
+    },
+    /// A binary a script of `package.json` runs that only an undeclared package provides: it is
+    /// in `node_modules` as another package's dependency, and may go with it.
+    MissingBinary {
+        script: String,
+        binary: String,
         package: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         workspace: Option<String>,
@@ -146,12 +158,15 @@ pub fn check(
         | Finding::UnusedExport { file, .. }
         | Finding::UnusedEnumMember { file, .. }
         | Finding::UnusedClassMember { file, .. }
+        | Finding::DuplicateExport { file, .. }
         | Finding::UnusedImport { file, .. }
         | Finding::UnusedIgnore { file, .. }
         | Finding::MissingDependency { file, .. }
         | Finding::UnresolvedRequire { file, .. }
         | Finding::UnparsedFile { file, .. } => !in_test_fixture(file),
-        Finding::UnusedDependency { .. } | Finding::MisplacedDependency { .. } => true,
+        Finding::UnusedDependency { .. }
+        | Finding::MisplacedDependency { .. }
+        | Finding::MissingBinary { .. } => true,
     });
     findings.sort();
     findings
@@ -188,6 +203,7 @@ pub fn in_production(
         | Finding::UnusedExport { .. }
         | Finding::UnusedEnumMember { .. }
         | Finding::UnusedClassMember { .. }
+        | Finding::DuplicateExport { .. }
         | Finding::MisplacedDependency { .. } => true,
         Finding::UnusedImport { file, .. }
         | Finding::UnusedIgnore { file, .. }
@@ -195,6 +211,8 @@ pub fn in_production(
         | Finding::UnresolvedRequire { file, .. }
         | Finding::UnparsedFile { file, .. } => live.contains(file),
         Finding::CircularImport { cycle } => cycle.iter().all(|file| live.contains(file)),
+        // Scripts are tooling: production does not run them.
+        Finding::MissingBinary { .. } => false,
         Finding::UnusedDependency { package, workspace } => {
             let dir = workspace.as_deref().unwrap_or_default();
             project
@@ -343,12 +361,22 @@ fn unused_exports(
         let entry = production.contains(id);
         let mut file_ignored = false;
         let mut alive_exports = BTreeSet::new();
+        // A comment that keeps a duplicate (an old name callers still use) is used even when
+        // the export it is before is alive.
+        let duplicated: BTreeSet<Vec<String>> = facts
+            .duplicate_exports
+            .iter()
+            .flatten()
+            .map(|name| vec![name.clone()])
+            .collect();
         for export in &facts.exports {
             let alive = entry || export.used_internally || used_by(&live_uses, &export.path);
             let ignore = facts.ignores.get(&export.path);
             if alive {
                 alive_exports.insert(&export.path);
-                if let Some(Ignore::NextLine(line)) = ignore {
+                if let Some(Ignore::NextLine(line)) = ignore
+                    && !duplicated.contains(&export.path)
+                {
                     findings.push(unused_ignore(*line));
                 }
             } else if facts.ignore_file.is_some() {
@@ -368,6 +396,22 @@ fn unused_exports(
                         test_only,
                     },
                 });
+            }
+        }
+        // An entry's aliases are interface too (a route's `GET` and `POST`, a renamed option).
+        for names in facts.duplicate_exports.iter().filter(|_| !entry) {
+            if names
+                .iter()
+                .any(|name| facts.ignores.contains_key(&vec![name.clone()]))
+            {
+                continue;
+            }
+            match facts.ignore_file {
+                Some(_) => file_ignored = true,
+                None => findings.push(Finding::DuplicateExport {
+                    file: id.clone(),
+                    exports: names.clone(),
+                }),
             }
         }
         // The methods of a used class (an unused class is already reported whole), in a package
@@ -533,6 +577,14 @@ fn dependencies(
             None => false,
         };
         let at = (index > 0).then(|| workspace.dir.clone());
+        for (script, binary, package) in &workspace.undeclared_binaries {
+            findings.push(Finding::MissingBinary {
+                script: script.clone(),
+                binary: binary.clone(),
+                package: package.clone(),
+                workspace: at.clone(),
+            });
+        }
         for package in workspace.dependencies.union(&workspace.dev_dependencies) {
             if !used(package) && !types_used(package) {
                 findings.push(Finding::UnusedDependency {

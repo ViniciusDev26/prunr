@@ -35,6 +35,8 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 33. [Triagem do que só o Knip aponta](33-knip-only-triage.md)
 - [x] 34. [Membros de enum sem uso](34-unused-enum-members.md)
 - [x] 35. [Membros de classe sem uso](35-unused-class-members.md)
+- [x] 36. [Exports duplicados](36-duplicate-exports.md)
+- [x] 37. [Binários não declarados](37-unlisted-binaries.md)
 
 ## Fase 1: credibilidade (concluída)
 
@@ -70,8 +72,8 @@ A fase 2 ampliou o que o prunr enxerga; a 3 amplia o que ele reporta e quem o ad
 2. Achados novos:
    - [x] Membros de enum sem uso ([34](34-unused-enum-members.md)).
    - [x] Membros de classe sem uso ([35](35-unused-class-members.md)).
-   - [ ] Exports duplicados ([36](36-duplicate-exports.md)).
-   - [ ] Binários não declarados ([37](37-unlisted-binaries.md)).
+   - [x] Exports duplicados ([36](36-duplicate-exports.md)).
+   - [x] Binários não declarados ([37](37-unlisted-binaries.md)).
 3. Adoção:
    - [x] GitHub Action ([38](38-github-action.md)).
    - [ ] `prunr init` a partir do Knip ([39](39-init-from-knip.md)).

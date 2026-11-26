@@ -59,6 +59,9 @@ pub struct Workspace {
     /// The `peerDependencies` of each installed package it can use: whoever uses the package
     /// uses them too.
     pub peers: BTreeMap<String, BTreeSet<String>>,
+    /// The binaries its scripts run that only an installed package it does not declare
+    /// provides, as `(script, binary, package)`.
+    pub undeclared_binaries: BTreeSet<(String, String, String)>,
 }
 
 #[derive(Debug, Default)]
@@ -373,6 +376,39 @@ fn binaries(installed: &BTreeMap<String, Option<serde_json::Value>>) -> BTreeMap
         }
     }
     binaries
+}
+
+/// Every binary the packages installed in the `node_modules` of `dirs` provide, with its
+/// package: the first of `dirs` that has a binary wins.
+fn installed_binaries(dirs: &[PathBuf]) -> BTreeMap<String, String> {
+    let mut found = BTreeMap::new();
+    let entries = |dir: &Path| -> Vec<PathBuf> {
+        let read = std::fs::read_dir(dir).into_iter().flatten().flatten();
+        read.map(|entry| entry.path()).collect()
+    };
+    for dir in dirs.iter().rev() {
+        let mut packages = Vec::new();
+        for path in entries(&dir.join("node_modules")) {
+            match path.file_name().and_then(|name| name.to_str()) {
+                Some(name) if name.starts_with('@') => packages.extend(entries(&path)),
+                _ => packages.push(path),
+            }
+        }
+        for path in packages {
+            let Ok(text) = std::fs::read_to_string(path.join("package.json")) else {
+                continue;
+            };
+            let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&text) else {
+                continue;
+            };
+            let Some(package) = manifest["name"].as_str() else {
+                continue;
+            };
+            let installed = BTreeMap::from([(package.to_string(), Some(manifest.clone()))]);
+            found.extend(binaries(&installed));
+        }
+    }
+    found
 }
 
 /// The `package.json` of each package as installed in the `node_modules` of the first of `dirs`
@@ -847,6 +883,32 @@ impl Project {
             let declared_packages = manifest.declared();
             let installed = installed(&[package.clone(), root.clone()], &visible[index]);
             let binaries = binaries(&installed);
+            // A binary no declared package provides, but one in `node_modules` does: it is
+            // there by chance, as another package's dependency. One nothing provides is the
+            // system's (`git`, `docker`).
+            let unknown: Vec<(&String, String)> = manifest
+                .scripts
+                .iter()
+                .flat_map(|(name, script)| {
+                    let binaries = crate::scripts::binaries(script).into_iter();
+                    binaries.map(move |binary| (name, binary))
+                })
+                .filter(|(_, binary)| !binaries.contains_key(binary))
+                .collect();
+            let everything = match unknown.is_empty() {
+                true => BTreeMap::new(),
+                false => installed_binaries(&[package.clone(), root.clone()]),
+            };
+            let undeclared_binaries: BTreeSet<(String, String, String)> = unknown
+                .into_iter()
+                .filter_map(|(name, binary)| {
+                    let package = everything.get(&binary)?.clone();
+                    Some((name.clone(), binary, package))
+                })
+                .filter(|(_, _, package)| {
+                    !manifests.iter().any(|m| m.name.as_ref() == Some(package))
+                })
+                .collect();
             // The scripts of `package.json`, and the commands the tools run (Playwright's web
             // servers), which run test code.
             let scripts: Vec<(bool, &String)> = manifest
@@ -915,6 +977,7 @@ impl Project {
                 test_packages: plugins.packages,
                 production_packages: plugins.production_packages,
                 peers: peers(&installed),
+                undeclared_binaries,
             });
         }
         let nested_declared = nested_manifests(&root, &dirs);

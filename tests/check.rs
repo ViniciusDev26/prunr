@@ -124,6 +124,48 @@ fn the_class_methods_of_a_published_package_are_its_interface() {
 }
 
 #[test]
+fn two_exports_of_the_same_binding_are_duplicates() {
+    let run = check("duplicate-exports");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "duplicate-export      dates.js: format, formatDate\n\
+         \n\
+         errors: 1, warnings: 0\n"
+    );
+    let run = prunr("duplicate-exports", &["check", "--github"]);
+    assert!(
+        run.stdout.contains(
+            "::error file=dates.js,line=4,title=duplicate-export::dates.js: format, formatDate\n"
+        ),
+        "{}",
+        run.stdout
+    );
+}
+
+#[test]
+fn a_script_binary_from_an_undeclared_package_is_missing() {
+    let run = check("missing-binaries");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "missing-binary        lint: eslint, from eslint, which package.json does not declare\n\
+         missing-binary        tool: scoped-tool, from @scope/tool, which package.json does not declare\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
+    let run = prunr("missing-binaries", &["check", "--github"]);
+    assert!(
+        run.stdout
+            .contains("::error file=package.json,line=6,title=missing-binary::"),
+        "{}",
+        run.stdout
+    );
+    let run = prunr("missing-binaries", &["check", "--production"]);
+    assert_eq!(run.stdout, "No findings.\n");
+}
+
+#[test]
 fn a_require_that_cannot_be_followed_is_a_warning() {
     let run = check("unresolved-require");
     assert_eq!(run.code, 0, "warnings do not fail the check");

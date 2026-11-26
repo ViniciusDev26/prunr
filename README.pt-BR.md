@@ -111,10 +111,12 @@ rodar.
 | `unused-export` | Nenhum código de produção usa o export. |
 | `unused-enum-member` | Nenhum código de produção lê o membro de um enum exportado. |
 | `unused-class-member` | Nenhum código de produção chama o método de uma classe exportada, numa aplicação. |
+| `duplicate-export` | O mesmo binding é exportado com mais de um nome. |
 | `unused-import` | Um `require` ou `import` traz um nome que o arquivo nunca usa. |
 | `unused-dependency` | Nada importa o pacote e nenhum script o roda. |
 | `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o usam. |
 | `missing-dependency` | O código importa um pacote que o `package.json` não declara. |
+| `missing-binary` | Um script roda o binário de um pacote que o `package.json` não declara. |
 | `circular-import` | Há um ciclo de imports. |
 | `unused-ignore` | Um comentário `prunr-ignore` que não ignora mais nada. |
 | `unresolved-require` | Aviso: um `require` que não dá para seguir. |

@@ -82,6 +82,10 @@ const RULES: &[(&str, &str)] = &[
         "No production code calls the method of the exported class.",
     ),
     (
+        "duplicate-export",
+        "The same binding is exported under more than one name.",
+    ),
+    (
         "unused-import",
         "A require or import brings in a name the file never uses.",
     ),
@@ -100,6 +104,10 @@ const RULES: &[(&str, &str)] = &[
     (
         "missing-dependency",
         "The code imports a package package.json does not declare.",
+    ),
+    (
+        "missing-binary",
+        "A script runs a binary of a package package.json does not declare.",
     ),
     ("circular-import", "There is an import cycle."),
     ("unresolved-require", "A require prunr cannot follow."),
@@ -252,6 +260,14 @@ fn position(finding: &Finding, project: &Project) -> (String, Option<u32>) {
             let path: Vec<String> = symbol.split('.').map(str::to_string).collect();
             (file.clone(), facts(file).export_lines.get(&path).copied())
         }
+        Finding::DuplicateExport { file, exports } => {
+            let lines = &facts(file).export_lines;
+            let line = exports
+                .iter()
+                .filter_map(|name| lines.get(&vec![name.clone()]))
+                .max();
+            (file.clone(), line.copied())
+        }
         Finding::UnusedImport {
             file, specifier, ..
         }
@@ -262,6 +278,9 @@ fn position(finding: &Finding, project: &Project) -> (String, Option<u32>) {
         Finding::UnusedIgnore { file, line } => (file.clone(), Some(*line)),
         Finding::UnusedDependency { package, workspace }
         | Finding::MisplacedDependency { package, workspace } => manifest(package, workspace),
+        Finding::MissingBinary {
+            script, workspace, ..
+        } => manifest(script, workspace),
         Finding::MissingDependency { file, package } => {
             let line = facts(file)
                 .require_lines
@@ -348,6 +367,10 @@ fn describe(finding: &Finding) -> (&'static str, String) {
         Finding::UnusedClassMember { file, symbol, .. } => {
             ("unused-class-member", format!("{file}: {symbol}"))
         }
+        Finding::DuplicateExport { file, exports } => (
+            "duplicate-export",
+            format!("{file}: {}", exports.join(", ")),
+        ),
         Finding::UnusedImport {
             file,
             name,
@@ -369,6 +392,18 @@ fn describe(finding: &Finding) -> (&'static str, String) {
         Finding::MissingDependency { file, package } => {
             ("missing-dependency", format!("{file}: {package}"))
         }
+        Finding::MissingBinary {
+            script,
+            binary,
+            package,
+            workspace,
+        } => (
+            "missing-binary",
+            format!(
+                "{script}: {binary}, from {package}, which {} does not declare",
+                manifest_path(workspace)
+            ),
+        ),
         Finding::CircularImport { cycle } => ("circular-import", cycle.join(" -> ")),
         Finding::UnresolvedRequire { file, specifier } => {
             ("unresolved-require", format!("{file}: {specifier}"))

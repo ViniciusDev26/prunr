@@ -110,10 +110,12 @@ findings, and `2` when it cannot run.
 | `unused-export` | No production code uses the export. |
 | `unused-enum-member` | No production code reads the member of an exported enum. |
 | `unused-class-member` | No production code calls the method of an exported class, in an application. |
+| `duplicate-export` | The same binding is exported under more than one name. |
 | `unused-import` | A `require` or `import` brings in a name the file never uses. |
 | `unused-dependency` | Nothing imports the package and no script runs it. |
 | `misplaced-dependency` | The package is in `dependencies`, but only the tests use it. |
 | `missing-dependency` | The code imports a package `package.json` does not declare. |
+| `missing-binary` | A script runs a binary of a package `package.json` does not declare. |
 | `circular-import` | There is an import cycle. |
 | `unused-ignore` | A `prunr-ignore` comment that no longer ignores anything. |
 | `unresolved-require` | Warning: a `require` prunr cannot follow. |
