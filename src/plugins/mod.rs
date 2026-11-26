@@ -24,6 +24,7 @@ mod react;
 mod runners;
 mod static_config;
 mod svelte;
+mod tools;
 mod typescript;
 mod vite;
 mod vitest;
@@ -226,6 +227,10 @@ pub const PLUGINS: &[&dyn Plugin] = &[
     &svelte::Svelte,
     &astro::Astro,
     &mdx::Mdx,
+    &tools::ESLINT,
+    &tools::PRETTIER,
+    &tools::BABEL,
+    &tools::COMMITLINT,
 ];
 
 /// What the plugins enabled in the project contribute.
@@ -474,7 +479,11 @@ mod tests {
                 "vue",
                 "svelte",
                 "astro",
-                "@mdx-js/mdx"
+                "@mdx-js/mdx",
+                "eslint",
+                "prettier",
+                "@babel/core",
+                "@commitlint/cli"
             ]
         );
     }
