@@ -21,6 +21,11 @@ chave `jest` do `package.json`, `vitest.config.*` ou `vite.config.*`):
   `test.coverage.provider`) contam como uso de teste: não são `unused-dependency` e, se estiverem
   em `dependencies`, são `misplaced-dependency`.
 
+- **Nomes que o Jest resolve sozinho:** o `moduleNameMapper` (`"^@/(.*)$": "<rootDir>/src/$1"`,
+  `"\\.css$": "identity-obj-proxy"`) e os arquivos das pastas `__mocks__`, cujo nome vira o do
+  módulo (`require("createRuntime")` chega em `__mocks__/createRuntime.js`; o mock de um pacote
+  declarado continua sendo do pacote).
+
 Só valores literais são lidos. Uma configuração montada em tempo de execução (uma função, uma
 variável importada) cai nos padrões do runner; cubra o resto com `entries.test`. `testRegex`
 não é lido.
@@ -97,7 +102,9 @@ O `vite.config.*` é código de ferramenta: os plugins que ele importa (`@vitejs
 contam como dependências de desenvolvimento usadas.
 
 Um import que começa com `/` (`import logo from "/vite.svg"`) é procurado como o Vite faz: no
-`publicDir` (`public/` por padrão) e depois no `root`.
+`publicDir` (`public/` por padrão) e depois no `root`. Os nomes do `resolve.alias` (um objeto,
+ou uma lista de `{ find, replacement }` com `find` em texto) também: um destino que começa com
+`/` parte do `root`, e um relativo, da configuração.
 
 ## React
 
