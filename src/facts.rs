@@ -87,6 +87,11 @@ pub struct Facts {
     pub default_export: bool,
     /// The exports that are members of an exported enum (`["E", "A"]`).
     pub enum_members: BTreeSet<Vec<String>>,
+    /// The public methods of an exported class (`["C", "m"]`). Without types, any read of a
+    /// property with the same name, on any object, uses one.
+    pub class_members: BTreeSet<Vec<String>>,
+    /// The names of the properties the file reads (`a.b`, `const { b } = a`, `a["b"]`).
+    pub properties: BTreeSet<String>,
     /// The file has ESM `import` or `export` declarations.
     pub esm: bool,
     pub reexports: Vec<Reexport>,
@@ -1705,6 +1710,44 @@ mod tests {
     fn reading_an_export_back_is_internal_use() {
         let facts = facts("exports.a = () => 1; exports.b = () => exports.a() + module.exports.b;");
         assert_eq!(facts.exports, [export(&["a"], true), export(&["b"], true)]);
+    }
+
+    #[test]
+    fn the_public_methods_of_an_exported_class_are_class_members() {
+        let facts = facts_at(
+            "index.ts",
+            "export class A {
+               constructor() {} m() {} get g() { return 1; } #p() {} private q() {}
+               static s() {} f = 1; ['c']() {} @d() e() {} toString() { return ''; }
+             }
+             export class B extends Error { n() {} }
+             export class C implements I { n() {} }
+             export default class { o() {} }
+             class D { r() {} } const x = 1; export { D, x };",
+        );
+        assert_eq!(
+            facts.class_members,
+            BTreeSet::from([
+                path(&["A", "m"]),
+                path(&["A", "g"]),
+                path(&["D", "r"]),
+                path(&["default", "o"]),
+            ])
+        );
+        assert_eq!(facts.export_lines[&path(&["A", "m"])], 2);
+        assert!(matches!(
+            facts.export_removals[&path(&["A", "m"])],
+            Removal::Statement(_)
+        ));
+    }
+
+    #[test]
+    fn the_properties_a_file_reads_are_known_by_name() {
+        let facts = facts("a.b.c(); const { d, e: f } = g; h['i']; j[k]; ({ l: 1 });");
+        assert_eq!(
+            facts.properties,
+            ["b", "c", "d", "e", "i"].map(String::from).into()
+        );
     }
 
     #[test]

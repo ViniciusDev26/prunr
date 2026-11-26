@@ -105,6 +105,18 @@ fn an_enum_member_nothing_reads_is_unused() {
 }
 
 #[test]
+fn a_class_method_no_file_calls_is_unused() {
+    let run = check("class-members");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-class-member   cart.ts: Cart.legacyTotal\n\
+         \n\
+         errors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
 fn a_require_that_cannot_be_followed_is_a_warning() {
     let run = check("unresolved-require");
     assert_eq!(run.code, 0, "warnings do not fail the check");
