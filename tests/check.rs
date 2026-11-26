@@ -1646,3 +1646,13 @@ fn react_router_routes_root_and_generated_types_are_part_of_the_graph() {
         "unused-file           app/orphan.ts\nunused-export         app/lib/greet.ts: unused\n\nerrors: 2, warnings: 0\n"
     );
 }
+
+#[test]
+fn vitepress_pages_theme_and_page_scripts_are_part_of_the_graph() {
+    let run = check("vitepress");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           docs/.vitepress/theme/components/Orphan.vue\n\nerrors: 1, warnings: 0\n"
+    );
+}
