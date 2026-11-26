@@ -127,6 +127,34 @@ pub fn check(
     findings
 }
 
+/// Whether a finding is about what goes to production (`prunr check --production`): unused
+/// files and exports, misplaced dependencies, the rest only in files production reaches, and
+/// unused dependencies only among `dependencies`.
+pub fn in_production(
+    project: &Project,
+    production: &BTreeSet<FileId>,
+) -> impl Fn(&Finding) -> bool {
+    let live = reachable(project, production);
+    move |finding| match finding {
+        Finding::UnusedFile { .. }
+        | Finding::UnusedExport { .. }
+        | Finding::MisplacedDependency { .. } => true,
+        Finding::UnusedImport { file, .. }
+        | Finding::UnusedIgnore { file, .. }
+        | Finding::MissingDependency { file, .. }
+        | Finding::UnresolvedRequire { file, .. }
+        | Finding::UnparsedFile { file, .. } => live.contains(file),
+        Finding::CircularImport { cycle } => cycle.iter().all(|file| live.contains(file)),
+        Finding::UnusedDependency { package, workspace } => {
+            let dir = workspace.as_deref().unwrap_or_default();
+            project
+                .workspaces
+                .iter()
+                .any(|w| w.dir == dir && w.dependencies.contains(package))
+        }
+    }
+}
+
 /// The files the entries reach, the entries included.
 pub(crate) fn reachable(project: &Project, entries: &BTreeSet<FileId>) -> BTreeSet<FileId> {
     let mut seen = entries.clone();

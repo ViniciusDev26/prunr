@@ -238,7 +238,7 @@ fn an_unknown_command_is_a_usage_error() {
         assert_eq!(run.code, 2, "{args:?}");
         assert_eq!(
             run.stderr,
-            "usage: prunr check [--json | --github | --sarif | --codeclimate | --markdown] [--since <ref>] | prunr fix [--dry-run] | prunr why <file | file:export | package> | prunr baseline | prunr init | prunr schema | prunr --version\n",
+            "usage: prunr check [--json | --github | --sarif | --codeclimate | --markdown] [--production] [--since <ref>] | prunr fix [--dry-run] | prunr why <file | file:export | package> | prunr baseline | prunr init | prunr schema | prunr --version\n",
             "{args:?}"
         );
     }
@@ -1472,4 +1472,30 @@ fn the_structured_reports_list_stale_baseline_entries_too() {
     let issues: serde_json::Value =
         serde_json::from_str(&prunr("baseline", &["check", "--codeclimate"]).stdout).unwrap();
     assert_eq!(issues[1]["location"]["lines"]["begin"], 1);
+}
+
+#[test]
+fn production_mode_reports_only_what_goes_to_production() {
+    let run = check("production-mode");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/dead.js\n\
+         unused-import         test/a.test.js: helper from ./helper\n\
+         unused-dependency     left-pad\n\
+         unused-dependency     lodash\n\
+         missing-dependency    test/a.test.js: undeclared-test-lib\n\
+         circular-import       test/cycle-a.js -> test/cycle-b.js -> test/cycle-a.js\n\
+         \n\
+         errors: 6, warnings: 0\n"
+    );
+    let run = prunr("production-mode", &["check", "--production"]);
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/dead.js\n\
+         unused-dependency     lodash\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
 }
