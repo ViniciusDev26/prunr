@@ -42,7 +42,7 @@ pub fn init(root: &Path) -> Result<String, String> {
     let is_file = |path: &String| project.entries(std::slice::from_ref(path)).is_ok();
 
     let mut candidates = vec![manifest.main.unwrap_or_else(|| "index.js".into())];
-    candidates.extend(project.root_entry.clone());
+    candidates.extend(project.root_entries.iter().cloned());
     candidates.extend(TYPESCRIPT_ENTRIES.iter().map(|entry| entry.to_string()));
     // The files the scripts run, Next.js routes and the NestJS main are entries already.
     let covered = |path: &String| {
@@ -139,7 +139,7 @@ mod tests {
         let dir = project(&[
             (
                 "package.json",
-                r#"{ "exports": { "types": "./dist/source/index.d.ts", "default": "./dist/source/index.js" } }"#,
+                r#"{ "private": true, "exports": { "types": "./dist/source/index.d.ts", "default": "./dist/source/index.js" } }"#,
             ),
             ("source/index.ts", ""),
         ]);
@@ -156,6 +156,7 @@ mod tests {
             (
                 "package.json",
                 r#"{
+                    "private": true,
                     "main": "dist/index.js",
                     "scripts": {
                         "dev": "tsx watch src/server.ts",
@@ -182,7 +183,10 @@ mod tests {
     #[test]
     fn with_a_test_runner_no_test_entries_are_proposed() {
         let dir = project(&[
-            ("package.json", r#"{ "devDependencies": { "jest": "29" } }"#),
+            (
+                "package.json",
+                r#"{ "private": true, "devDependencies": { "jest": "29" } }"#,
+            ),
             ("index.js", ""),
             ("index.test.js", ""),
         ]);
@@ -211,7 +215,7 @@ mod tests {
 
     #[test]
     fn without_main_index_js_is_the_entry() {
-        let dir = project(&[("package.json", "{}"), ("index.js", "")]);
+        let dir = project(&[("package.json", r#"{ "private": true }"#), ("index.js", "")]);
         init(dir.path()).unwrap();
         assert_eq!(
             written(&dir),
