@@ -31,6 +31,17 @@ contra o Knip. É o teste de aceite do MVP em escala.
     da própria ferramenta;
   - cada subcaminho do `exports` de um pacote publicado é entrada, procurada no fonte (nodemailer).
 
+- Na conferência, um a um, dos 70 exports que só o prunr apontava:
+  - o `bin` de um pacote é entrada de produção (Mocha, knex);
+  - passar o valor exportado para uma função (`var God = module.exports = {...}`, depois
+    `fn(God)`) usa todos os exports (pm2);
+  - um arquivo que o git rastreia é fonte mesmo quando um padrão do `.gitignore` casa com ele
+    (`mocha.js`, para um bundle na raiz, também casava com `bin/mocha.js`).
+
+  Os demais se sustentaram: um `Symbol` local com o mesmo nome do export (undici), o mesmo nome
+  vindo de outro módulo (pm2), propriedades do objeto exportado que ninguém lê (nodemon), e
+  exports usados só por arquivos que nenhuma entrada alcança.
+
 ## O que a triagem decidiu manter
 
 Diferenças conferidas em que o achado do prunr se sustenta, ou que é do Knip:
@@ -51,8 +62,10 @@ Diferenças conferidas em que o achado do prunr se sustenta, ou que é do Knip:
 
 ## Pendências
 
-- O repositório do próprio Mocha roda a si mesmo por `node bin/mocha.js`, com configurações
-  passadas por `npm run -- --config`: o plugin liga, mas não acha essas configurações.
+- O repositório do próprio Mocha roda os testes por `node bin/mocha.js`, com configurações
+  passadas por `npm run -s test-node-run -- --config test/unit/mocharc.cjs`: o código dele já é
+  alcançado pelo `bin`, mas as specs ficam de fora, porque o plugin não segue o `--config` que um
+  script repassa a outro.
 - Os tipos gerados em `declarations/` do webpack que só o Knip aponta: não conferidos.
 - Testes de tipo que o `tsc` checa pelo `include` do `tsconfig.json` (execa) e exemplos em
   Angular, Svelte e Vue (TanStack Query): dependem do plugin de TypeScript e dos compiladores da
