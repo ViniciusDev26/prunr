@@ -1,0 +1,37 @@
+name: action
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  action:
+    name: The GitHub Action
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: A clean project passes
+        uses: ./
+        with:
+          working-directory: tests/fixtures/clean
+
+      - name: A project with findings fails
+        id: findings
+        continue-on-error: true
+        uses: ./
+        with:
+          working-directory: tests/fixtures/example
+          format: markdown
+
+      - name: It failed with findings
+        if: steps.findings.outputs.exit-code != '1'
+        env:
+          EXIT_CODE: ${{ steps.findings.outputs.exit-code }}
+        run: |
+          echo "::error::expected exit code 1, got '$EXIT_CODE'"
+          exit 1

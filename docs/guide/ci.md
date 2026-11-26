@@ -18,6 +18,29 @@ aparece mesmo num arquivo que o PR não tocou.
 
 Rode a partir da raiz do repositório: os caminhos das anotações são relativos à raiz do projeto.
 
+### A Action
+
+A Action do prunr baixa a versão pedida do npm e roda o check, sem passo de instalação:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- uses: ViniciusDev26/prunr@v0
+  with:
+    since: origin/${{ github.base_ref }}
+```
+
+| Entrada | Padrão | Para quê |
+|---|---|---|
+| `version` | `latest` | A versão do `@prunr/prunr`. |
+| `working-directory` | `.` | A pasta do projeto, a do `prunr.json`. |
+| `format` | `github` | `github` (anotações no diff), `sarif` (o code scanning do repositório; o job precisa de `security-events: write`) ou `markdown` (uma tabela no resumo do job). |
+| `since` | | Só o que esse ref não tinha. |
+| `production` | `false` | Só o que vai para produção. |
+
+O passo falha quando há achados, e a saída `exit-code` diz o código do check.
+
 ## Outros formatos
 
 | Flag | Para quê |
