@@ -178,6 +178,19 @@ fn the_paths_written_in_a_config_built_at_runtime_are_edges() {
 }
 
 #[test]
+fn a_plugin_can_be_turned_off_or_on_in_the_config() {
+    let run = check("toggle-plugins");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           index.test.js\n\
+         unused-dependency     jest\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
+}
+
+#[test]
 fn a_require_that_cannot_be_followed_is_a_warning() {
     let run = check("unresolved-require");
     assert_eq!(run.code, 0, "warnings do not fail the check");
