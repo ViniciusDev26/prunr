@@ -938,6 +938,15 @@ impl Project {
                         });
                     }
                 }
+                // Packages a library requires by the names passed to it.
+                let loaded = &contributions[workspace_index(&dir_names, id)].loaded_by_name;
+                for (specifier, key, value) in &facts.call_strings {
+                    let library = crate::resolve::package_name(specifier);
+                    if loaded.iter().any(|(l, k)| l == library && k == key) {
+                        file.packages
+                            .insert(crate::resolve::package_name(value).to_string());
+                    }
+                }
                 file.unresolved
                     .extend(facts.dynamic_requires.iter().cloned());
                 file.parse_error = parse_errors.get(id).cloned();
@@ -1588,6 +1597,26 @@ mod tests {
         assert_eq!(edges("tools/s.ts"), ["kit/setup.ts"]);
         assert_eq!(project.files["tools/s.ts"].edge_lines["kit/setup.ts"], 1);
         assert!(edges("src/a.ts").is_empty());
+    }
+
+    #[test]
+    fn a_library_that_requires_packages_by_name_uses_them() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{ "dependencies": { "chartjs-node-canvas": "4" } }"#,
+            ),
+            (
+                "index.js",
+                "const { C } = require('chartjs-node-canvas');
+                 new C({ plugins: { modern: ['chartjs-plugin-a'] }, type: 'x' });",
+            ),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.files["index.js"].packages,
+            BTreeSet::from(["chartjs-node-canvas".into(), "chartjs-plugin-a".into()])
+        );
     }
 
     #[test]

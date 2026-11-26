@@ -235,3 +235,11 @@ Com `vitepress` declarado, em cada pasta com `.vitepress/` (a raiz, a que um scr
 `<script setup>` das páginas `.md` entra no grafo: os componentes que uma página importa estão
 em uso. Um `<script>` dentro de um bloco de código ou de código inline é texto. Os `.md` nunca
 são reportados como arquivos sem uso.
+
+## chartjs-node-canvas
+
+O `chartjs-node-canvas` faz o `require` dos plugins do Chart.js pelos nomes que recebe nas
+opções: `new ChartJSNodeCanvas({ plugins: { modern: ["chartjs-plugin-annotation"] } })`. Com ele
+declarado, os pacotes nomeados em `modern`, `requireLegacy`, `globalVariableLegacy` e
+`requireChartJSLegacy`, numa chamada do que ele exporta, contam como usados pelo arquivo da
+chamada, sem `dependencies.ignore`.

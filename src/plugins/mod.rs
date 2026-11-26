@@ -11,6 +11,7 @@ use std::path::Path;
 use serde_json::Value;
 
 mod astro;
+mod chartjs_node_canvas;
 mod compile;
 mod drizzle;
 mod jest;
@@ -149,6 +150,10 @@ pub struct Contribution {
     /// Those files are part of the project; their imports are never reported, since the markup
     /// around the scripts can use them.
     pub compilers: BTreeMap<String, Compiler>,
+    /// Libraries that require packages named in the arguments of a call: `(library, key)` says
+    /// that the strings under `key`, in a call of what the library exports, are packages it
+    /// loads (`new ChartJSNodeCanvas({ plugins: { modern: ["chartjs-plugin-x"] } })`).
+    pub loaded_by_name: Vec<(String, String)>,
 }
 
 /// A name a tool maps to a file (`./src/lib/x`, relative to the package) or to a package.
@@ -235,6 +240,7 @@ pub const PLUGINS: &[&dyn Plugin] = &[
     &nuxt::Nuxt,
     &react_router::ReactRouter,
     &vitepress::VitePress,
+    &chartjs_node_canvas::ChartJsNodeCanvas,
     &tools::ESLINT,
     &tools::PRETTIER,
     &tools::BABEL,
@@ -506,6 +512,7 @@ mod tests {
                 "nuxt",
                 "@react-router/dev",
                 "vitepress",
+                "chartjs-node-canvas",
                 "eslint",
                 "prettier",
                 "@babel/core",
