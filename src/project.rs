@@ -411,6 +411,71 @@ fn installed_binaries(dirs: &[PathBuf]) -> BTreeMap<String, String> {
     found
 }
 
+/// A config a tool reads may be built at runtime (a function that returns Vitest's projects),
+/// where prunr cannot read it, but the files it loads are still written in it as text
+/// (`setupFiles: ["./kit/setup.ts"]`): each relative path in a config, or in a file it imports
+/// directly, that names a file of the project is an edge. Only there: elsewhere, a string that
+/// looks like a path proves nothing. Returns the files they name.
+fn config_paths(
+    files: &mut BTreeMap<FileId, File>,
+    configs: &[(usize, FileId)],
+    resolver: &Resolver,
+    root: &Path,
+    dirs: &[String],
+    paths: &BTreeMap<PathBuf, FileId>,
+) -> BTreeSet<FileId> {
+    let mut named = BTreeSet::new();
+    // The configs and the files they import, not further: past them is the project's code,
+    // where a path in a string proves nothing (a tool's own config imports its source).
+    let mut read: BTreeSet<(usize, FileId)> = configs.iter().cloned().collect();
+    for (index, id) in configs {
+        read.extend(
+            files[id]
+                .edges
+                .iter()
+                .map(|edge| (*index, edge.target.clone())),
+        );
+    }
+    for (index, id) in read {
+        let file = &files[&id];
+        // From the file's folder, then from the package's root, as the tools resolve them.
+        let package = root.join(&dirs[index]).join("package.json");
+        let found: Vec<(FileId, u32)> = file
+            .facts
+            .path_strings
+            .iter()
+            // An import's specifier is an edge already, with what it uses.
+            .filter(|(path, _)| !file.facts.require_lines.contains_key(path))
+            .filter_map(|(path, line)| {
+                let target = [root.join(&id), package.clone()].iter().find_map(|from| {
+                    match resolver.resolve(from, path) {
+                        Target::File(target) => paths.get(&target).cloned(),
+                        _ => None,
+                    }
+                })?;
+                Some((target, *line))
+            })
+            .collect();
+        let file = files.get_mut(&id).expect("a config is a project file");
+        for (target, line) in found {
+            named.insert(target.clone());
+            if file.edge_lines.contains_key(&target) {
+                continue;
+            }
+            file.edge_lines.insert(target.clone(), line);
+            file.edges.push(Edge {
+                target,
+                uses: vec![Use {
+                    path: vec![],
+                    whole: true,
+                }],
+                type_only: false,
+            });
+        }
+    }
+    named
+}
+
 /// The `package.json` of each package as installed in the `node_modules` of the first of `dirs`
 /// that has it; `None` when it is not installed or cannot be read.
 fn installed(
@@ -872,7 +937,9 @@ impl Project {
                 (id.clone(), file)
             })
             .collect();
-        let files: BTreeMap<FileId, File> = linked.into_iter().collect();
+        let mut files: BTreeMap<FileId, File> = linked.into_iter().collect();
+        // The config files the tools read, by package.
+        let mut configs: Vec<(usize, FileId)> = Vec::new();
         let mut workspaces = Vec::new();
         let mut production_files = BTreeSet::new();
         let mut test_files = BTreeSet::new();
@@ -957,6 +1024,7 @@ impl Project {
                     && let Some(id) = paths.get(&path)
                 {
                     test_files.insert(id.clone());
+                    configs.push((index, id.clone()));
                 }
             }
             // A published package's entry is its interface to whoever installs it.
@@ -980,6 +1048,10 @@ impl Project {
                 undeclared_binaries,
             });
         }
+        // Like the setup files a config names statically, they are test code the tool loads.
+        test_files.extend(config_paths(
+            &mut files, &configs, &resolver, &root, &dirs, &paths,
+        ));
         let nested_declared = nested_manifests(&root, &dirs);
         let mut root_entries = package_entries(&resolver, &root, "", &manifests[0], &paths);
         root_entries.extend(package_bins(&resolver, &root, "", &manifests[0], &paths));
@@ -1485,14 +1557,17 @@ mod tests {
     #[test]
     fn the_paths_a_config_and_its_local_imports_write_are_edges() {
         let dir = project(&[
-            ("package.json", r#"{ "devDependencies": { "vitest": "3" } }"#),
+            (
+                "package.json",
+                r#"{ "devDependencies": { "vitest": "3" } }"#,
+            ),
             (
                 "vitest.config.ts",
                 "import { s } from './tools/s'; import x from 'vitest'; export default () => s;",
             ),
             (
                 "tools/s.ts",
-                "export const s = ['./kit/setup.ts', './gone.ts', '../outside.ts', 'kit/x.ts'];",
+                "export const s = ['./kit/setup.ts', './gone.ts', '../outside.ts', 'kit/x.ts', './kit/setup.ts'];",
             ),
             ("kit/setup.ts", ""),
             ("src/a.ts", "export const p = '../kit/setup.ts';"),
