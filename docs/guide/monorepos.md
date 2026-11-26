@@ -23,5 +23,5 @@ pacote. Ele acha os pacotes pela declaração de cada ferramenta, somando o que 
   que o `package.json` raiz declara vale para todos os pacotes (dependências içadas e
   ferramentas), e conta como usado por qualquer arquivo ou script do repositório.
 - Os scripts e os [frameworks](frameworks.md) de cada pacote são lidos no diretório dele.
-- A entrada de um pacote publicado (sem `"private": true`) é a interface dele: seus exports não
-  são reportados. A de um pacote privado é checada pelos usos reais dos outros pacotes.
+- As entradas de um pacote publicado (sem `"private": true`), cada subcaminho do `exports`, são
+  a interface dele: seus exports não são reportados. Vale também para o pacote raiz. A de um pacote privado é checada pelos usos reais dos outros pacotes.

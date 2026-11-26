@@ -16,9 +16,9 @@ pub struct Project {
     /// test harness with its own dependencies), by its directory: a file under it can import
     /// them, as Node.js looks for packages in every folder above the file.
     pub nested_declared: BTreeMap<String, BTreeSet<String>>,
-    /// The entry the root `package.json` declares (`exports`, `main`, `module`), found in the
-    /// source when it points to a build.
-    pub root_entry: Option<FileId>,
+    /// The entries the root `package.json` declares (each subpath of `exports`, `main`,
+    /// `module`), found in the source when they point to a build.
+    pub root_entries: BTreeSet<FileId>,
     /// The canonical project root.
     pub root: PathBuf,
     pub files: BTreeMap<FileId, File>,
@@ -154,7 +154,11 @@ impl Manifest {
     fn load(root: &Path, dir: &str) -> Result<Self, ProjectError> {
         let path = root.join(dir).join("package.json");
         if !path.is_file() {
-            return Ok(Self::default());
+            // A folder without package.json is not a package anyone installs.
+            return Ok(Self {
+                private: true,
+                ..Self::default()
+            });
         }
         let text = std::fs::read_to_string(path).unwrap_or_default();
         let value: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
@@ -215,41 +219,84 @@ impl Manifest {
     /// Where its entry may be, relative to its directory: what `exports` and `main` say, then
     /// the source a build would compile it from.
     fn entry_candidates(&self) -> Vec<String> {
-        let mut candidates = Vec::new();
-        let mut exports = self.exports.as_ref();
-        if let Some(serde_json::Value::Object(map)) = exports
-            && let Some(dot) = map.get(".")
-        {
-            exports = Some(dot);
-        }
-        match exports {
-            Some(serde_json::Value::String(entry)) => candidates.push(entry.clone()),
-            Some(serde_json::Value::Object(conditions)) => {
-                for condition in ["require", "import", "node", "default"] {
-                    if let Some(serde_json::Value::String(entry)) = conditions.get(condition) {
-                        candidates.push(entry.clone());
-                    }
-                }
-            }
-            _ => {}
-        }
-        candidates.extend(self.main.iter().chain(&self.module).cloned());
-        // An entry in a build folder (`./dist/source/index.js`) is compiled from the same path
-        // without it (`source/index.ts`, which the resolver finds from `.js`).
-        let mut candidates: Vec<String> = candidates
-            .into_iter()
-            .flat_map(|entry| {
-                let source = entry
-                    .trim_start_matches("./")
-                    .split_once('/')
-                    .filter(|(folder, _)| BUILD_FOLDERS.contains(folder))
-                    .map(|(_, rest)| rest.to_string());
-                std::iter::once(entry).chain(source)
-            })
-            .collect();
+        let mut entries = self.dot_export().map(targets).unwrap_or_default();
+        entries.extend(self.main.iter().chain(&self.module).cloned());
+        let mut candidates: Vec<String> = entries.iter().flat_map(|e| from_build(e)).collect();
         candidates.extend(["src/index".to_string(), "index".to_string()]);
         candidates
     }
+
+    /// Whether `exports` maps subpaths (`{ ".": ..., "./lib": ... }`) rather than being the
+    /// export of `.` itself (a path, or conditions).
+    fn has_subpaths(&self) -> bool {
+        matches!(&self.exports, Some(serde_json::Value::Object(map))
+            if map.keys().any(|key| key.starts_with('.')))
+    }
+
+    /// What `exports` says the `.` subpath is.
+    fn dot_export(&self) -> Option<&serde_json::Value> {
+        match self.has_subpaths() {
+            true => self.exports.as_ref()?.get("."),
+            false => self.exports.as_ref(),
+        }
+    }
+
+    /// For each subpath `exports` declares besides `.` (`./lib/parser`), where it may be.
+    fn subpath_candidates(&self) -> Vec<Vec<String>> {
+        let Some(serde_json::Value::Object(map)) = &self.exports else {
+            return Vec::new();
+        };
+        map.iter()
+            .filter(|(key, _)| key.starts_with("./"))
+            .map(|(_, value)| targets(value).iter().flat_map(|t| from_build(t)).collect())
+            .collect()
+    }
+}
+
+/// The files an `exports` value points to, under any condition but `types` (nested conditions
+/// and fallback arrays too); `null` blocks a subpath.
+fn targets(value: &serde_json::Value) -> Vec<String> {
+    match value {
+        serde_json::Value::String(path) if !path.ends_with(".d.ts") => vec![path.clone()],
+        serde_json::Value::Object(conditions) => conditions
+            .iter()
+            .filter(|(condition, _)| *condition != "types")
+            .flat_map(|(_, value)| targets(value))
+            .collect(),
+        serde_json::Value::Array(fallbacks) => fallbacks.iter().flat_map(targets).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// An entry and, when it is in a build folder (`./dist/cjs/index.js`), the paths of the source
+/// it may be compiled from: without the build folder and the folders after it, as they are and
+/// under `src/` (`cjs/index.js`, `src/cjs/index.js`, `index.js`, `src/index.js`). The resolver
+/// finds the `.ts` of a `.js`.
+fn from_build(entry: &str) -> Vec<String> {
+    let mut candidates = vec![entry.to_string()];
+    let segments: Vec<&str> = entry.trim_start_matches("./").split('/').collect();
+    if segments.len() > 1 && BUILD_FOLDERS.contains(&segments[0]) {
+        for start in 1..segments.len() {
+            let rest = segments[start..].join("/");
+            candidates.push(rest.clone());
+            candidates.push(format!("src/{rest}"));
+        }
+    }
+    candidates
+}
+
+/// The files a package declares as its entries: its main one and each subpath of `exports`.
+fn package_entries(
+    resolver: &Resolver,
+    root: &Path,
+    dir: &str,
+    manifest: &Manifest,
+    files: &BTreeMap<PathBuf, FileId>,
+) -> BTreeSet<FileId> {
+    std::iter::once(manifest.entry_candidates())
+        .chain(manifest.subpath_candidates())
+        .filter_map(|candidates| package_file(resolver, root, dir, &candidates, files))
+        .collect()
 }
 
 /// The folders a build usually writes to.
@@ -706,9 +753,9 @@ impl Project {
                 }
             }
             // A published package's entry is its interface to whoever installs it.
-            if index > 0 && !manifest.private {
-                let candidates = manifest.entry_candidates();
-                production_files.extend(package_file(&resolver, &root, dir, &candidates, &paths));
+            // A published package's entries are its interface to whoever installs it.
+            if !manifest.private {
+                production_files.extend(package_entries(&resolver, &root, dir, manifest, &paths));
             }
             workspaces.push(Workspace {
                 dir: dir.clone(),
@@ -723,16 +770,10 @@ impl Project {
             });
         }
         let nested_declared = nested_manifests(&root, &dirs);
-        let root_entry = package_file(
-            &resolver,
-            &root,
-            "",
-            &manifests[0].entry_candidates(),
-            &paths,
-        );
+        let root_entries = package_entries(&resolver, &root, "", &manifests[0], &paths);
         Ok(Self {
             nested_declared,
-            root_entry,
+            root_entries,
             root,
             parsed: files.len(),
             files,
@@ -1423,14 +1464,72 @@ mod tests {
             [
                 "./dist/source/index.js",
                 "source/index.js",
+                "src/source/index.js",
+                "index.js",
+                "src/index.js",
                 "build/main.js",
                 "main.js",
+                "src/main.js",
                 "./lib/esm/index.mjs",
                 "esm/index.mjs",
+                "src/esm/index.mjs",
+                "index.mjs",
+                "src/index.mjs",
                 "src/index",
                 "index"
             ]
         );
+    }
+
+    #[test]
+    fn every_subpath_a_published_library_exports_is_an_entry() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{
+                    "name": "mailer",
+                    "main": "./dist/cjs/mailer.js",
+                    "exports": {
+                        ".": { "import": "./dist/esm/mailer.js", "require": "./dist/cjs/mailer.js" },
+                        "./lib/parser": { "node": { "require": "./dist/cjs/parser/index.js" } },
+                        "./package.json": "./package.json",
+                        "./types": { "types": "./dist/types.d.ts" },
+                        "./internal/*": null,
+                        "./fallback": ["./dist/cjs/fallback.js"]
+                    }
+                }"#,
+            ),
+            ("src/mailer.ts", ""),
+            ("src/parser/index.ts", ""),
+            ("src/internal.ts", ""),
+            ("src/fallback.ts", ""),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.root_entries.iter().collect::<Vec<_>>(),
+            ["src/fallback.ts", "src/mailer.ts", "src/parser/index.ts"]
+        );
+        assert_eq!(
+            project.production_files.iter().collect::<Vec<_>>(),
+            ["src/fallback.ts", "src/mailer.ts", "src/parser/index.ts"]
+        );
+        let dir = project_private();
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.root_entries.iter().collect::<Vec<_>>(),
+            ["src/index.ts"]
+        );
+        assert!(project.production_files.is_empty());
+    }
+
+    fn project_private() -> tempfile::TempDir {
+        project(&[
+            (
+                "package.json",
+                r#"{ "private": true, "main": "dist/index.js" }"#,
+            ),
+            ("src/index.ts", ""),
+        ])
     }
 
     fn set(ids: &[&str]) -> BTreeSet<FileId> {
