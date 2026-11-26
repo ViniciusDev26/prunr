@@ -30,6 +30,7 @@ mod sveltekit;
 mod tools;
 mod typescript;
 mod vite;
+mod vitepress;
 mod vitest;
 mod vue;
 
@@ -233,6 +234,7 @@ pub const PLUGINS: &[&dyn Plugin] = &[
     &sveltekit::SvelteKit,
     &nuxt::Nuxt,
     &react_router::ReactRouter,
+    &vitepress::VitePress,
     &tools::ESLINT,
     &tools::PRETTIER,
     &tools::BABEL,
@@ -498,6 +500,7 @@ mod tests {
                 "@sveltejs/kit",
                 "nuxt",
                 "@react-router/dev",
+                "vitepress",
                 "eslint",
                 "prettier",
                 "@babel/core",

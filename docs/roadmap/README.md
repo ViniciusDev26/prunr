@@ -31,6 +31,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 29. [Plugins declarativos de ferramentas](29-tool-plugins.md)
 - [x] 30. [SvelteKit e Nuxt](30-sveltekit-and-nuxt.md)
 - [x] 31. [Astro e React Router/Remix](31-astro-and-react-router.md)
+- [x] 32. [VitePress](32-vitepress.md)
 
 ## Fase 1: credibilidade (concluída)
 
@@ -56,6 +57,7 @@ Os pacotes e arquivos que as ferramentas carregam sem import:
   ([29](29-tool-plugins.md)).
 - [x] SvelteKit e Nuxt ([30](30-sveltekit-and-nuxt.md)).
 - [x] Astro e React Router/Remix ([31](31-astro-and-react-router.md)).
+- [x] VitePress ([32](32-vitepress.md)).
 
 ## Depois
 
