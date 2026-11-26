@@ -40,6 +40,8 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 35. [Membros de classe sem uso](35-unused-class-members.md)
 - [x] 36. [Exports duplicados](36-duplicate-exports.md)
 - [x] 37. [Binários não declarados](37-unlisted-binaries.md)
+- [x] 38. [GitHub Action](38-github-action.md)
+- [x] 39. [`prunr init` a partir do Knip](39-init-from-knip.md)
 
 ## Fase 1: credibilidade (concluída)
 
@@ -67,7 +69,7 @@ Os pacotes e arquivos que as ferramentas carregam sem import:
 - [x] Astro e React Router/Remix ([31](31-astro-and-react-router.md)).
 - [x] VitePress ([32](32-vitepress.md)).
 
-## Fase 3: profundidade
+## Fase 3: profundidade (concluída)
 
 A fase 2 ampliou o que o prunr enxerga; a 3 amplia o que ele reporta e quem o adota, na ordem:
 
