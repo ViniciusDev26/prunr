@@ -436,14 +436,23 @@ impl Project {
                 })
             })
             .collect();
+        // Each file is read and analyzed on its own, in parallel; the results keep the order of
+        // `paths`, so the error reported is always the one of the first file that has one.
+        use rayon::prelude::*;
+        let results: Vec<(FileId, Result<Facts, String>)> = paths
+            .par_iter()
+            .map(|(path, id)| {
+                let source = std::fs::read_to_string(path).unwrap_or_default();
+                (id.clone(), analyze(&source, path))
+            })
+            .collect();
         let mut analyzed = BTreeMap::new();
-        for (path, id) in &paths {
-            let source = std::fs::read_to_string(path).unwrap_or_default();
-            let facts = analyze(&source, path).map_err(|message| ProjectError::Parse {
+        for (id, facts) in results {
+            let facts = facts.map_err(|message| ProjectError::Parse {
                 file: id.clone(),
                 message,
             })?;
-            analyzed.insert(id.clone(), facts);
+            analyzed.insert(id, facts);
         }
         let esm: BTreeSet<FileId> = analyzed
             .iter()
@@ -494,64 +503,74 @@ impl Project {
                     file.link(target, specifier, &paths)
                 }
             };
-        let mut files = BTreeMap::new();
-        for (path, id) in &paths {
-            let facts = analyzed.remove(id).expect("every file was analyzed");
-            let mut file = File::default();
-            for require in &facts.requires {
-                if let Some(target) = target_of(&mut file, path, &require.specifier) {
-                    file.edge_lines
-                        .entry(target.clone())
-                        .or_insert(facts.require_lines[&require.specifier]);
-                    let uses = if require.esm && !esm.contains(&target) {
-                        require.uses.iter().map(as_commonjs).collect()
-                    } else {
-                        require.uses.clone()
-                    };
-                    file.edges.push(Edge {
-                        target,
-                        uses,
-                        type_only: require.type_only,
-                    });
+        // Each file is linked on its own, in parallel: the resolver is shared and caches.
+        let jobs: Vec<(&PathBuf, &FileId, Facts)> = paths
+            .iter()
+            .map(|(path, id)| {
+                let facts = analyzed.remove(id).expect("every file was analyzed");
+                (path, id, facts)
+            })
+            .collect();
+        let linked: Vec<(FileId, File)> = jobs
+            .into_par_iter()
+            .map(|(path, id, facts)| {
+                let mut file = File::default();
+                for require in &facts.requires {
+                    if let Some(target) = target_of(&mut file, path, &require.specifier) {
+                        file.edge_lines
+                            .entry(target.clone())
+                            .or_insert(facts.require_lines[&require.specifier]);
+                        let uses = if require.esm && !esm.contains(&target) {
+                            require.uses.iter().map(as_commonjs).collect()
+                        } else {
+                            require.uses.clone()
+                        };
+                        file.edges.push(Edge {
+                            target,
+                            uses,
+                            type_only: require.type_only,
+                        });
+                    }
                 }
-            }
-            for reexport in &facts.reexports {
-                if let Some(target) = target_of(&mut file, path, &reexport.specifier) {
-                    file.edge_lines
-                        .entry(target.clone())
-                        .or_insert(facts.require_lines[&reexport.specifier]);
-                    file.edges.push(Edge {
-                        target: target.clone(),
-                        uses: Vec::new(),
-                        type_only: reexport.type_only,
-                    });
-                    file.reexports.push((target, reexport.kind.clone()));
+                for reexport in &facts.reexports {
+                    if let Some(target) = target_of(&mut file, path, &reexport.specifier) {
+                        file.edge_lines
+                            .entry(target.clone())
+                            .or_insert(facts.require_lines[&reexport.specifier]);
+                        file.edges.push(Edge {
+                            target: target.clone(),
+                            uses: Vec::new(),
+                            type_only: reexport.type_only,
+                        });
+                        file.reexports.push((target, reexport.kind.clone()));
+                    }
                 }
-            }
-            for pattern in &facts.patterns {
-                let targets = matching(id, &pattern.glob, paths.values());
-                if targets.is_empty() {
-                    file.unresolved.push(pattern.source.clone());
+                for pattern in &facts.patterns {
+                    let targets = matching(id, &pattern.glob, paths.values());
+                    if targets.is_empty() {
+                        file.unresolved.push(pattern.source.clone());
+                    }
+                    for target in targets {
+                        file.edge_lines
+                            .entry(target.clone())
+                            .or_insert(facts.require_lines[&pattern.source]);
+                        file.edges.push(Edge {
+                            target,
+                            uses: vec![Use {
+                                path: vec![],
+                                whole: true,
+                            }],
+                            type_only: false,
+                        });
+                    }
                 }
-                for target in targets {
-                    file.edge_lines
-                        .entry(target.clone())
-                        .or_insert(facts.require_lines[&pattern.source]);
-                    file.edges.push(Edge {
-                        target,
-                        uses: vec![Use {
-                            path: vec![],
-                            whole: true,
-                        }],
-                        type_only: false,
-                    });
-                }
-            }
-            file.unresolved
-                .extend(facts.dynamic_requires.iter().cloned());
-            file.facts = facts;
-            files.insert(id.clone(), file);
-        }
+                file.unresolved
+                    .extend(facts.dynamic_requires.iter().cloned());
+                file.facts = facts;
+                (id.clone(), file)
+            })
+            .collect();
+        let files: BTreeMap<FileId, File> = linked.into_iter().collect();
         let mut workspaces = Vec::new();
         let mut production_files = BTreeSet::new();
         let mut test_files = BTreeSet::new();
