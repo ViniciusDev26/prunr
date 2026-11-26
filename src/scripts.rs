@@ -50,6 +50,22 @@ pub fn configs(script: &str, runner: &str) -> Vec<String> {
     found
 }
 
+/// The arguments each command of `script` that runs `runner` passes to it, through package
+/// runners (`npx mocha`) or straight from `node_modules` (`node node_modules/mocha/bin/mocha`).
+pub fn arguments(script: &str, runner: &str) -> Vec<Vec<String>> {
+    let installed = format!("node_modules/{runner}/");
+    let bin = format!("node_modules/.bin/{runner}");
+    commands(script)
+        .into_iter()
+        .filter_map(|words| {
+            let at = words.iter().position(|word| {
+                word == runner || word.contains(&installed) || word.ends_with(&bin)
+            })?;
+            Some(words[at + 1..].to_vec())
+        })
+        .collect()
+}
+
 /// A file a command of a script runs with Node.js or a runner like it (`node`, `tsx`,
 /// `ts-node`, `bun`...).
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -424,6 +440,20 @@ mod tests {
 
     fn used(script: &str) -> Vec<String> {
         packages(script, &bins()).into_iter().collect()
+    }
+
+    #[test]
+    fn the_arguments_a_script_passes_to_a_runner() {
+        assert_eq!(
+            arguments("npx mocha 'test/**' -r x && mocha; tap", "mocha"),
+            [vec!["test/**", "-r", "x"], vec![]]
+        );
+        assert_eq!(
+            arguments("node node_modules/mocha/bin/mocha.js a", "mocha"),
+            [vec!["a"]]
+        );
+        assert_eq!(arguments("./node_modules/.bin/tap b", "tap"), [vec!["b"]]);
+        assert!(arguments("jest", "mocha").is_empty());
     }
 
     #[test]

@@ -1,0 +1,10 @@
+{
+  "name": "node-test-fixture",
+  "private": true,
+  "scripts": {
+    "test": "node --import tsx --test --test-concurrency=1",
+    "test:tap": "tap",
+    "test:lab": "lab -a @hapi/code -t 100"
+  },
+  "devDependencies": { "tsx": "4", "tap": "18", "@hapi/lab": "25", "@hapi/code": "9" }
+}

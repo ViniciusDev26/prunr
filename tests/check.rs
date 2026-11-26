@@ -1509,3 +1509,23 @@ fn the_root_package_can_import_the_packages_of_the_repository_without_declaring_
         "missing-dependency    packages/app/src/index.js: @x/lib\n\nerrors: 1, warnings: 0\n"
     );
 }
+
+#[test]
+fn mocha_runs_the_specs_its_config_and_scripts_name() {
+    let run = check("mocha");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           lib/dead.js\n\nerrors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
+fn node_test_tap_and_lab_run_their_default_test_files() {
+    let run = check("node-test");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/only-tests.js (only tests use it)\n\nerrors: 1, warnings: 0\n"
+    );
+}

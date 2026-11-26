@@ -1,0 +1,6 @@
+{
+  "name": "mocha-fixture",
+  "private": true,
+  "scripts": { "test": "mocha --require test/support/env --reporter spec --check-leaks test/ test/unit/" },
+  "devDependencies": { "mocha": "10", "chai": "4", "should": "13" }
+}
