@@ -30,6 +30,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 28. [Vue, Svelte, Astro e MDX](28-single-file-components.md)
 - [x] 29. [Plugins declarativos de ferramentas](29-tool-plugins.md)
 - [x] 30. [SvelteKit e Nuxt](30-sveltekit-and-nuxt.md)
+- [x] 31. [Astro e React Router/Remix](31-astro-and-react-router.md)
 
 ## Fase 1: credibilidade (concluída)
 
@@ -54,7 +55,7 @@ Os pacotes e arquivos que as ferramentas carregam sem import:
   Storybook, Cypress, husky, lint-staged, Prisma, tsup, Rollup e webpack
   ([29](29-tool-plugins.md)).
 - [x] SvelteKit e Nuxt ([30](30-sveltekit-and-nuxt.md)).
-- [ ] Astro (além das páginas) e Remix/React Router.
+- [x] Astro e React Router/Remix ([31](31-astro-and-react-router.md)).
 
 ## Depois
 

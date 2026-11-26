@@ -33,8 +33,10 @@ depcheck + madge + scripts próprios.
 - **ESM e TypeScript no mesmo grafo**, com `paths` do `tsconfig.json` e interop CJS/ESM como no
   Node.
 - **Entende o seu stack** sem configuração: Jest, Vitest, Mocha, `node --test`, tap, AVA,
-  Playwright, Vite, React, Next.js, NestJS, Drizzle Kit, PostCSS e monorepos (npm, yarn, pnpm,
-  bun, lerna, rush, nx, turbo).
+  Playwright, Cypress, Storybook, Vite, React, Next.js, NestJS, Nuxt, SvelteKit, Astro, React
+  Router/Remix, TypeScript (`tsconfig`), arquivos `.vue`/`.svelte`/`.astro`/`.mdx`, ESLint,
+  Prettier, Babel, commitlint, husky, lint-staged, Tailwind, Prisma, tsup, Rollup, webpack,
+  Drizzle Kit, PostCSS e monorepos (npm, yarn, pnpm, bun, lerna, rush, nx, turbo).
 - **Conserta sozinho:** `prunr fix` apaga o que está morto e limpa o `package.json`.
 - **Feito para CI:** anotações no diff do PR, só os achados novos com `--since`, e um baseline
   para adotar em código legado.
@@ -138,8 +140,8 @@ Cada achado novo vira uma anotação na linha certa do diff. Para um código leg
 - [Configuração](docs/guide/configuration.md): o `prunr.json` e os `scripts` do `package.json`.
 - [Achados](docs/guide/checks.md): o que cada um significa, ESM e TypeScript, `require` dinâmico.
 - [`prunr fix`](docs/guide/fix.md): o que ele remove e o que deixa para você.
-- [Frameworks](docs/guide/frameworks.md): Jest, Vitest, Playwright, Vite, React, Next.js,
-  NestJS, Drizzle Kit e PostCSS.
+- [Frameworks e ferramentas](docs/guide/frameworks.md): test runners, frameworks, componentes de
+  arquivo único e as configurações de ferramentas que o prunr lê.
 - [Monorepos](docs/guide/monorepos.md): como os pacotes são encontrados e checados.
 - [Ignorar no código](docs/guide/ignore.md): exports públicos de propósito.
 - [CI e código legado](docs/guide/ci.md): anotações, `--since` e baseline.
@@ -150,8 +152,8 @@ Cada achado novo vira uma anotação na linha certa do diff. Para um código leg
   `noUnusedVariables` e `noUnusedPrivateClassMembers` no [Biome](https://biomejs.dev/): junto com
   o `unused-import` do prunr, elas cobrem o que o `noUnusedLocals` do `tsc` pega.
 - **Formatação, estilo e tipos:** use Biome e `tsc --noEmit`.
-- **Dependências citadas só na configuração de outra ferramenta** (plugins do ESLint, presets do
-  Babel) aparecem como `unused-dependency`. Liste-as em `dependencies.ignore`.
+- **Dependências citadas só na configuração de uma ferramenta que o prunr não conhece** aparecem
+  como `unused-dependency`. Liste-as em `dependencies.ignore`.
 
 O que vem depois está no [roadmap](docs/roadmap/).
 
@@ -208,8 +210,8 @@ vez, `--since` e anotações no diff para barrar só o que é novo no PR, e um `
 o código morto e limpa o `package.json`.
 
 **Quando o Knip é a melhor escolha.** Num projeto só em ESM e TypeScript, o Knip tem bem mais
-plugins (o prunr conhece Jest, Vitest, Playwright, Vite, React, Next.js, NestJS, Drizzle Kit e
-PostCSS) e mais tempo de estrada. O prunr vale a pena quando há CommonJS no meio, ou quando a
+plugins (o prunr conhece uns 40 frameworks e ferramentas; o Knip, mais de cem) e mais tempo de
+estrada. O prunr vale a pena quando há CommonJS no meio, ou quando a
 velocidade e uma ferramenta só pesam mais.
 
 ## Contribuindo

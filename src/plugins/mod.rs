@@ -22,6 +22,7 @@ mod nuxt;
 mod playwright;
 mod postcss;
 mod react;
+mod react_router;
 mod runners;
 mod static_config;
 mod svelte;
@@ -231,6 +232,7 @@ pub const PLUGINS: &[&dyn Plugin] = &[
     &mdx::Mdx,
     &sveltekit::SvelteKit,
     &nuxt::Nuxt,
+    &react_router::ReactRouter,
     &tools::ESLINT,
     &tools::PRETTIER,
     &tools::BABEL,
@@ -495,6 +497,7 @@ mod tests {
                 "@mdx-js/mdx",
                 "@sveltejs/kit",
                 "nuxt",
+                "@react-router/dev",
                 "eslint",
                 "prettier",
                 "@babel/core",

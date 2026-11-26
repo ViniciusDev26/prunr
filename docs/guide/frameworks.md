@@ -202,3 +202,18 @@ raiz. Os `modules` do `nuxt.config` contam como usados. `~`, `@`, `~~` e `@@` s�
 - **Prisma:** o comando `seed` da chave `prisma` do `package.json`, também.
 - **tsup, Rollup e webpack:** as entradas do bundle (`entry`, `input`) são entradas de produção,
   e os loaders do webpack (`loader`, `use`) contam como usados.
+
+## Astro
+
+Com `astro` declarado, são entradas de produção as páginas (`src/pages/**`), as coleções de
+conteúdo (`src/content/**` e `src/content.config.*`), o middleware, as actions e o
+`astro.config.*`, cujas integrações contam como usadas em produção. `astro:content` e os outros
+módulos `astro:` não viram achados.
+
+## React Router e Remix
+
+Com `@react-router/dev` ou `@remix-run/dev` declarado, sob `app/` (ou o `appDirectory` da
+configuração) a rota raiz (`root.tsx`), as rotas (`routes/**`), o `routes.ts` e as entradas
+`entry.client` e `entry.server` são entradas de produção; os exports delas (`loader`, `action`,
+`meta`, o componente) são a interface que o framework lê. Os tipos gerados (`./+types/...`) não
+viram achados, e `react-dom`, `isbot` e o adaptador de servidor contam como usados.
