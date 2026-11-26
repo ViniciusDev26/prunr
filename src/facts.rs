@@ -16,7 +16,7 @@ use oxc_ast::ast::{
     ExportDefaultDeclarationKind, ExportFromDeclaration, ExportNamedDeclaration, Expression,
     IdentifierReference, ImportDeclaration, ImportDeclarationSpecifier, ImportExpression,
     MethodDefinitionKind, ObjectPropertyKind, StaticMemberExpression, TSImportEqualsDeclaration,
-    TSModuleReference, TemplateLiteral, UnaryOperator,
+    TSModuleReference, TemplateLiteral, UnaryOperator, VariableDeclarator,
 };
 use oxc_ast::{AstKind, Comment};
 use oxc_parser::{ParseOptions, Parser};
@@ -202,6 +202,8 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
         require_sites: BTreeMap::new(),
         removal: None,
         exports_escape: false,
+        exported_symbols: BTreeSet::new(),
+        passed_symbols: BTreeSet::new(),
         comments: program
             .comments
             .iter()
@@ -213,16 +215,8 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
             AstKind::CallExpression(call) if analyzer.is_global(&call.callee, "require") => {
                 analyzer.require(node.id(), call);
             }
-            // `setup(exports)`: the function can read any export.
-            AstKind::CallExpression(call)
-                if call.arguments.iter().any(|argument| {
-                    argument
-                        .as_expression()
-                        .is_some_and(|argument| analyzer.is_exports_object(argument))
-                }) =>
-            {
-                analyzer.exports_escape = true;
-            }
+            AstKind::CallExpression(call) => analyzer.call_arguments(call),
+            AstKind::VariableDeclarator(declarator) => analyzer.declarator(declarator),
             AstKind::AssignmentExpression(assignment) => analyzer.assignment(node.id(), assignment),
             AstKind::StaticMemberExpression(member) => analyzer.read(node.id(), member),
             AstKind::ImportDeclaration(import) => analyzer.import(import),
@@ -268,6 +262,11 @@ struct Analyzer<'s, 'a> {
     comments: Vec<Span>,
     /// The file passes its own `exports` to a function, which can read any of them.
     exports_escape: bool,
+    /// The bindings that are the exported value (`module.exports = api`,
+    /// `var God = module.exports = {...}`).
+    exported_symbols: BTreeSet<SymbolId>,
+    /// The bindings the file passes to a function.
+    passed_symbols: BTreeSet<SymbolId>,
 }
 
 impl<'a> Analyzer<'_, 'a> {
@@ -277,7 +276,7 @@ impl<'a> Analyzer<'_, 'a> {
                 *used = true;
             }
         }
-        if self.exports_escape {
+        if self.exports_escape || !self.exported_symbols.is_disjoint(&self.passed_symbols) {
             self.exports.values_mut().for_each(|used| *used = true);
         }
         let newlines: Vec<usize> = self.source.match_indices('\n').map(|(at, _)| at).collect();
@@ -776,8 +775,46 @@ impl<'a> Analyzer<'_, 'a> {
         }
     }
 
+    /// `setup(exports)`, `extend(api)` where `api` is the exported value: the function can read
+    /// any export.
+    fn call_arguments(&mut self, call: &CallExpression<'a>) {
+        for argument in call.arguments.iter().filter_map(|a| a.as_expression()) {
+            if self.is_exports_object(argument) {
+                self.exports_escape = true;
+            } else if let Expression::Identifier(ident) = argument
+                && let Some(symbol) = self.symbol_of(ident)
+            {
+                self.passed_symbols.insert(symbol);
+            }
+        }
+    }
+
+    /// `var God = module.exports = {...}`: `God` is the exported value.
+    fn declarator(&mut self, declarator: &VariableDeclarator<'a>) {
+        if let Some(Expression::AssignmentExpression(assignment)) = &declarator.init
+            && let AssignmentTarget::StaticMemberExpression(target) = &assignment.left
+            && self.is_module_exports(target)
+            && let BindingPattern::BindingIdentifier(binding) = &declarator.id
+        {
+            self.exported_symbols.insert(binding.symbol_id());
+        }
+    }
+
+    /// The binding an identifier refers to, if it is a local one.
+    fn symbol_of(&self, ident: &IdentifierReference) -> Option<SymbolId> {
+        self.semantic
+            .scoping()
+            .get_reference(ident.reference_id())
+            .symbol_id()
+    }
+
     /// `module.exports = value`.
     fn module_exports(&mut self, value: &Expression<'a>) {
+        if let Expression::Identifier(ident) = value
+            && let Some(symbol) = self.symbol_of(ident)
+        {
+            self.exported_symbols.insert(symbol);
+        }
         if let Expression::ObjectExpression(object) = value {
             let items: Vec<Span> = object.properties.iter().map(|p| p.span()).collect();
             for (index, property) in object.properties.iter().enumerate() {
@@ -1411,6 +1448,21 @@ mod tests {
     #[test]
     fn a_member_of_the_require_call_is_used() {
         assert_eq!(uses_of(r#"require("./x").a();"#), [uses(&["a"], true)]);
+    }
+
+    #[test]
+    fn passing_the_exported_value_to_a_function_uses_it_all() {
+        for source in [
+            "var God = module.exports = { next_id: 0, started_at: 1 }; require('./methods')(God);",
+            "const api = { a: 1, b: 2 }; module.exports = api; extend(api);",
+        ] {
+            let found = facts(source);
+            assert!(!found.exports.is_empty(), "{source}");
+            assert!(found.exports.iter().all(|e| e.used_internally), "{source}");
+        }
+        let found =
+            facts("const api = { a: 1 }; module.exports = api; const other = {}; f(other);");
+        assert!(!found.exports.iter().all(|e| e.used_internally));
     }
 
     #[test]

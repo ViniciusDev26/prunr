@@ -145,6 +145,8 @@ struct Manifest {
     peer_dependencies: BTreeMap<String, serde_json::Value>,
     optional_dependencies: BTreeMap<String, serde_json::Value>,
     scripts: BTreeMap<String, String>,
+    /// The files of its `bin`: the commands it installs.
+    bin: Vec<String>,
     /// The whole `package.json`, for the plugins: tools keep their configuration in it.
     raw: serde_json::Value,
 }
@@ -199,6 +201,14 @@ impl Manifest {
                 .into_iter()
                 .filter_map(|(name, script)| Some((name, script.as_str()?.to_string())))
                 .collect(),
+            bin: match &value["bin"] {
+                Value::String(path) => vec![path.clone()],
+                Value::Object(bins) => bins
+                    .values()
+                    .filter_map(|path| path.as_str().map(str::to_string))
+                    .collect(),
+                _ => Vec::new(),
+            },
             raw: value.clone(),
         }
     }
@@ -296,6 +306,22 @@ fn package_entries(
     std::iter::once(manifest.entry_candidates())
         .chain(manifest.subpath_candidates())
         .filter_map(|candidates| package_file(resolver, root, dir, &candidates, files))
+        .collect()
+}
+
+/// The files of the commands a package's `bin` declares, found in the source when they point to
+/// a build.
+fn package_bins(
+    resolver: &Resolver,
+    root: &Path,
+    dir: &str,
+    manifest: &Manifest,
+    files: &BTreeMap<PathBuf, FileId>,
+) -> BTreeSet<FileId> {
+    manifest
+        .bin
+        .iter()
+        .filter_map(|bin| package_file(resolver, root, dir, &from_build(bin), files))
         .collect()
 }
 
@@ -419,14 +445,31 @@ fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
         .require_git(false)
         .filter_entry(|entry| entry.file_name() != "node_modules")
         .build();
+    let walked = walker.flatten().map(|entry| entry.into_path());
+    // A file git tracks is part of the project even when an ignore pattern matches it
+    // (`mocha.js` in .gitignore, for a bundle at the root, also matches `bin/mocha.js`).
+    let tracked = std::process::Command::new("git")
+        .args(["ls-files", "-z"])
+        .current_dir(root)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| output.stdout)
+        .unwrap_or_default();
+    let tracked = tracked
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .map(|path| root.join(String::from_utf8_lossy(path).as_ref()));
     let mut files = BTreeMap::new();
-    for entry in walker.flatten() {
-        let path = entry.into_path();
+    for path in walked.chain(tracked) {
         let source = path
             .extension()
             .and_then(|e| e.to_str())
             .is_some_and(|extension| EXTENSIONS.contains(&extension));
-        if source && !is_declaration(&path) && path.is_file() {
+        let installed = path
+            .components()
+            .any(|part| part.as_os_str() == "node_modules");
+        if source && !installed && !is_declaration(&path) && path.is_file() {
             let id = file_id(root, &path).expect("walked files are under the root");
             files.insert(path, id);
         }
@@ -753,10 +796,12 @@ impl Project {
                 }
             }
             // A published package's entry is its interface to whoever installs it.
-            // A published package's entries are its interface to whoever installs it.
+            // A published package's entries are its interface to whoever installs it, and the
+            // commands in `bin` run whether it is published or not.
             if !manifest.private {
                 production_files.extend(package_entries(&resolver, &root, dir, manifest, &paths));
             }
+            production_files.extend(package_bins(&resolver, &root, dir, manifest, &paths));
             workspaces.push(Workspace {
                 dir: dir.clone(),
                 name: manifest.name.clone(),
@@ -770,7 +815,8 @@ impl Project {
             });
         }
         let nested_declared = nested_manifests(&root, &dirs);
-        let root_entries = package_entries(&resolver, &root, "", &manifests[0], &paths);
+        let mut root_entries = package_entries(&resolver, &root, "", &manifests[0], &paths);
+        root_entries.extend(package_bins(&resolver, &root, "", &manifests[0], &paths));
         Ok(Self {
             nested_declared,
             root_entries,
@@ -1520,6 +1566,55 @@ mod tests {
             ["src/index.ts"]
         );
         assert!(project.production_files.is_empty());
+    }
+
+    #[test]
+    fn the_binaries_a_package_declares_are_entries() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{ "private": true, "bin": { "tool": "./bin/tool.js", "other": "bin/other" } }"#,
+            ),
+            ("bin/tool.js", ""),
+            ("bin/other.js", ""),
+            (
+                "packages/cli/package.json",
+                r#"{ "name": "cli", "bin": "./dist/cli.js" }"#,
+            ),
+            ("packages/cli/src/cli.ts", ""),
+        ]);
+        std::fs::write(
+            dir.path().join("package.json"),
+            r#"{ "private": true, "workspaces": ["packages/*"], "bin": { "tool": "./bin/tool.js", "other": "bin/other" } }"#,
+        )
+        .unwrap();
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(
+            project.production_files.iter().collect::<Vec<_>>(),
+            ["bin/other.js", "bin/tool.js", "packages/cli/src/cli.ts"]
+        );
+    }
+
+    #[test]
+    fn a_tracked_file_an_ignore_pattern_matches_is_a_source_file() {
+        let dir = project(&[
+            (".gitignore", "mocha.js\n"),
+            ("bin/mocha.js", ""),
+            ("mocha.js", ""),
+            ("lib/a.js", ""),
+        ]);
+        let git = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .args(args)
+                .current_dir(dir.path())
+                .output()
+                .unwrap();
+            assert!(status.status.success(), "{status:?}");
+        };
+        git(&["init", "-q"]);
+        git(&["add", "-f", "bin/mocha.js", "lib/a.js"]);
+        let project = Project::load(dir.path()).unwrap();
+        assert_eq!(ids(&project), ["bin/mocha.js", "lib/a.js"]);
     }
 
     fn project_private() -> tempfile::TempDir {
