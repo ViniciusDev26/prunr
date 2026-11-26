@@ -116,9 +116,9 @@ Nos 85 projetos em que os dois rodaram, somando todos:
 
 | | Os dois | Só o prunr | Só o Knip |
 |---|---|---|---|
-| Arquivos sem uso | 20.952 | 842 | 26.038 |
-| Exports sem uso | 193 | 105 | 5.983 |
-| Dependências sem uso | 511 | 136 | 455 |
+| Arquivos sem uso | 20.951 | 840 | 26.039 |
+| Exports sem uso | 193 | 104 | 5.983 |
+| Dependências sem uso | 511 | 135 | 455 |
 
 Com a fase 2 (plugin de TypeScript, componentes `.vue`/`.svelte`/`.astro`/`.mdx`, as
 configurações das ferramentas e os frameworks), as dependências que só o prunr apontava caíram
@@ -131,6 +131,11 @@ Knip reporta como arquivos sem uso. Os 102 exports que só o prunr aponta foram 
 (os casos e as duas limitações que eles mostram estão no
 [item 23 do roadmap](roadmap/23-validation-corpus.md)); os que só o Knip aponta incluem os
 exports usados no próprio arquivo, que o prunr não reporta por desenho (veja abaixo).
+
+Os achados que a fase 3 trouxe ficam fora dessa comparação (o harness compara arquivos, exports e
+dependências). No corpus: 10 `unused-enum-member` (os mapas de eventos do MQTT e do Redis no
+nest), 13 `duplicate-export`, 9 `missing-binary` e nenhum `unused-class-member`, que só vale
+para aplicações e o corpus é de bibliotecas publicadas.
 
 ### O que só o Knip aponta
 
