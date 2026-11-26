@@ -5,13 +5,16 @@
 //! plugin only reads files: it never runs the project's code. What all enabled plugins
 //! contribute is added up before the checks run.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde_json::Value;
 
+mod astro;
+mod compile;
 mod drizzle;
 mod jest;
+mod mdx;
 mod mocha;
 mod nest;
 mod next;
@@ -20,10 +23,13 @@ mod postcss;
 mod react;
 mod runners;
 mod static_config;
+mod svelte;
 mod typescript;
 mod vite;
 mod vitest;
+mod vue;
 
+pub use compile::{Compiled, Compiler};
 pub use static_config::static_config;
 
 /// What a plugin can read about the project.
@@ -134,6 +140,10 @@ pub struct Contribution {
     /// Names a tool resolves itself (Jest's `moduleNameMapper` and `__mocks__`, Vite's
     /// `resolve.alias`), tried before a specifier is resolved as Node.js would.
     pub aliases: Vec<Alias>,
+    /// By extension (`vue`), what turns a file the parser cannot read into the module it holds.
+    /// Those files are part of the project; their imports are never reported, since the markup
+    /// around the scripts can use them.
+    pub compilers: BTreeMap<String, Compiler>,
 }
 
 /// A name a tool maps to a file (`./src/lib/x`, relative to the package) or to a package.
@@ -212,6 +222,10 @@ pub const PLUGINS: &[&dyn Plugin] = &[
     &typescript::TypeScript,
     &next::Next,
     &nest::Nest,
+    &vue::Vue,
+    &svelte::Svelte,
+    &astro::Astro,
+    &mdx::Mdx,
 ];
 
 /// What the plugins enabled in the project contribute.
@@ -456,7 +470,11 @@ mod tests {
                 "react",
                 "typescript",
                 "next",
-                "@nestjs/core"
+                "@nestjs/core",
+                "vue",
+                "svelte",
+                "astro",
+                "@mdx-js/mdx"
             ]
         );
     }
@@ -466,6 +484,22 @@ mod tests {
         let dir = project(&[]);
         let found = setup(dir.path(), &declared(&[]), &json!({ "name": "mocha" }));
         assert_eq!(found.tests, strings(&["test/*.*"]));
+    }
+
+    #[test]
+    fn compilers_are_equal_when_they_are_the_same_function() {
+        let a = Compiler(|source: &str| Compiled {
+            source: source.to_string(),
+            typescript: false,
+        });
+        assert_eq!(a, a);
+        let b = Compiler(|_: &str| Compiled {
+            source: String::new(),
+            typescript: true,
+        });
+        assert_ne!(a, b);
+        assert_eq!((b.0)("x").source, "");
+        assert_eq!((a.0)("y").source, "y");
     }
 
     #[test]

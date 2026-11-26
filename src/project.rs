@@ -475,7 +475,8 @@ fn vendored(root: &Path) -> BTreeSet<String> {
         .collect()
 }
 
-fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
+/// The source files under `root`, and those with an extension a plugin compiles.
+fn source_files(root: &Path, compiled: &[&str]) -> BTreeMap<PathBuf, FileId> {
     let walker = ignore::WalkBuilder::new(root)
         .require_git(false)
         .filter_entry(|entry| entry.file_name() != "node_modules")
@@ -489,7 +490,9 @@ fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
         let source = path
             .extension()
             .and_then(|e| e.to_str())
-            .is_some_and(|extension| EXTENSIONS.contains(&extension));
+            .is_some_and(|extension| {
+                EXTENSIONS.contains(&extension) || compiled.contains(&extension)
+            });
         let installed = path
             .components()
             .any(|part| part.as_os_str() == "node_modules");
@@ -499,6 +502,25 @@ fn source_files(root: &Path) -> BTreeMap<PathBuf, FileId> {
         }
     }
     files
+}
+
+/// Analyzes one file: a source, or what the compiler of its extension makes of it. The imports
+/// of a compiled file are used: the markup around its scripts can use them.
+fn analyze_file(
+    source: &str,
+    path: &Path,
+    compilers: &BTreeMap<String, crate::plugins::Compiler>,
+) -> Result<Facts, String> {
+    let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let Some(compiler) = compilers.get(extension) else {
+        return analyze(source, path);
+    };
+    let compiled = (compiler.0)(source);
+    let language = match compiled.typescript {
+        true => "ts",
+        false => "js",
+    };
+    crate::facts::analyze_markup(&compiled.source, &path.with_extension(language))
 }
 
 /// The source file of the project a script names, relative to `dir`, with or without its
@@ -600,7 +622,6 @@ impl Project {
             .filter_map(|(index, manifest)| Some((manifest.name.as_deref()?, index)))
             .collect();
         let dir_names: Vec<&str> = dirs.iter().map(String::as_str).collect();
-        let paths = source_files(&root);
         let resolver = Resolver::default();
         let root_declared = manifests[0].declared();
         // What the root declares is available to every package (hoisting, shared tools).
@@ -620,6 +641,13 @@ impl Project {
                 })
             })
             .collect();
+        // The files of every package that a plugin compiles (`.vue`) are sources too.
+        let compilers: BTreeMap<String, crate::plugins::Compiler> = contributions
+            .iter()
+            .flat_map(|contribution| contribution.compilers.clone())
+            .collect();
+        let compiled: Vec<&str> = compilers.keys().map(String::as_str).collect();
+        let paths = source_files(&root, &compiled);
         // Each file is read and analyzed on its own, in parallel; the results keep the order of
         // `paths`.
         use rayon::prelude::*;
@@ -627,7 +655,7 @@ impl Project {
             .par_iter()
             .map(|(path, id)| {
                 let source = std::fs::read_to_string(path).unwrap_or_default();
-                (id.clone(), analyze(&source, path))
+                (id.clone(), analyze_file(&source, path, &compilers))
             })
             .collect();
         // A file that does not parse (a fixture broken on purpose, a syntax prunr does not read)
@@ -1516,6 +1544,30 @@ mod tests {
         assert!(
             error.to_string().starts_with("invalid package.json: "),
             "{error}"
+        );
+    }
+
+    #[test]
+    fn a_file_a_plugin_compiles_is_a_source() {
+        let dir = project(&[
+            ("package.json", r#"{ "dependencies": { "vue": "3" } }"#),
+            (
+                "App.vue",
+                "<template/>\n<script lang=\"ts\">import x from './x.js'; let y: number = x;</script>",
+            ),
+            ("Plain.vue", "<script>import z from './z.js'</script>"),
+            ("x.js", "export default 1"),
+            ("z.js", ""),
+            ("C.svelte", ""),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        let ids: Vec<&str> = project.files.keys().map(|id| id.as_str()).collect();
+        assert_eq!(ids, ["App.vue", "Plain.vue", "x.js", "z.js"]);
+        assert!(project.files["App.vue"].parse_error.is_none());
+        assert!(
+            project.files["Plain.vue"].facts.requires[0]
+                .unused
+                .is_empty()
         );
     }
 
