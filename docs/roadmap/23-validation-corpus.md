@@ -81,7 +81,7 @@ contra o Knip. É o teste de aceite do MVP em escala.
   | `unresolved-require` | saída de build | 534 | a pasta para onde o build escreve |
   | `unresolved-require` | submódulo git não clonado | 23 | o `.gitmodules`; o corpus clona raso |
   | `unresolved-require` | sintaxe de loader | 1 | `loader!arquivo` do webpack |
-  | `unresolved-require` | não existe | 185 | nada no caminho: imports quebrados de propósito nos testes de resolução do Jest, configs locais ignoradas pelo git, dados gerados por script, caminhos escritos para o teste compilado |
+  | `unresolved-require` | não existe | 185 | nada no caminho, conferido um a um: saídas que o build escreve fora de `dist/` (o `index.js` do chai na raiz, `tools/runner/bundle/` do driver do MongoDB, o `self-coverage` do nyc, o `pkg/` do sinon, o `validator.min` do validator), imports quebrados de propósito em testes de resolução (Jest, browserify), configs locais ignoradas pelo git, dados gerados por script e caminhos escritos para o teste compilado |
 
   Nenhuma categoria esconde um falso positivo do prunr: os que existiam viraram as correções
   acima.
