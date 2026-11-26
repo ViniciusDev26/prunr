@@ -116,9 +116,15 @@ Nos 85 projetos em que os dois rodaram, somando todos:
 
 | | Os dois | Só o prunr | Só o Knip |
 |---|---|---|---|
-| Arquivos sem uso | 21.125 | 1.184 | 25.865 |
-| Exports sem uso | 170 | 102 | 6.006 |
-| Dependências sem uso | 535 | 381 | 431 |
+| Arquivos sem uso | 20.949 | 842 | 26.041 |
+| Exports sem uso | 193 | 105 | 5.983 |
+| Dependências sem uso | 500 | 143 | 466 |
+
+Com a fase 2 (plugin de TypeScript, componentes `.vue`/`.svelte`/`.astro`/`.mdx`, as
+configurações das ferramentas e os frameworks), as dependências que só o prunr apontava caíram
+de 381 para 143, e os arquivos, de 1.184 para 842. Algumas que os dois apontavam passaram a ser
+só do Knip, e são usos que ele não vê: as 18 `@npmcli/eslint-config` do npm CLI, que cada
+`.eslintrc.js` carrega pelo atalho `extends: ['@npmcli']`.
 
 O prunr não reporta o que está em pastas de fixtures de teste (os milhares do webpack), que o
 Knip reporta como arquivos sem uso. Os 102 exports que só o prunr aponta foram conferidos um a um
