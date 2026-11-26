@@ -1055,6 +1055,19 @@ fn npm_workspaces_are_one_graph_with_dependencies_per_package() {
 }
 
 #[test]
+fn a_root_dependency_only_packages_that_declare_it_themselves_use_is_unused() {
+    let run = check("workspace-root-dependencies");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     eslint\n\
+         unused-dependency     lodash\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
+}
+
+#[test]
 fn pnpm_workspaces_are_one_graph_with_dependencies_per_package() {
     let run = check("workspaces-pnpm");
     assert_eq!(run.code, 1);

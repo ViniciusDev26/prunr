@@ -1,0 +1,7 @@
+{
+  "name": "demo",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "dependencies": { "lodash": "4.0.0", "chalk": "5.0.0" },
+  "devDependencies": { "eslint": "9.0.0" }
+}
