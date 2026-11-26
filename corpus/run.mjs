@@ -2,14 +2,18 @@
 // The validation corpus: runs prunr (and, optionally, Knip) on real open source projects pinned
 // to a commit, and writes what each one finds and how long it takes.
 //
-//   node corpus/run.mjs [--only express,koa] [--install] [--knip] [--prunr path/to/prunr]
+//   node corpus/run.mjs [--only express,koa] [--install] [--knip] [--jobs 8] [--reinit]
+//                       [--prunr path]
+//
+// Projects run in parallel, `--jobs` at a time (default: one per core). For benchmark numbers,
+// run with `--jobs 1`: in parallel, the tools compete for the CPU and their times grow.
 //
 // Checkouts and results live outside the repository, in $PRUNR_CORPUS_DIR
 // (default: ~/.cache/prunr-corpus). See corpus/README.md.
 
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { spawn } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { availableParallelism, homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
@@ -25,6 +29,7 @@ const cache = process.env.PRUNR_CORPUS_DIR ?? join(homedir(), ".cache", "prunr-c
 const prunr = resolve(option("prunr") ?? join(here, "..", "target", "release", "prunr"));
 const knipVersion = option("knip-version") ?? "5";
 const only = option("only")?.split(",");
+const jobs = Math.max(1, Number(option("jobs") ?? availableParallelism()));
 const { repositories } = JSON.parse(readFileSync(join(here, "repos.json"), "utf8"));
 const selected = repositories.filter((repo) => !only || only.includes(repo.name));
 
@@ -33,21 +38,29 @@ if (!existsSync(prunr)) {
   process.exit(2);
 }
 
-/** Runs a command and returns its output, exit code and duration in seconds. */
+/** Runs a command and resolves to its output, exit code and duration in seconds. */
 function run(command, commandArgs, cwd, extra = {}) {
-  const start = performance.now();
-  const result = spawnSync(command, commandArgs, {
-    cwd,
-    encoding: "utf8",
-    maxBuffer: 1 << 30,
-    ...extra,
+  return new Promise((done) => {
+    const start = performance.now();
+    const child = spawn(command, commandArgs, { cwd, ...extra });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    const finish = (status, error) =>
+      done({
+        status,
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: Buffer.concat(stderr).toString("utf8") + (error ? String(error) : ""),
+        seconds: (performance.now() - start) / 1000,
+      });
+    child.on("error", (error) => finish(null, error));
+    child.on("close", (status) => finish(status));
   });
-  const seconds = (performance.now() - start) / 1000;
-  return { ...result, seconds };
 }
 
-function git(cwd, ...gitArgs) {
-  const result = run("git", gitArgs, cwd);
+async function git(cwd, ...gitArgs) {
+  const result = await run("git", gitArgs, cwd);
   if (result.status !== 0) {
     throw new Error(`git ${gitArgs.join(" ")}: ${result.stderr}`);
   }
@@ -55,42 +68,43 @@ function git(cwd, ...gitArgs) {
 }
 
 /** A shallow checkout of the repository at its pinned commit. */
-function checkout(repo) {
+async function checkout(repo) {
   const dir = join(cache, "repos", repo.name);
   if (!existsSync(join(dir, ".git"))) {
     mkdirSync(dir, { recursive: true });
-    git(dir, "init", "-q");
-    git(dir, "remote", "add", "origin", `https://github.com/${repo.repo}.git`);
+    await git(dir, "init", "-q");
+    await git(dir, "remote", "add", "origin", `https://github.com/${repo.repo}.git`);
   }
-  if (run("git", ["rev-parse", "HEAD"], dir).stdout.trim() !== repo.commit) {
-    git(dir, "fetch", "-q", "--depth", "1", "origin", repo.commit);
-    git(dir, "checkout", "-q", "--force", "FETCH_HEAD");
-    git(dir, "clean", "-q", "-fdx", "-e", "node_modules");
+  if ((await run("git", ["rev-parse", "HEAD"], dir)).stdout.trim() !== repo.commit) {
+    await git(dir, "fetch", "-q", "--depth", "1", "origin", repo.commit);
+    await git(dir, "checkout", "-q", "--force", "FETCH_HEAD");
+    await git(dir, "clean", "-q", "-fdx", "-e", "node_modules");
   }
   return dir;
 }
 
 /** Installs the dependencies with the project's package manager, without running scripts. */
-function install(dir) {
+async function install(dir) {
   if (existsSync(join(dir, "node_modules"))) return "present";
   const manager = existsSync(join(dir, "pnpm-lock.yaml"))
     ? ["npx", ["-y", "pnpm@10", "install", "--ignore-scripts", "--no-frozen-lockfile"]]
     : existsSync(join(dir, "yarn.lock"))
       ? ["npx", ["-y", "yarn@1", "install", "--ignore-scripts", "--ignore-engines"]]
       : ["npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--allow-remote=all"]];
-  const result = run(...manager, dir, { env: { ...process.env, CI: "1" } });
+  const result = await run(...manager, dir, { env: { ...process.env, CI: "1" } });
   return result.status === 0 ? "installed" : `failed: ${result.stderr.slice(-400)}`;
 }
 
 /** The prunr.json of the corpus for this repository, or one `prunr init` writes. */
-function configure(repo, dir) {
+async function configure(repo, dir) {
   const config = join(here, "configs", `${repo.name}.json`);
   if (existsSync(config)) {
     copyFileSync(config, join(dir, "prunr.json"));
     return "corpus";
   }
-  if (existsSync(join(dir, "prunr.json"))) return "existing";
-  const result = run(prunr, ["init"], dir);
+  if (existsSync(join(dir, "prunr.json")) && !flag("reinit")) return "existing";
+  rmSync(join(dir, "prunr.json"), { force: true });
+  const result = await run(prunr, ["init"], dir);
   return result.status === 0 ? "init" : `init failed: ${result.stderr.trim()}`;
 }
 
@@ -159,21 +173,18 @@ function compare(ours, theirs) {
   return diff;
 }
 
-const rows = [];
-for (const repo of selected) {
+/** Checks out, configures and runs the tools on one project: its row of the report. */
+async function project(repo) {
   const results = join(cache, "results", repo.name);
   mkdirSync(results, { recursive: true });
   const row = { name: repo.name, kind: repo.kind };
   try {
-    process.stderr.write(`${repo.name}: checkout`);
-    const dir = checkout(repo);
+    const dir = await checkout(repo);
     if (flag("install")) {
-      process.stderr.write(", install");
-      row.install = install(dir);
+      row.install = await install(dir);
     }
-    row.config = configure(repo, dir);
-    process.stderr.write(", prunr");
-    const ours = run(prunr, ["check", "--json"], dir);
+    row.config = await configure(repo, dir);
+    const ours = await run(prunr, ["check", "--json"], dir);
     writeFileSync(join(results, "prunr.json"), ours.stdout);
     row.prunrSeconds = ours.seconds;
     if (ours.status === 2) {
@@ -182,8 +193,7 @@ for (const repo of selected) {
       const found = prunrFindings(ours.stdout);
       row.prunr = found.counts;
       if (flag("knip") && existsSync(join(dir, "node_modules"))) {
-        process.stderr.write(", knip");
-        const theirs = run(
+        const theirs = await run(
           "npx",
           ["-y", `knip@${knipVersion}`, "--reporter", "json", "--no-exit-code", "--no-progress"],
           dir,
@@ -203,9 +213,24 @@ for (const repo of selected) {
   } catch (error) {
     row.error = String(error.message ?? error);
   }
-  process.stderr.write(row.error ? `: error\n` : `: ${row.prunrSeconds.toFixed(2)}s\n`);
-  rows.push(row);
+  const knip = row.knipSeconds === undefined ? "" : `, knip ${row.knipSeconds.toFixed(2)}s`;
+  process.stderr.write(
+    row.error ? `${repo.name}: error\n` : `${repo.name}: prunr ${row.prunrSeconds.toFixed(2)}s${knip}\n`,
+  );
+  return row;
 }
+
+// `jobs` workers take the next project until none is left; the rows keep the corpus order.
+const rows = new Array(selected.length);
+let next = 0;
+await Promise.all(
+  Array.from({ length: Math.min(jobs, selected.length) }, async () => {
+    while (next < selected.length) {
+      const index = next++;
+      rows[index] = await project(selected[index]);
+    }
+  }),
+);
 
 writeFileSync(join(cache, "results.json"), JSON.stringify(rows, null, 2));
 writeFileSync(join(cache, "report.md"), report(rows));
