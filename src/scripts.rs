@@ -7,6 +7,13 @@ use std::collections::{BTreeMap, BTreeSet};
 pub fn packages(script: &str, bins: &BTreeMap<String, String>) -> BTreeSet<String> {
     let mut used = BTreeSet::new();
     for words in commands(script) {
+        let words: Vec<&str> = words.iter().map(String::as_str).collect();
+        // `NODE_OPTIONS='--import=tsx/esm'` preloads for every node the command starts.
+        for word in &words {
+            if let Some(options) = word.strip_prefix("NODE_OPTIONS=") {
+                preloads(&options.split_whitespace().collect::<Vec<_>>(), &mut used);
+            }
+        }
         run(&words, bins, &mut used);
         for word in &words {
             if let Some((_, inside)) = word.split_once("node_modules/")
@@ -24,6 +31,7 @@ pub fn configs(script: &str, runner: &str) -> Vec<String> {
     let installed = format!("node_modules/{runner}/");
     let mut found = Vec::new();
     for words in commands(script) {
+        let words: Vec<&str> = words.iter().map(String::as_str).collect();
         let runs = words
             .iter()
             .any(|word| *word == runner || word.contains(&installed));
@@ -58,7 +66,8 @@ pub struct Run {
 /// The files the commands of `script` run.
 pub fn files(script: &str) -> Vec<Run> {
     commands(script)
-        .filter_map(|words| file_run(&words))
+        .iter()
+        .filter_map(|words| file_run(&words.iter().map(String::as_str).collect::<Vec<_>>()))
         .collect()
 }
 
@@ -198,13 +207,36 @@ fn manager_options<'w, 's>(
 }
 
 /// The words of each command of a script.
-fn commands(script: &str) -> impl Iterator<Item = Vec<&str>> {
-    script.split([';', '|', '&', '\n']).map(|command| {
-        command
-            .split_whitespace()
-            .map(|word| word.trim_matches(['"', '\'']))
-            .collect()
-    })
+/// The words of each command of a script, split as a shell would: by whitespace and by `;`,
+/// `|`, `&` and newlines, except inside quotes, which are dropped
+/// (`NODE_OPTIONS='--import tsx' node a.js` → `NODE_OPTIONS=--import tsx`, `node`, `a.js`).
+fn commands(script: &str) -> Vec<Vec<String>> {
+    let mut commands = vec![Vec::new()];
+    let mut word: Option<String> = None;
+    let mut quote = None;
+    for c in script.chars() {
+        match (quote, c) {
+            (Some(open), c) if c == open => quote = None,
+            (Some(_), c) => word.get_or_insert_with(String::new).push(c),
+            (None, '"' | '\'') => {
+                quote = Some(c);
+                word.get_or_insert_with(String::new);
+            }
+            (None, c) if c.is_whitespace() || matches!(c, ';' | '|' | '&') => {
+                let command = commands.last_mut().expect("there is always a command");
+                command.extend(word.take());
+                if !c.is_whitespace() || c == '\n' {
+                    commands.push(Vec::new());
+                }
+            }
+            (None, c) => word.get_or_insert_with(String::new).push(c),
+        }
+    }
+    commands
+        .last_mut()
+        .expect("there is always a command")
+        .extend(word);
+    commands
 }
 
 /// Package managers that run a binary: as `yarn jest`, or through a subcommand (`pnpm exec jest`).
@@ -392,6 +424,15 @@ mod tests {
 
     fn used(script: &str) -> Vec<String> {
         packages(script, &bins()).into_iter().collect()
+    }
+
+    #[test]
+    fn node_options_preload_packages_too() {
+        assert_eq!(
+            used("NODE_OPTIONS='--import=tsx/esm --require dotenv/config' node --test 'test/*.ts'"),
+            ["dotenv", "tsx"]
+        );
+        assert_eq!(used("NODE_OPTIONS=--import=tsx jest"), ["jest", "tsx"]);
     }
 
     #[test]
