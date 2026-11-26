@@ -108,6 +108,7 @@ findings, and `2` when it cannot run.
 |---|---|
 | `unused-file` | No production entry reaches the file. |
 | `unused-export` | No production code uses the export. |
+| `unused-enum-member` | No production code reads the member of an exported enum. |
 | `unused-import` | A `require` or `import` brings in a name the file never uses. |
 | `unused-dependency` | Nothing imports the package and no script runs it. |
 | `misplaced-dependency` | The package is in `dependencies`, but only the tests use it. |

@@ -13,6 +13,13 @@ prunr só reporta o enum inteiro.
   os membros.
 - `prunr fix` apaga o membro, e `prunr-ignore-next-line` o mantém.
 
+## Feito
+
+Os membros de um enum exportado são exports aninhados (`Color.Blue`), como os métodos estáticos
+de uma classe, e o que sobra sem uso é `unused-enum-member`. Um membro lido no próprio arquivo
+fica, e ler o enum de outro jeito que não por um membro usa todos. O `prunr fix` tira o membro
+da lista, e `prunr-ignore-next-line` o mantém.
+
 ## Critérios de aceite
 
-- [ ] Uma fixture com um membro lido, um sem uso e um enum lido por chave.
+- [x] Uma fixture com um membro lido, um sem uso e um enum lido por chave.

@@ -28,6 +28,14 @@ pub enum Finding {
         #[serde(rename = "testOnly", default, skip_serializing_if = "is_false")]
         test_only: bool,
     },
+    /// A member of an exported enum that no production file reads, and neither does its own
+    /// file. With `test_only`, tests do.
+    UnusedEnumMember {
+        file: FileId,
+        symbol: String,
+        #[serde(rename = "testOnly", default, skip_serializing_if = "is_false")]
+        test_only: bool,
+    },
     /// A binding a require declares that its file never references. The require still runs the
     /// module, so the edge stays until the import is deleted.
     UnusedImport {
@@ -128,6 +136,7 @@ pub fn check(
         Finding::CircularImport { cycle } => !cycle.iter().all(|file| in_test_fixture(file)),
         Finding::UnusedFile { file, .. }
         | Finding::UnusedExport { file, .. }
+        | Finding::UnusedEnumMember { file, .. }
         | Finding::UnusedImport { file, .. }
         | Finding::UnusedIgnore { file, .. }
         | Finding::MissingDependency { file, .. }
@@ -168,6 +177,7 @@ pub fn in_production(
     move |finding| match finding {
         Finding::UnusedFile { .. }
         | Finding::UnusedExport { .. }
+        | Finding::UnusedEnumMember { .. }
         | Finding::MisplacedDependency { .. } => true,
         Finding::UnusedImport { file, .. }
         | Finding::UnusedIgnore { file, .. }
@@ -325,10 +335,19 @@ fn unused_exports(
             } else if facts.ignore_file.is_some() {
                 file_ignored = true;
             } else if ignore.is_none() {
-                findings.push(Finding::UnusedExport {
-                    file: id.clone(),
-                    symbol: export.path.join("."),
-                    test_only: used_by(&test_uses, &export.path),
+                let (file, symbol) = (id.clone(), export.path.join("."));
+                let test_only = used_by(&test_uses, &export.path);
+                findings.push(match facts.enum_members.contains(&export.path) {
+                    true => Finding::UnusedEnumMember {
+                        file,
+                        symbol,
+                        test_only,
+                    },
+                    false => Finding::UnusedExport {
+                        file,
+                        symbol,
+                        test_only,
+                    },
                 });
             }
         }

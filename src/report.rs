@@ -74,6 +74,10 @@ const RULES: &[(&str, &str)] = &[
     ("unused-file", "No production entry reaches the file."),
     ("unused-export", "No production code uses the export."),
     (
+        "unused-enum-member",
+        "No production code reads the member of the exported enum.",
+    ),
+    (
         "unused-import",
         "A require or import brings in a name the file never uses.",
     ),
@@ -238,7 +242,8 @@ fn position(finding: &Finding, project: &Project) -> (String, Option<u32>) {
         Finding::UnusedFile { file, .. } | Finding::UnparsedFile { file, .. } => {
             (file.clone(), None)
         }
-        Finding::UnusedExport { file, symbol, .. } => {
+        Finding::UnusedExport { file, symbol, .. }
+        | Finding::UnusedEnumMember { file, symbol, .. } => {
             let path: Vec<String> = symbol.split('.').map(str::to_string).collect();
             (file.clone(), facts(file).export_lines.get(&path).copied())
         }
@@ -304,6 +309,9 @@ fn note(finding: &Finding) -> &'static str {
         }
         | Finding::UnusedExport {
             test_only: true, ..
+        }
+        | Finding::UnusedEnumMember {
+            test_only: true, ..
         } => " (only tests use it)",
         _ => "",
     }
@@ -325,6 +333,9 @@ fn describe(finding: &Finding) -> (&'static str, String) {
         Finding::UnusedFile { file, .. } => ("unused-file", file.clone()),
         Finding::UnusedExport { file, symbol, .. } => {
             ("unused-export", format!("{file}: {symbol}"))
+        }
+        Finding::UnusedEnumMember { file, symbol, .. } => {
+            ("unused-enum-member", format!("{file}: {symbol}"))
         }
         Finding::UnusedImport {
             file,

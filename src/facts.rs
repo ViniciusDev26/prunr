@@ -15,8 +15,9 @@ use oxc_ast::ast::{
     ExportAllDeclaration, ExportDeclaration, ExportDefaultDeclaration,
     ExportDefaultDeclarationKind, ExportFromDeclaration, ExportNamedDeclaration, Expression,
     IdentifierReference, ImportDeclaration, ImportDeclarationSpecifier, ImportExpression,
-    MethodDefinitionKind, ObjectPropertyKind, StaticMemberExpression, TSImportEqualsDeclaration,
-    TSModuleReference, TemplateLiteral, UnaryOperator, VariableDeclarator,
+    MethodDefinitionKind, ObjectPropertyKind, StaticMemberExpression, TSEnumDeclaration,
+    TSImportEqualsDeclaration, TSModuleReference, TemplateLiteral, UnaryOperator,
+    VariableDeclarator,
 };
 use oxc_ast::{AstKind, Comment};
 use oxc_parser::{ParseOptions, Parser};
@@ -944,6 +945,8 @@ impl<'a> Analyzer<'_, 'a> {
         let nodes = semantic.nodes();
         let mut members = BTreeSet::new();
         let mut used = false;
+        // Read other than by a member (`Object.values(E)`, `E[key]`): every member is used.
+        let mut whole = false;
         for reference in semantic.symbol_references(symbol) {
             let node = reference.node_id();
             let span = nodes.kind(node).span();
@@ -955,17 +958,52 @@ impl<'a> Analyzer<'_, 'a> {
                 continue;
             }
             used = true;
-            if let AstKind::StaticMemberExpression(member) = nodes.parent_kind(node)
-                && member.object.span() == span
-            {
-                members.insert(member.property.name.to_string());
+            match nodes.parent_kind(node) {
+                AstKind::StaticMemberExpression(member) if member.object.span() == span => {
+                    members.insert(member.property.name.to_string());
+                }
+                _ => whole = true,
             }
         }
         if used {
             self.exports.insert(path.clone(), true);
         }
-        if let AstKind::Class(class) = semantic.symbol_declaration(symbol).kind() {
-            self.export_statics(&path, class, &members);
+        match semantic.symbol_declaration(symbol).kind() {
+            AstKind::Class(class) => self.export_statics(&path, class, &members),
+            AstKind::TSEnumDeclaration(enumeration) => {
+                self.export_enum_members(&path, enumeration, &members, whole)
+            }
+            _ => {}
+        }
+    }
+
+    /// The members of an exported enum; `read` are the ones the file reads itself, and
+    /// `whole` says it reads them all.
+    fn export_enum_members(
+        &mut self,
+        path: &[String],
+        enumeration: &TSEnumDeclaration,
+        read: &BTreeSet<String>,
+        whole: bool,
+    ) {
+        let members = &enumeration.body.members;
+        let items: Vec<Span> = members.iter().map(|member| member.span).collect();
+        for (index, member) in members.iter().enumerate() {
+            let name = member.id.static_name().display().to_string();
+            let mut path = path.to_vec();
+            let used = whole || read.contains(&name);
+            path.push(name);
+            self.sites.entry(path.clone()).or_insert(member.span);
+            self.facts
+                .export_removals
+                .entry(path.clone())
+                .or_insert(Removal::Item {
+                    items: items.clone(),
+                    index,
+                    all: None,
+                });
+            self.facts.enum_members.insert(path.clone());
+            self.exports.insert(path, used);
         }
     }
 
@@ -1848,6 +1886,7 @@ mod tests {
                 export(&["C"], false),
                 export(&["C", "m"], false),
                 export(&["E"], false),
+                export(&["E", "X"], false),
                 export(&["I"], false),
                 export(&["N"], false),
                 export(&["T"], false),

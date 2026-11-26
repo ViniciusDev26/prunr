@@ -43,6 +43,11 @@ pub fn plan(project: &Project, findings: &[Finding]) -> Plan {
                 file,
                 symbol,
                 test_only: false,
+            }
+            | Finding::UnusedEnumMember {
+                file,
+                symbol,
+                test_only: false,
             } => {
                 let path: Vec<String> = symbol.split('.').map(str::to_string).collect();
                 if let Some(removal) = project.files[file].facts.export_removals.get(&path) {
@@ -325,6 +330,20 @@ mod tests {
             tidy("a\r\n\r\nb\r\n", "a\r\n\r\n\r\nb\r\n".into()),
             "a\r\n\r\nb\r\n"
         );
+    }
+
+    #[test]
+    fn an_unused_enum_member_is_removed_from_its_list() {
+        let source = "export enum E {\n  A,\n  B,\n  C,\n}\n";
+        let (_dir, project) = project(&[("e.ts", source)]);
+        let findings = [Finding::UnusedEnumMember {
+            file: "e.ts".into(),
+            symbol: "E.B".into(),
+            test_only: false,
+        }];
+        let plan = plan(&project, &findings);
+        assert_eq!(plan.files["e.ts"], "export enum E {\n  A,\n  C,\n}\n");
+        assert_eq!(plan.fixed, findings);
     }
 
     #[test]
