@@ -66,6 +66,36 @@ pub fn arguments(script: &str, runner: &str) -> Vec<Vec<String>> {
         .collect()
 }
 
+/// The scripts each command of `script` runs with extra arguments, and those arguments:
+/// `npm run unit -- --config x` runs the `unit` script with `--config x` at its end. npm forwards
+/// only what follows `--`; pnpm, yarn and bun forward the rest (and `yarn x` is `yarn run x`).
+/// The names may not be scripts (`yarn add`): the caller keeps those that are.
+pub fn forwarded(script: &str) -> Vec<(String, Vec<String>)> {
+    commands(script)
+        .into_iter()
+        .filter_map(|words| {
+            let (manager, rest) = words.split_first()?;
+            if !MANAGERS.contains(&manager.as_str()) {
+                return None;
+            }
+            let mut rest = rest.iter().skip_while(|word| word.starts_with('-'));
+            let mut name = rest.next()?;
+            if name == "run" {
+                name = rest.find(|word| !word.starts_with('-'))?;
+            } else if manager == "npm" {
+                return None;
+            }
+            let after: Vec<String> = rest.cloned().collect();
+            let arguments = match after.iter().position(|word| word == "--") {
+                Some(at) => after[at + 1..].to_vec(),
+                None if manager == "npm" => Vec::new(),
+                None => after,
+            };
+            (!arguments.is_empty()).then(|| (name.clone(), arguments))
+        })
+        .collect()
+}
+
 /// A file a command of a script runs with Node.js or a runner like it (`node`, `tsx`,
 /// `ts-node`, `bun`...).
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -440,6 +470,24 @@ mod tests {
 
     fn used(script: &str) -> Vec<String> {
         packages(script, &bins()).into_iter().collect()
+    }
+
+    #[test]
+    fn a_script_can_forward_arguments_to_another() {
+        assert_eq!(
+            forwarded(
+                "npm run -s unit -- --config x.cjs && pnpm run lint --fix; yarn build a; bun run b -- c; npm test"
+            ),
+            [
+                (
+                    "unit".to_string(),
+                    vec!["--config".to_string(), "x.cjs".to_string()]
+                ),
+                ("lint".to_string(), vec!["--fix".to_string()]),
+                ("build".to_string(), vec!["a".to_string()]),
+                ("b".to_string(), vec!["c".to_string()]),
+            ]
+        );
     }
 
     #[test]
