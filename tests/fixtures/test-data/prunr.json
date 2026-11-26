@@ -1,0 +1,1 @@
+{ "entries": { "production": ["src/index.ts"], "test": ["test/**", "client/test/**"] } }
