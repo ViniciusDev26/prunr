@@ -58,7 +58,10 @@ Diferenças conferidas em que o achado do prunr se sustenta, ou que é do Knip:
   de teste: verdadeiros pela regra; o `--production` os deixa de fora.
 - **Exports que só o Knip aponta:** no nodemailer, tipos de subcaminhos publicados (interface
   pública, depois da correção das entradas); no mongoose, exports lidos no próprio arquivo
-  (falso positivo do Knip).
+  (falso positivo do Knip); no webpack, os tipos de `declarations/WebpackOptions.ts` que outro
+  tipo do mesmo arquivo usa (`UmdAmdContainer = DottedIdentifier`). Esse último é uma diferença
+  de semântica: o prunr não reporta um export que o próprio arquivo usa, e o Knip reporta, a menos
+  que se ligue o `ignoreExportsUsedInFile` dele.
 
 ## Pendências
 
@@ -66,7 +69,6 @@ Diferenças conferidas em que o achado do prunr se sustenta, ou que é do Knip:
   passadas por `npm run -s test-node-run -- --config test/unit/mocharc.cjs`: o código dele já é
   alcançado pelo `bin`, mas as specs ficam de fora, porque o plugin não segue o `--config` que um
   script repassa a outro.
-- Os tipos gerados em `declarations/` do webpack que só o Knip aponta: não conferidos.
 - Testes de tipo que o `tsc` checa pelo `include` do `tsconfig.json` (execa) e exemplos em
   Angular, Svelte e Vue (TanStack Query): dependem do plugin de TypeScript e dos compiladores da
   fase 2.
