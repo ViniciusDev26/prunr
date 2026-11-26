@@ -1,1 +1,1 @@
-require("lodash");
+require("lodash"); require("debug");
