@@ -14,6 +14,9 @@ pub enum Target {
 
 pub struct Resolver {
     inner: oxc_resolver::Resolver,
+    /// The same resolver without `tsconfig.json`: for when one cannot be loaded (it extends a
+    /// package that is not installed), which would otherwise leave every specifier unresolved.
+    plain: oxc_resolver::Resolver,
 }
 
 impl Default for Resolver {
@@ -32,8 +35,13 @@ impl Default for Resolver {
             condition_names: strings(&["node", "import", "require", "default"]),
             ..oxc_resolver::ResolveOptions::default()
         };
+        let plain = oxc_resolver::ResolveOptions {
+            tsconfig: None,
+            ..options.clone()
+        };
         Self {
             inner: oxc_resolver::Resolver::new(options),
+            plain: oxc_resolver::Resolver::new(plain),
         }
     }
 }
@@ -47,7 +55,16 @@ impl Resolver {
         if !local && nodejs_built_in_modules::is_nodejs_builtin_module(specifier) {
             return Target::Builtin;
         }
-        match self.inner.resolve_file(from, specifier) {
+        let resolved = match self.inner.resolve_file(from, specifier) {
+            Err(
+                oxc_resolver::ResolveError::TsconfigNotFound(_)
+                | oxc_resolver::ResolveError::TsconfigLoadFailed { .. }
+                | oxc_resolver::ResolveError::TsconfigSelfReference(_)
+                | oxc_resolver::ResolveError::TsconfigCircularExtend(_),
+            ) => self.plain.resolve_file(from, specifier),
+            resolved => resolved,
+        };
+        match resolved {
             Ok(resolution) if local || !in_node_modules(resolution.path()) => {
                 Target::File(canonical(resolution.path()))
             }
@@ -96,6 +113,19 @@ mod tests {
 
     fn file(root: &Path, path: &str) -> Target {
         Target::File(dunce::canonicalize(root).unwrap().join(path))
+    }
+
+    #[test]
+    fn a_tsconfig_that_cannot_be_loaded_does_not_stop_resolution() {
+        for tsconfig in [
+            r#"{ "extends": "@not-installed/tsconfig/base.json" }"#,
+            "{ nope",
+        ] {
+            let dir = project();
+            std::fs::write(dir.path().join("tsconfig.json"), tsconfig).unwrap();
+            assert_eq!(resolve(dir.path(), "./lib/a"), file(dir.path(), "lib/a.js"));
+            assert_eq!(resolve(dir.path(), "./lib/gone"), Target::Unresolved);
+        }
     }
 
     #[test]
