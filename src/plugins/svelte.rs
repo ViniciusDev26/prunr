@@ -1,7 +1,5 @@
 //! Svelte: the `<script>` elements of each `.svelte` file are a module of the graph, and the
 //! compiled components import `svelte`'s runtime.
-//!
-//! Off in a SvelteKit project, whose routes are found by convention.
 
 use super::compile::{Compiled, Compiler, keep, script_blocks, scripts};
 use super::{Context, Contribution, Plugin};
@@ -11,10 +9,6 @@ pub struct Svelte;
 impl Plugin for Svelte {
     fn name(&self) -> &'static str {
         "svelte"
-    }
-
-    fn enabled(&self, context: &Context) -> bool {
-        context.declared.contains("svelte") && !context.declared.contains("@sveltejs/kit")
     }
 
     fn contribute(&self, _: &Context, contribution: &mut Contribution) {
@@ -81,11 +75,7 @@ mod tests {
         );
         assert!(!compiled.typescript);
         assert_eq!(found.production_packages, declared(&["svelte"]));
-        let found = setup(
-            dir.path(),
-            &declared(&["svelte", "@sveltejs/kit"]),
-            &json!({}),
-        );
+        let found = setup(dir.path(), &declared(&[]), &json!({}));
         assert!(found.compilers.is_empty());
     }
 }

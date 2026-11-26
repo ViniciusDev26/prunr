@@ -1,6 +1,6 @@
 //! Vue: the `<script>` and `<script setup>` of each `.vue` file are a module of the graph.
 //!
-//! Off in a Nuxt project, whose components and pages are found by convention.
+//! On in a Nuxt project too, which need not declare `vue`.
 
 use super::compile::{Compiled, Compiler, keep, script_blocks};
 use super::{Context, Contribution, Plugin};
@@ -13,7 +13,7 @@ impl Plugin for Vue {
     }
 
     fn enabled(&self, context: &Context) -> bool {
-        context.declared.contains("vue") && !context.declared.contains("nuxt")
+        context.declared.contains("vue") || context.declared.contains("nuxt")
     }
 
     fn contribute(&self, _: &Context, contribution: &mut Contribution) {
@@ -55,7 +55,9 @@ mod tests {
         );
         assert!(compiled.typescript);
         assert!(!compile("<script>x</script>").typescript);
-        let found = setup(dir.path(), &declared(&["vue", "nuxt"]), &json!({}));
+        let found = setup(dir.path(), &declared(&["nuxt"]), &json!({}));
+        assert!(found.compilers.contains_key("vue"));
+        let found = setup(dir.path(), &declared(&[]), &json!({}));
         assert!(found.compilers.is_empty());
     }
 }
