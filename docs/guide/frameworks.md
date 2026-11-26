@@ -158,3 +158,16 @@ Os imports de um desses arquivos nunca são reportados, porque o template pode u
 páginas do Astro (`src/pages/**`) são entradas de produção. Num projeto Nuxt ou SvelteKit, os
 `.vue` e `.svelte` ainda ficam de fora: os componentes e as rotas desses frameworks são achados
 por convenção, sem import.
+
+## ESLint, Prettier, Babel e commitlint
+
+Os pacotes que a configuração dessas ferramentas nomeia contam como usados, também no atalho
+de cada uma: os `extends`, `plugins` e `parser` do ESLint (`airbnb` é `eslint-config-airbnb`,
+`plugin:react/recommended` é `eslint-plugin-react`), os `plugins` do Prettier, os `presets` e
+`plugins` do Babel (`@babel/env` é `@babel/preset-env`) e os `extends` e `plugins` do
+commitlint. A configuração pode estar no arquivo da ferramenta (JavaScript, JSON ou YAML) ou no
+`package.json` (`eslintConfig`, `prettier`, `babel`, `commitlint`).
+
+Uma configuração em JavaScript é um arquivo da ferramenta: o que ela importa conta como usado.
+Com uma configuração, o pacote da ferramenta (`eslint`, `prettier`, `@babel/core`,
+`@commitlint/cli`) também conta, mesmo sem script que o rode.

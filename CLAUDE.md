@@ -64,6 +64,10 @@ uma:
    plugin precisa de outra coisa, o campo nasce junto com ele, e o núcleo passa a usá-lo nesse
    mesmo PR.
 
+Uma ferramenta cuja configuração só nomeia pacotes (ESLint, Babel...) não precisa de código: é
+um `Tool` em `src/plugins/tools.rs`, com os arquivos de configuração e as chaves que nomeiam
+pacotes.
+
 ## Commits e PRs
 
 - **Tudo em inglês:** mensagens de commit, títulos de PR e corpos de PR.

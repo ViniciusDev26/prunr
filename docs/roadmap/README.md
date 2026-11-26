@@ -28,6 +28,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 26. [Modo produção](26-production-mode.md)
 - [x] 27. [Plugin de TypeScript](27-typescript-plugin.md)
 - [x] 28. [Vue, Svelte, Astro e MDX](28-single-file-components.md)
+- [x] 29. [Plugins declarativos de ferramentas](29-tool-plugins.md)
 
 ## Fase 1: credibilidade (concluída)
 
@@ -48,8 +49,9 @@ Os pacotes e arquivos que as ferramentas carregam sem import:
 
 - [x] Plugin de TypeScript ([27](27-typescript-plugin.md)).
 - [x] `.vue`, `.svelte`, `.astro` e `.mdx`: o script de cada um passa pelo parser ([28](28-single-file-components.md)).
-- [ ] Plugins declarativos para ferramentas (ESLint, Prettier, Babel, Storybook, Cypress, husky,
-  lint-staged, commitlint, Tailwind, Prisma, tsup, Rollup, webpack...).
+- [x] Plugins declarativos para ferramentas: ESLint, Prettier, Babel e commitlint
+  ([29](29-tool-plugins.md)).
+- [ ] Storybook, Cypress, husky, lint-staged, Tailwind, Prisma, tsup, Rollup, webpack.
 - [ ] Plugins de frameworks (Nuxt, SvelteKit, Astro, Remix/React Router).
 
 ## Depois

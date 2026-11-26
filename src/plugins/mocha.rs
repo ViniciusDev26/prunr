@@ -185,7 +185,7 @@ fn load(root: &Path, name: &str, contribution: &mut Contribution) {
 
 /// The top-level keys of a YAML file, as far as Mocha's configurations use them: a scalar
 /// (`require: should`) or a list (`spec:` followed by `- item` lines).
-fn yaml(source: &str) -> Value {
+pub(super) fn yaml(source: &str) -> Value {
     let mut config = serde_json::Map::new();
     let mut list: Option<(String, Vec<Value>)> = None;
     let scalar = |value: &str| {
