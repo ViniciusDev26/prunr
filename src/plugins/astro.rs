@@ -1,11 +1,26 @@
 //! Astro: the frontmatter (between the `---` lines at the top) and the `<script>` elements of
-//! each `.astro` file are a module of the graph, in TypeScript. The pages (`src/pages/**`) are
-//! production entries, and the compiled components import `astro`'s runtime.
+//! each `.astro` file are a module of the graph, in TypeScript. The pages, the content
+//! collections (and their config), the middleware and the actions are production entries, and
+//! so is `astro.config.*`, as `astro add` keeps integrations in `dependencies`; and the compiled
+//! components import `astro`'s runtime. `astro:content`, `astro:assets`... are URLs of a
+//! scheme, which prunr leaves alone.
 
 use super::compile::{Compiled, Compiler, keep, script_blocks};
 use super::{Context, Contribution, Plugin};
 
 pub struct Astro;
+
+/// The files Astro loads by convention.
+const ENTRIES: &[&str] = &[
+    "src/pages/**",
+    "src/content/**",
+    "src/content.config.*",
+    "src/content/config.*",
+    "src/middleware.*",
+    "src/middleware/index.*",
+    "src/actions/index.*",
+    "astro.config.*",
+];
 
 impl Plugin for Astro {
     fn name(&self) -> &'static str {
@@ -16,7 +31,9 @@ impl Plugin for Astro {
         contribution
             .compilers
             .insert("astro".to_string(), Compiler(compile));
-        contribution.production.push("src/pages/**".to_string());
+        contribution
+            .production
+            .extend(ENTRIES.iter().map(|glob| glob.to_string()));
         contribution.production_packages.insert("astro".to_string());
     }
 }
@@ -54,7 +71,8 @@ mod tests {
         );
         assert!(compiled.typescript);
         assert_eq!(compile("<p>a</p>").source, "        ");
-        assert_eq!(found.production, strings(&["src/pages/**"]));
+        assert!(found.production.contains(&"src/content/**".to_string()));
+        assert!(found.production.contains(&"astro.config.*".to_string()));
         assert_eq!(found.production_packages, declared(&["astro"]));
     }
 }
