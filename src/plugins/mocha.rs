@@ -358,4 +358,16 @@ mod tests {
         let found = setup(dir.path(), &declared(&["mocha"]), &manifest);
         assert_eq!(found.tests, strings(&["test/**"]));
     }
+
+    #[test]
+    fn the_values_of_the_watch_and_parallel_flags_are_not_specs() {
+        let dir = project(&[]);
+        for folder in ["lib", "test"] {
+            std::fs::create_dir(dir.path().join(folder)).unwrap();
+        }
+        std::fs::write(dir.path().join("test/a.test.js"), "").unwrap();
+        let manifest = json!({ "scripts": { "tdd": "mocha --watch --watch-files lib/**/*.js --watch-ignore lib/x.js -j 2 --retries 1 -f x -n inspect test/a.test.js" } });
+        let found = setup(dir.path(), &declared(&["mocha"]), &manifest);
+        assert_eq!(found.tests, strings(&["test/a.test.js", "test/**"]));
+    }
 }
