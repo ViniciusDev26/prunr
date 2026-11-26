@@ -95,6 +95,9 @@ pub struct Facts {
     /// The relative paths written as strings (`"./setup.ts"`), with their lines: in a config a
     /// tool reads, they name the files it loads.
     pub path_strings: Vec<(String, u32)>,
+    /// The strings passed to a binding imported from a package (`new C({ plugins: ["x"] })`),
+    /// as `(specifier, key, value)`: the key of the property the string is under, or empty.
+    pub call_strings: Vec<(String, String, String)>,
     /// Groups of ESM exports that are the same local binding (`export { a, a as b }`), by
     /// name; `default` is not one.
     pub duplicate_exports: Vec<Vec<String>>,
@@ -2184,6 +2187,31 @@ mod tests {
         assert!(commonjs.duplicate_exports.is_empty());
         let nested = facts("class X {} module.exports = X; module.exports.X = X;");
         assert!(nested.duplicate_exports.is_empty());
+    }
+
+    #[test]
+    fn the_strings_passed_to_a_package_are_known_by_their_key() {
+        let found = facts_at(
+            "index.mjs",
+            "import { C } from 'lib'; import D from 'other'; const { E } = require('cjs');
+             new C({ plugins: { modern: ['a', 'b'] }, name: 'c' }, 'd');
+             D({ x: [{ y: 'e' }] }); E({ k: 'f' }); local({ k: 'g' }); C.m({ k: 'h' });
+             function local() {}",
+        );
+        let call = |specifier: &str, key: &str, value: &str| {
+            (specifier.to_string(), key.to_string(), value.to_string())
+        };
+        assert_eq!(
+            found.call_strings,
+            [
+                call("lib", "modern", "a"),
+                call("lib", "modern", "b"),
+                call("lib", "name", "c"),
+                call("lib", "", "d"),
+                call("other", "y", "e"),
+                call("cjs", "k", "f"),
+            ]
+        );
     }
 
     #[test]
