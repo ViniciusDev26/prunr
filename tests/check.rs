@@ -1542,3 +1542,20 @@ fn declaration_files_non_packages_vendored_packages_and_test_fixtures_are_not_fi
          errors: 2, warnings: 0\n"
     );
 }
+
+#[test]
+fn jest_mocks_and_module_name_mapper_resolve_their_names() {
+    let run = check("aliases/jest");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/lib/math.js (only tests use it)\n\nerrors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
+fn vite_resolve_alias_resolves_its_names() {
+    let run = check("aliases/vite");
+    assert_eq!(run.code, 0, "{}", run.stdout);
+    assert_eq!(run.stdout, "No findings.\n");
+}

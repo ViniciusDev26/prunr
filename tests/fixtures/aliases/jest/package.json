@@ -1,0 +1,1 @@
+{ "name": "jest-aliases", "private": true, "scripts": { "test": "jest" }, "devDependencies": { "jest": "29", "identity-obj-proxy": "3" }, "jest": { "moduleNameMapper": { "^@lib/(.*)$": "<rootDir>/src/lib/$1", "\\.css$": "identity-obj-proxy" } } }
