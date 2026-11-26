@@ -4,8 +4,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
-
 use crate::facts::{Facts, ReexportKind, Use, analyze};
 use crate::resolve::{Resolver, Target};
 
@@ -126,24 +124,17 @@ impl std::fmt::Display for ProjectError {
 }
 
 /// The dependency fields of `package.json`.
-#[derive(Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default)]
 struct Manifest {
     name: Option<String>,
-    #[serde(default)]
     private: bool,
     main: Option<String>,
     module: Option<String>,
     exports: Option<serde_json::Value>,
-    #[serde(default)]
     dependencies: BTreeMap<String, serde_json::Value>,
-    #[serde(default)]
     dev_dependencies: BTreeMap<String, serde_json::Value>,
-    #[serde(default)]
     peer_dependencies: BTreeMap<String, serde_json::Value>,
-    #[serde(default)]
     optional_dependencies: BTreeMap<String, serde_json::Value>,
-    #[serde(default)]
     scripts: BTreeMap<String, String>,
     /// Jest's configuration, when it lives in `package.json`.
     jest: Option<serde_json::Value>,
@@ -157,14 +148,46 @@ impl Manifest {
             return Ok(Self::default());
         }
         let text = std::fs::read_to_string(path).unwrap_or_default();
-        serde_json::from_str(&text).map_err(|e| {
-            let at = if dir.is_empty() {
-                String::new()
-            } else {
-                format!("{dir}/package.json: ")
-            };
-            ProjectError::PackageJson(format!("{at}{e}"))
-        })
+        let value: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+            .map_err(|e| {
+                let at = if dir.is_empty() {
+                    String::new()
+                } else {
+                    format!("{dir}/package.json: ")
+                };
+                ProjectError::PackageJson(format!("{at}{e}"))
+            })?;
+        Ok(Self::from_value(&value))
+    }
+
+    /// The fields prunr reads, each as far as it has the type npm documents: a field of another
+    /// type (`"private": "true"`, a `name` that is a number) is read leniently or left out,
+    /// as package managers do, instead of failing the check.
+    fn from_value(value: &serde_json::Value) -> Self {
+        use serde_json::Value;
+        let text = |key: &str| value[key].as_str().map(str::to_string);
+        let map = |key: &str| match &value[key] {
+            Value::Object(map) => map.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            _ => BTreeMap::new(),
+        };
+        let some = |key: &str| Some(value[key].clone()).filter(|value| !value.is_null());
+        Self {
+            name: text("name"),
+            private: matches!(&value["private"], Value::Bool(true))
+                || value["private"].as_str() == Some("true"),
+            main: text("main"),
+            module: text("module"),
+            exports: some("exports"),
+            dependencies: map("dependencies"),
+            dev_dependencies: map("devDependencies"),
+            peer_dependencies: map("peerDependencies"),
+            optional_dependencies: map("optionalDependencies"),
+            scripts: map("scripts")
+                .into_iter()
+                .filter_map(|(name, script)| Some((name, script.as_str()?.to_string())))
+                .collect(),
+            jest: some("jest"),
+        }
     }
 
     /// Every package it declares, in any dependency field.
@@ -1276,6 +1299,39 @@ mod tests {
         let broken = &project.files["lib/broken.js"];
         assert!(broken.parse_error.as_ref().is_some_and(|e| !e.is_empty()));
         assert!(broken.edges.is_empty());
+    }
+
+    #[test]
+    fn a_package_json_is_read_as_far_as_its_fields_go() {
+        let dir = project(&[
+            (
+                "package.json",
+                "\u{feff}{ \"workspaces\": [\"packages/*\"], \"dependencies\": { \"a\": \"1\" } }",
+            ),
+            (
+                "packages/b/package.json",
+                r#"{
+                    "name": 7,
+                    "private": "true",
+                    "main": ["no"],
+                    "dependencies": ["not", "an", "object"],
+                    "devDependencies": { "c": "1" },
+                    "scripts": { "start": "node index.js", "odd": { "x": 1 } }
+                }"#,
+            ),
+            ("packages/b/index.js", ""),
+        ]);
+        let loaded = Project::load(dir.path()).unwrap();
+        let root = &loaded.workspaces[0];
+        assert_eq!(root.dependencies.iter().collect::<Vec<_>>(), ["a"]);
+        let b = &loaded.workspaces[1];
+        assert!(b.dependencies.is_empty());
+        assert_eq!(b.dev_dependencies.iter().collect::<Vec<_>>(), ["c"]);
+        assert!(loaded.production_files.contains("packages/b/index.js"));
+        let manifest = Manifest::load(dir.path(), "packages/b").unwrap();
+        assert!(manifest.private && manifest.name.is_none() && manifest.main.is_none());
+        let dir = project(&[("package.json", r#"{ "private": false }"#)]);
+        assert!(!Manifest::load(dir.path(), "").unwrap().private);
     }
 
     fn set(ids: &[&str]) -> BTreeSet<FileId> {
