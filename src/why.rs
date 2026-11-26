@@ -254,6 +254,44 @@ mod tests {
     }
 
     #[test]
+    fn an_export_kept_by_a_reexport_an_entry_or_its_own_file() {
+        let (_dir, project) = project(&[
+            ("index.js", "export const e = 1;"),
+            (
+                "main.js",
+                "import { x } from './barrel'; import { y } from './lib';",
+            ),
+            ("barrel.js", "export * from './lib';"),
+            (
+                "lib.js",
+                "export const x = 1; export const y = 2; export const z = 3; export const own = 4; own;",
+            ),
+        ]);
+        let production = ids(&["index.js", "main.js"]);
+        let none = BTreeSet::new();
+        assert_eq!(
+            why(&project, &production, &none, "lib.js:x").unwrap(),
+            "lib.js: x is used by:\n  main.js:1 (production, through barrel.js)\n"
+        );
+        assert_eq!(
+            why(&project, &production, &none, "lib.js:y").unwrap(),
+            "lib.js: y is used by:\n  main.js:1 (production)\n"
+        );
+        assert_eq!(
+            why(&project, &production, &none, "lib.js:own").unwrap(),
+            "lib.js: own is used by:\n  its own file\n"
+        );
+        assert_eq!(
+            why(&project, &production, &none, "index.js:e").unwrap(),
+            "index.js: e is used by:\n  an entry: its exports are its interface\n"
+        );
+        assert_eq!(
+            why(&project, &production, &none, "lib.js:z").unwrap(),
+            "lib.js: z is used by no file.\n"
+        );
+    }
+
+    #[test]
     fn a_package_scripts_tools_frameworks_and_peers_need() {
         let (_dir, project) = project(&[
             (
@@ -267,7 +305,7 @@ mod tests {
             ),
             (
                 "web/package.json",
-                r#"{ "dependencies": { "next": "15", "react": "19", "react-dom": "19" } }"#,
+                r#"{ "dependencies": { "next": "15", "react": "19", "react-dom": "19" }, "devDependencies": { "@types/react": "19", "@types/node": "22" } }"#,
             ),
             (
                 "node_modules/next/package.json",
@@ -289,6 +327,14 @@ mod tests {
         assert_eq!(
             why(&project, &none, &none, "ts-jest").unwrap(),
             "ts-jest is used by:\n  a tool configured in the project (test)\n"
+        );
+        assert_eq!(
+            why(&project, &none, &none, "@types/react").unwrap(),
+            "@types/react is used by:\n  the types of react, kept while react is used\n"
+        );
+        assert_eq!(
+            why(&project, &none, &none, "@types/node").unwrap(),
+            "@types/node is used by:\n  the types of Node.js, kept while the project has TypeScript or uses Node.js modules\n"
         );
         assert_eq!(
             why(&project, &none, &none, "react").unwrap(),
