@@ -11,9 +11,10 @@ use crate::config::Config;
 use crate::project::{FileId, Project};
 use crate::report;
 
-pub const USAGE: &str = "usage: prunr check [--json | --github] [--since <ref>] \
-     | prunr fix [--dry-run] | prunr why <file | file:export | package> | prunr baseline \
-     | prunr init | prunr schema | prunr --version";
+pub const USAGE: &str = "usage: prunr check [--json | --github | --sarif | --codeclimate \
+     | --markdown] [--production] [--since <ref>] | prunr fix [--dry-run] \
+     | prunr why <file | file:export | package> | prunr baseline | prunr init | prunr schema \
+     | prunr --version";
 
 /// How `prunr check` prints its findings.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -21,10 +22,15 @@ enum Format {
     Human,
     Json,
     Github,
+    Sarif,
+    CodeClimate,
+    Markdown,
 }
 
 struct CheckOptions<'a> {
     format: Format,
+    /// Only report what goes to production (`--production`).
+    production: bool,
     /// Only report findings that this git commit does not have.
     since: Option<&'a str>,
 }
@@ -33,6 +39,7 @@ struct CheckOptions<'a> {
 fn check_options<'a>(args: &[&'a str]) -> Option<CheckOptions<'a>> {
     let mut options = CheckOptions {
         format: Format::Human,
+        production: false,
         since: None,
     };
     let mut args = args.iter();
@@ -40,6 +47,13 @@ fn check_options<'a>(args: &[&'a str]) -> Option<CheckOptions<'a>> {
         let format = match *arg {
             "--json" => Format::Json,
             "--github" => Format::Github,
+            "--sarif" => Format::Sarif,
+            "--codeclimate" => Format::CodeClimate,
+            "--markdown" => Format::Markdown,
+            "--production" => {
+                options.production = true;
+                continue;
+            }
             "--since" => {
                 options.since = Some(args.next()?);
                 continue;
@@ -91,11 +105,17 @@ pub fn run(args: &[String], root: &Path, out: &mut impl Write, err: &mut impl Wr
 
 fn check_command(root: &Path, options: &CheckOptions, out: &mut impl Write) -> Result<u8, String> {
     let config = Config::load(root).map_err(|e| e.to_string())?;
-    let (project, findings) = analyze(root, &config)?;
-    let known = match &config.baseline {
+    let (project, production, tests) = graph(root, &config)?;
+    let mut findings = check(&project, &production, &tests);
+    let mut known = match &config.baseline {
         Some(path) => baseline::read(&root.join(path))?,
         None => Vec::new(),
     };
+    if options.production {
+        let keep = crate::checks::in_production(&project, &production);
+        findings.retain(&keep);
+        known.retain(&keep);
+    }
     let mut diff = baseline::diff(findings, &known);
     if let Some(base) = options.since {
         let before = findings_at(root, base, &config)?;
@@ -105,6 +125,9 @@ fn check_command(root: &Path, options: &CheckOptions, out: &mut impl Write) -> R
         Format::Human => report::human(&diff.fresh, &diff.stale),
         Format::Json => report::json(&diff.fresh, &diff.stale),
         Format::Github => report::github(&diff.fresh, &diff.stale, &project),
+        Format::Sarif => report::sarif(&diff.fresh, &diff.stale, &project),
+        Format::CodeClimate => report::codeclimate(&diff.fresh, &diff.stale, &project),
+        Format::Markdown => report::markdown(&diff.fresh, &diff.stale, &project),
     };
     let _ = out.write_all(text.as_bytes());
     let failed = !diff.stale.is_empty() || diff.fresh.iter().any(|f| !f.is_warning());

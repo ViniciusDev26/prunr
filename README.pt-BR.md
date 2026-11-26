@@ -90,7 +90,7 @@ em [Configuração](docs/guide/configuration.md).
 
 | Comando | O que faz |
 |---|---|
-| `prunr check` | Lista os achados. `--json` para máquinas, `--github` para anotações no PR, `--since <ref>` para só o que é novo. |
+| `prunr check` | Lista os achados. `--json` para máquinas, `--github` para anotações no PR, `--sarif` para code scanning, `--codeclimate` para o Code Quality do GitLab, `--markdown` para um comentário de PR, `--since <ref>` para só o que é novo, `--production` para só o que vai para produção. |
 | `prunr fix` | Remove o código morto e as dependências sem uso. `--dry-run` mostra sem mudar nada. |
 | `prunr why <alvo>` | Explica um arquivo (a cadeia de imports desde uma entrada), um `arquivo:export` (quem o usa) ou um pacote (os arquivos, scripts e ferramentas que precisam dele). |
 | `prunr init` | Cria um `prunr.json` a partir do `package.json`. |
