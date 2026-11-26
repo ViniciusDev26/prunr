@@ -52,7 +52,11 @@ impl Resolver {
     pub fn resolve(&self, from: &Path, specifier: &str) -> Target {
         // `/x` is a path on every system, even where an absolute path needs a drive (Windows).
         let local = specifier.starts_with(['.', '#', '/']) || Path::new(specifier).is_absolute();
-        if !local && nodejs_built_in_modules::is_nodejs_builtin_module(specifier) {
+        // Bun's modules (`bun:test`, `bun:sqlite`) are built in, like Node's.
+        if !local
+            && (specifier.starts_with("bun:")
+                || nodejs_built_in_modules::is_nodejs_builtin_module(specifier))
+        {
             return Target::Builtin;
         }
         let resolved = match self.inner.resolve_file(from, specifier) {

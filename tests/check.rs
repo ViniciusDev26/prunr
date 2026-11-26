@@ -1237,3 +1237,13 @@ fn the_output_is_the_same_with_any_number_of_threads() {
         );
     }
 }
+
+#[test]
+fn a_package_any_package_json_above_the_file_declares_is_declared() {
+    let run = check("nested-packages");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "missing-dependency    tests/smoke/cjs/a.test.js: chai\n\nerrors: 1, warnings: 0\n"
+    );
+}
