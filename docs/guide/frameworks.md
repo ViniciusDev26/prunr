@@ -146,3 +146,15 @@ os scripts passam a `tsc -p` são lidos, seguindo `extends` e `references`. Cont
 - os plugins de `compilerOptions.plugins`.
 
 Os testes de tipo (`test-d/**` e `*.test-d.*`, do tsd ou do próprio `tsc`) são código de teste.
+
+## Vue, Svelte, Astro e MDX
+
+Com `vue`, `svelte`, `astro` ou um compilador de MDX (`@mdx-js/*`, `@next/mdx`, `@astrojs/mdx`)
+declarado, os arquivos `.vue`, `.svelte`, `.astro` e `.mdx` fazem parte do projeto: os scripts
+de cada um (os `<script>`, o frontmatter do Astro, os blocos de `import`/`export` do MDX) entram
+no grafo, e um componente que nada importa é reportado como arquivo sem uso.
+
+Os imports de um desses arquivos nunca são reportados, porque o template pode usar o nome. As
+páginas do Astro (`src/pages/**`) são entradas de produção. Num projeto Nuxt ou SvelteKit, os
+`.vue` e `.svelte` ainda ficam de fora: os componentes e as rotas desses frameworks são achados
+por convenção, sem import.

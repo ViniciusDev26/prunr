@@ -168,6 +168,16 @@ pub enum Ignore {
 /// Analyzes one source, parsed as its path's extension says. Fails with the parser's first
 /// diagnostic.
 pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
+    analyze_with(source, path, false)
+}
+
+/// Analyzes the scripts of a markup file (a `.vue` component): a binding they never reference
+/// still uses what it was given, since the markup around them can use it.
+pub fn analyze_markup(source: &str, path: &std::path::Path) -> Result<Facts, String> {
+    analyze_with(source, path, true)
+}
+
+fn analyze_with(source: &str, path: &std::path::Path, markup: bool) -> Result<Facts, String> {
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(path).unwrap_or(SourceType::cjs());
     // JSX is common in `.js` files (Create React App, webpack examples), and a CommonJS module
@@ -194,6 +204,7 @@ pub fn analyze(source: &str, path: &std::path::Path) -> Result<Facts, String> {
     let mut analyzer = Analyzer {
         semantic: &semantic,
         source,
+        markup,
         facts: Facts::default(),
         exports: BTreeMap::new(),
         reads: BTreeSet::new(),
@@ -255,6 +266,8 @@ type Path = Vec<String>;
 struct Analyzer<'s, 'a> {
     semantic: &'s Semantic<'a>,
     source: &'s str,
+    /// The scripts of a markup file: their bindings are used even without a reference.
+    markup: bool,
     facts: Facts,
     /// Every export, and whether the file uses it itself.
     exports: BTreeMap<Path, bool>,
@@ -737,7 +750,13 @@ impl<'a> Analyzer<'_, 'a> {
             };
             uses.insert(used);
         }
-        referenced
+        if !referenced && self.markup {
+            uses.insert(Use {
+                path: prefix.to_vec(),
+                whole: true,
+            });
+        }
+        referenced || self.markup
     }
 
     // ---- exports ----
@@ -2202,6 +2221,21 @@ mod tests {
                 ("x from ./x", "statement \"const x = require('./x');\""),
             ])
         );
+    }
+
+    #[test]
+    fn the_bindings_of_markup_scripts_are_used_without_a_reference() {
+        let source = "import { a, b } from './x';\nconst c = require('./c');\nb();";
+        let facts = analyze_markup(source, std::path::Path::new("a.js")).unwrap();
+        let x = &facts.requires[0];
+        assert!(x.unused.is_empty());
+        assert!(x.uses.contains(&Use {
+            path: vec!["a".to_string()],
+            whole: true
+        }));
+        assert!(facts.requires[1].unused.is_empty());
+        let facts = analyze(source, std::path::Path::new("a.js")).unwrap();
+        assert_eq!(facts.requires[0].unused, ["a"]);
     }
 
     #[test]
