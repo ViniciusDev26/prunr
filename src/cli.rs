@@ -12,7 +12,7 @@ use crate::project::{FileId, Project};
 use crate::report;
 
 pub const USAGE: &str = "usage: prunr check [--json | --github | --sarif | --codeclimate \
-     | --markdown] [--since <ref>] | prunr fix [--dry-run] \
+     | --markdown] [--production] [--since <ref>] | prunr fix [--dry-run] \
      | prunr why <file | file:export | package> | prunr baseline | prunr init | prunr schema \
      | prunr --version";
 
@@ -29,6 +29,8 @@ enum Format {
 
 struct CheckOptions<'a> {
     format: Format,
+    /// Only report what goes to production (`--production`).
+    production: bool,
     /// Only report findings that this git commit does not have.
     since: Option<&'a str>,
 }
@@ -37,6 +39,7 @@ struct CheckOptions<'a> {
 fn check_options<'a>(args: &[&'a str]) -> Option<CheckOptions<'a>> {
     let mut options = CheckOptions {
         format: Format::Human,
+        production: false,
         since: None,
     };
     let mut args = args.iter();
@@ -47,6 +50,10 @@ fn check_options<'a>(args: &[&'a str]) -> Option<CheckOptions<'a>> {
             "--sarif" => Format::Sarif,
             "--codeclimate" => Format::CodeClimate,
             "--markdown" => Format::Markdown,
+            "--production" => {
+                options.production = true;
+                continue;
+            }
             "--since" => {
                 options.since = Some(args.next()?);
                 continue;
@@ -98,11 +105,17 @@ pub fn run(args: &[String], root: &Path, out: &mut impl Write, err: &mut impl Wr
 
 fn check_command(root: &Path, options: &CheckOptions, out: &mut impl Write) -> Result<u8, String> {
     let config = Config::load(root).map_err(|e| e.to_string())?;
-    let (project, findings) = analyze(root, &config)?;
-    let known = match &config.baseline {
+    let (project, production, tests) = graph(root, &config)?;
+    let mut findings = check(&project, &production, &tests);
+    let mut known = match &config.baseline {
         Some(path) => baseline::read(&root.join(path))?,
         None => Vec::new(),
     };
+    if options.production {
+        let keep = crate::checks::in_production(&project, &production);
+        findings.retain(&keep);
+        known.retain(&keep);
+    }
     let mut diff = baseline::diff(findings, &known);
     if let Some(base) = options.since {
         let before = findings_at(root, base, &config)?;
