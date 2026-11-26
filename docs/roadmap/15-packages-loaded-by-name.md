@@ -14,6 +14,13 @@ do plugin por dentro. Hoje esses pacotes vão em `dependencies.ignore`.
   esse caminho com o primeiro plugin que precisar dele.
 - Vale a pena quando o padrão se repetir; para um caso isolado, `dependencies.ignore` resolve.
 
+## Feito
+
+Os fatos de cada arquivo guardam as strings passadas a um binding importado de um pacote, com a
+chave da propriedade em que cada uma está. A `Contribution` ganhou `loaded_by_name`: o par
+(biblioteca, chave) cujas strings são pacotes que a biblioteca carrega. O primeiro plugin é o do
+`chartjs-node-canvas`.
+
 ## Critérios de aceite
 
-- [ ] Uma fixture com `chartjs-node-canvas` sem `dependencies.ignore`.
+- [x] Uma fixture com `chartjs-node-canvas` sem `dependencies.ignore`.

@@ -191,6 +191,18 @@ fn a_plugin_can_be_turned_off_or_on_in_the_config() {
 }
 
 #[test]
+fn a_package_another_library_loads_by_name_is_used() {
+    let run = check("packages-loaded-by-name");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-dependency     left-pad\n\
+         \n\
+         errors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
 fn a_require_that_cannot_be_followed_is_a_warning() {
     let run = check("unresolved-require");
     assert_eq!(run.code, 0, "warnings do not fail the check");
