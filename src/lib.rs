@@ -13,4 +13,5 @@ pub mod report;
 pub mod resolve;
 pub mod scripts;
 pub mod stylesheets;
+pub mod why;
 pub mod workspaces;

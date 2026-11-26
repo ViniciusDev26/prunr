@@ -1,17 +1,19 @@
 //! `prunr check [--json | --github] [--since <ref>]`, `prunr baseline`, `prunr init` and
 //! `prunr schema`.
 
+use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::Path;
 
 use crate::baseline;
 use crate::checks::{Finding, check};
 use crate::config::Config;
-use crate::project::Project;
+use crate::project::{FileId, Project};
 use crate::report;
 
 pub const USAGE: &str = "usage: prunr check [--json | --github] [--since <ref>] \
-     | prunr fix [--dry-run] | prunr baseline | prunr init | prunr schema | prunr --version";
+     | prunr fix [--dry-run] | prunr why <file | file:export | package> | prunr baseline \
+     | prunr init | prunr schema | prunr --version";
 
 /// How `prunr check` prints its findings.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -63,6 +65,7 @@ pub fn run(args: &[String], root: &Path, out: &mut impl Write, err: &mut impl Wr
         ["fix"] => fix_command(root, false, out),
         ["fix", "--dry-run"] => fix_command(root, true, out),
         ["baseline"] => baseline_command(root, out),
+        ["why", target] => why_command(root, target, out),
         ["init"] => crate::init::init(root).map(|_| {
             let _ = writeln!(out, "created {}", crate::config::FILE_NAME);
             0
@@ -175,14 +178,32 @@ fn baseline_command(root: &Path, out: &mut impl Write) -> Result<u8, String> {
     Ok(0)
 }
 
-/// The project at `root` and its findings under `config`.
-fn analyze(root: &Path, config: &Config) -> Result<(Project, Vec<Finding>), String> {
+fn why_command(root: &Path, target: &str, out: &mut impl Write) -> Result<u8, String> {
+    let config = Config::load(root).map_err(|e| e.to_string())?;
+    let (project, production, tests) = graph(root, &config)?;
+    let target = target.trim_start_matches("./");
+    let answer = crate::why::why(&project, &production, &tests, target)?;
+    let _ = out.write_all(answer.as_bytes());
+    Ok(0)
+}
+
+/// The project at `root`, with its production and test entries under `config`.
+fn graph(
+    root: &Path,
+    config: &Config,
+) -> Result<(Project, BTreeSet<FileId>, BTreeSet<FileId>), String> {
     let mut project = Project::load(root).map_err(|e| e.to_string())?;
     project.ignore_packages(&config.dependencies.ignore);
     let mut production = project.entries(&config.entries.production)?;
     production.extend(project.production_files.iter().cloned());
     let mut tests = project.entries(&config.entries.test)?;
     tests.extend(project.test_files.iter().cloned());
+    Ok((project, production, tests))
+}
+
+/// The project at `root` and its findings under `config`.
+fn analyze(root: &Path, config: &Config) -> Result<(Project, Vec<Finding>), String> {
+    let (project, production, tests) = graph(root, config)?;
     let findings = check(&project, &production, &tests);
     Ok((project, findings))
 }
