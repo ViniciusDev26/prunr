@@ -29,6 +29,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 27. [Plugin de TypeScript](27-typescript-plugin.md)
 - [x] 28. [Vue, Svelte, Astro e MDX](28-single-file-components.md)
 - [x] 29. [Plugins declarativos de ferramentas](29-tool-plugins.md)
+- [x] 30. [SvelteKit e Nuxt](30-sveltekit-and-nuxt.md)
 
 ## Fase 1: credibilidade (concluída)
 
@@ -52,7 +53,8 @@ Os pacotes e arquivos que as ferramentas carregam sem import:
 - [x] Plugins declarativos para ferramentas: ESLint, Prettier, Babel e commitlint
   ([29](29-tool-plugins.md)).
 - [ ] Storybook, Cypress, husky, lint-staged, Tailwind, Prisma, tsup, Rollup, webpack.
-- [ ] Plugins de frameworks (Nuxt, SvelteKit, Astro, Remix/React Router).
+- [x] SvelteKit e Nuxt ([30](30-sveltekit-and-nuxt.md)).
+- [ ] Astro (além das páginas) e Remix/React Router.
 
 ## Depois
 

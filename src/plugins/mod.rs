@@ -18,12 +18,14 @@ mod mdx;
 mod mocha;
 mod nest;
 mod next;
+mod nuxt;
 mod playwright;
 mod postcss;
 mod react;
 mod runners;
 mod static_config;
 mod svelte;
+mod sveltekit;
 mod tools;
 mod typescript;
 mod vite;
@@ -227,6 +229,8 @@ pub const PLUGINS: &[&dyn Plugin] = &[
     &svelte::Svelte,
     &astro::Astro,
     &mdx::Mdx,
+    &sveltekit::SvelteKit,
+    &nuxt::Nuxt,
     &tools::ESLINT,
     &tools::PRETTIER,
     &tools::BABEL,
@@ -480,6 +484,8 @@ mod tests {
                 "svelte",
                 "astro",
                 "@mdx-js/mdx",
+                "@sveltejs/kit",
+                "nuxt",
                 "eslint",
                 "prettier",
                 "@babel/core",

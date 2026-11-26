@@ -1596,3 +1596,23 @@ fn a_package_compiles_only_the_files_its_own_plugins_compile() {
     assert_eq!(run.code, 0, "{}", run.stdout);
     assert_eq!(run.stdout, "No findings.\n");
 }
+
+#[test]
+fn sveltekit_routes_hooks_and_aliases_are_part_of_the_graph() {
+    let run = check("sveltekit");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           src/lib/orphan.js\nunused-export         src/lib/format.js: unused\n\nerrors: 2, warnings: 0\n"
+    );
+}
+
+#[test]
+fn nuxt_pages_components_composables_and_aliases_are_part_of_the_graph() {
+    let run = check("nuxt");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-file           orphan.ts\n\nerrors: 1, warnings: 0\n"
+    );
+}

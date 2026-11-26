@@ -156,8 +156,9 @@ no grafo, e um componente que nada importa é reportado como arquivo sem uso.
 
 Os imports de um desses arquivos nunca são reportados, porque o template pode usar o nome. As
 páginas do Astro (`src/pages/**`) são entradas de produção. Num projeto Nuxt ou SvelteKit, os
-`.vue` e `.svelte` ainda ficam de fora: os componentes e as rotas desses frameworks são achados
-por convenção, sem import.
+componentes e as rotas são achados pelas convenções do framework (abaixo). Num monorepo, cada
+pacote compila só os próprios arquivos. No script de instância de um componente Svelte,
+`export let` declara uma prop e não é reportado.
 
 ## ESLint, Prettier, Babel e commitlint
 
@@ -171,3 +172,19 @@ commitlint. A configuração pode estar no arquivo da ferramenta (JavaScript, JS
 Uma configuração em JavaScript é um arquivo da ferramenta: o que ela importa conta como usado.
 Com uma configuração, o pacote da ferramenta (`eslint`, `prettier`, `@babel/core`,
 `@commitlint/cli`) também conta, mesmo sem script que o rode.
+
+## SvelteKit
+
+Com `@sveltejs/kit` declarado, as rotas (`src/routes/**/+page.svelte`, `+layout`, `+server`,
+`+page.server.js`...), os hooks (`src/hooks.*`), o service worker, os param matchers e o que
+está em `static/` são entradas de produção. `$lib` e os nomes do `kit.alias` do
+`svelte.config.js` são resolvidos; `$app/*`, `$env/*` e `./$types` são módulos do framework e
+não viram achados.
+
+## Nuxt
+
+Com `nuxt` declarado, o que o Nuxt carrega por convenção é entrada de produção: `app.vue`,
+`error.vue`, `pages/`, `layouts/`, `components/`, `composables/`, `utils/`, `plugins/` e
+`middleware/` (sob `app/` no Nuxt 4, ou sob o `srcDir`), e `server/`, `modules/` e `shared/` na
+raiz. Os `modules` do `nuxt.config` contam como usados. `~`, `@`, `~~` e `@@` são resolvidos, e
+`#imports`, `#app`, `#components`... são módulos que o Nuxt gera.
