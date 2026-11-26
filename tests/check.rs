@@ -144,6 +144,19 @@ fn two_exports_of_the_same_binding_are_duplicates() {
 }
 
 #[test]
+fn a_script_binary_from_an_undeclared_package_is_missing() {
+    let run = check("missing-binaries");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "missing-binary        lint: eslint, from eslint, which package.json does not declare\n\
+         missing-binary        tool: scoped-tool, from @scope/tool, which package.json does not declare\n\
+         \n\
+         errors: 2, warnings: 0\n"
+    );
+}
+
+#[test]
 fn a_require_that_cannot_be_followed_is_a_warning() {
     let run = check("unresolved-require");
     assert_eq!(run.code, 0, "warnings do not fail the check");
