@@ -38,6 +38,8 @@ pub struct Project {
 pub struct Workspace {
     /// Its directory, relative to the root, with `/` separators: empty for the root package.
     pub dir: String,
+    /// Its `name`: importing itself by it needs no declaration.
+    pub name: Option<String>,
     /// Packages in `dependencies`: they must be used, and by production code.
     pub dependencies: BTreeSet<String>,
     /// Packages in `devDependencies`: they must be used.
@@ -705,6 +707,7 @@ impl Project {
             }
             workspaces.push(Workspace {
                 dir: dir.clone(),
+                name: manifest.name.clone(),
                 dependencies: manifest.dependencies.keys().cloned().collect(),
                 dev_dependencies: manifest.dev_dependencies.keys().cloned().collect(),
                 declared_packages,
@@ -1072,6 +1075,25 @@ mod tests {
         let index = &project.files["index.js"];
         assert_eq!(index.unresolved, ["/gone.svg"]);
         assert_eq!(index.edges.len(), 1);
+    }
+
+    #[test]
+    fn a_package_that_imports_itself_by_name_declares_itself() {
+        let dir = project(&[
+            (
+                "package.json",
+                r#"{ "name": "self", "exports": "./dist/index.js", "workspaces": ["packages/*"] }"#,
+            ),
+            ("packages/a/package.json", r#"{ "name": "@x/a" }"#),
+            ("packages/a/index.js", r#"require("@x/a/package.json");"#),
+            ("index.js", r#"require("self");"#),
+        ]);
+        let project = Project::load(dir.path()).unwrap();
+        let entries = project
+            .entries(&["index.js".to_string(), "packages/a/index.js".to_string()])
+            .unwrap();
+        let findings = crate::checks::check(&project, &entries, &BTreeSet::new());
+        assert_eq!(findings, []);
     }
 
     #[test]
