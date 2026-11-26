@@ -58,6 +58,17 @@ const VALUE_FLAGS: &[&str] = &[
     "--ignore",
     "--slow",
     "-s",
+    "--watch-files",
+    "--watch-ignore",
+    "-j",
+    "--jobs",
+    "--retries",
+    "-f",
+    "--fgrep",
+    "-n",
+    "--node-option",
+    "--reporter-options",
+    "--exclude",
 ];
 
 /// Mocha's default spec, without the extensions.
