@@ -35,15 +35,75 @@ pub struct Context<'a> {
 }
 
 impl Context<'_> {
-    /// The configuration files the `scripts` of `package.json` pass to `runner` with `--config`.
-    fn configs_passed_to(&self, runner: &str) -> Vec<String> {
+    /// The `scripts` of `package.json`, and each script another one runs with extra arguments,
+    /// with them (`npm run unit -- --config x`: the `unit` script, then `--config x`).
+    fn scripts(&self) -> Vec<String> {
         let Value::Object(scripts) = &self.manifest["scripts"] else {
             return Vec::new();
         };
-        scripts
+        let mut found: Vec<String> = scripts
             .values()
             .filter_map(Value::as_str)
-            .flat_map(|script| crate::scripts::configs(script, runner))
+            .map(str::to_string)
+            .collect();
+        let forwarded: Vec<String> = found
+            .iter()
+            .flat_map(|script| crate::scripts::forwarded(script))
+            .filter_map(|(name, arguments)| {
+                let script = scripts.get(&name)?.as_str()?;
+                let quoted: Vec<String> = arguments
+                    .iter()
+                    .map(|argument| match argument.contains(char::is_whitespace) {
+                        true => format!("\"{argument}\""),
+                        false => argument.clone(),
+                    })
+                    .collect();
+                Some(format!("{script} {}", quoted.join(" ")))
+            })
+            .collect();
+        found.extend(forwarded);
+        found
+    }
+
+    /// The words a script runs `runner` with: its name, and in the tool's own repository the
+    /// file its `bin` names (`node bin/mocha.js`).
+    fn runner_words(&self, runner: &str) -> Vec<String> {
+        let mut words = vec![runner.to_string()];
+        if self.manifest["name"].as_str() == Some(runner) {
+            let bin = match &self.manifest["bin"] {
+                Value::String(path) => Some(path.as_str()),
+                bins => bins[runner].as_str(),
+            };
+            words.extend(bin.map(|path| path.trim_start_matches("./").to_string()));
+        }
+        words
+    }
+
+    /// The arguments each command of the scripts passes to `runner`.
+    fn arguments(&self, runner: &str) -> Vec<Vec<String>> {
+        let words = self.runner_words(runner);
+        self.scripts()
+            .iter()
+            .flat_map(|script| {
+                words
+                    .iter()
+                    .flat_map(|word| crate::scripts::arguments(script, word))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// The configuration files the scripts pass to `runner` with `--config`.
+    fn configs_passed_to(&self, runner: &str) -> Vec<String> {
+        let words = self.runner_words(runner);
+        self.scripts()
+            .iter()
+            .flat_map(|script| {
+                words
+                    .iter()
+                    .flat_map(|word| crate::scripts::configs(script, word))
+                    .collect::<Vec<_>>()
+            })
             .collect()
     }
 }

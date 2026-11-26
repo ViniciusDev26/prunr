@@ -80,10 +80,7 @@ impl Plugin for Runners {
     }
 
     fn contribute(&self, context: &Context, contribution: &mut Contribution) {
-        let serde_json::Value::Object(scripts) = &context.manifest["scripts"] else {
-            return;
-        };
-        for script in scripts.values().filter_map(|script| script.as_str()) {
+        {
             for runner in RUNNERS {
                 if runner
                     .package
@@ -91,7 +88,7 @@ impl Plugin for Runners {
                 {
                     continue;
                 }
-                for arguments in crate::scripts::arguments(script, runner.binary) {
+                for arguments in context.arguments(runner.binary) {
                     if runner
                         .flag
                         .is_some_and(|flag| !arguments.iter().any(|a| a == flag))

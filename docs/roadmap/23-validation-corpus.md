@@ -38,6 +38,10 @@ contra o Knip. É o teste de aceite do MVP em escala.
   - um arquivo que o git rastreia é fonte mesmo quando um padrão do `.gitignore` casa com ele
     (`mocha.js`, para um bundle na raiz, também casava com `bin/mocha.js`).
 
+- Os scripts que repassam argumentos a outro (`npm run unit -- --config x`) e a ferramenta chamada
+  pelo próprio `bin` no repositório dela (`node bin/mocha.js`): no repositório do Mocha, os
+  arquivos sem uso caíram de 425 para 19.
+
   Os demais se sustentaram: um `Symbol` local com o mesmo nome do export (undici), o mesmo nome
   vindo de outro módulo (pm2), propriedades do objeto exportado que ninguém lê (nodemon), e
   exports usados só por arquivos que nenhuma entrada alcança.
@@ -65,10 +69,6 @@ Diferenças conferidas em que o achado do prunr se sustenta, ou que é do Knip:
 
 ## Pendências
 
-- O repositório do próprio Mocha roda os testes por `node bin/mocha.js`, com configurações
-  passadas por `npm run -s test-node-run -- --config test/unit/mocharc.cjs`: o código dele já é
-  alcançado pelo `bin`, mas as specs ficam de fora, porque o plugin não segue o `--config` que um
-  script repassa a outro.
 - Testes de tipo que o `tsc` checa pelo `include` do `tsconfig.json` (execa) e exemplos em
   Angular, Svelte e Vue (TanStack Query): dependem do plugin de TypeScript e dos compiladores da
   fase 2.

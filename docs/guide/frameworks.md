@@ -38,6 +38,10 @@ Com `mocha` declarado, o prunr lê a configuração do Mocha (`.mocharc.js`, `.c
   (`ts-node/register`, `should`).
 - **Reporters** que não vêm com o Mocha contam como uso de teste.
 
+Os argumentos que um script repassa a outro (`npm run unit -- --config x`) contam como do script
+que roda o Mocha, e no repositório do próprio Mocha o arquivo do `bin` (`node bin/mocha.js`) é o
+`mocha`. O mesmo vale para os runners abaixo.
+
 ## `node --test`, tap, AVA, lab e borp
 
 Um script que roda `node --test`, `tap`, `ava`, `lab` ou `borp` (os quatro últimos quando o

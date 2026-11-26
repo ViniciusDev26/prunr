@@ -71,13 +71,18 @@ impl Plugin for Mocha {
     fn contribute(&self, context: &Context, contribution: &mut Contribution) {
         let root = context.root;
         let mut configs = vec![context.manifest["mocha"].clone()];
-        configs.extend(
-            CONFIGS
-                .iter()
-                .find(|name| root.join(name).is_file())
-                .map(|name| read(root, name)),
-        );
-        for name in context.configs_passed_to("mocha") {
+        let files = CONFIGS
+            .iter()
+            .find(|name| root.join(name).is_file())
+            .map(|name| name.to_string())
+            .into_iter()
+            .chain(context.configs_passed_to("mocha"));
+        for name in files {
+            let name = name.trim_start_matches("./").to_string();
+            // A configuration in JavaScript is code the tests load.
+            if !name.ends_with(".json") && !name.ends_with(".jsonc") && !name.contains(".y") {
+                contribution.reference(&format!("./{name}"));
+            }
             configs.push(read(root, &name));
         }
         let mut spec: Vec<String> = Vec::new();
@@ -100,13 +105,9 @@ impl Plugin for Mocha {
                 }
             }
         }
-        let serde_json::Value::Object(scripts) = &context.manifest["scripts"] else {
-            contribution.test_arguments(root, &spec, if recursive { &["test/**"] } else { SPEC });
-            return;
-        };
         let mut ran = false;
-        for script in scripts.values().filter_map(Value::as_str) {
-            for arguments in crate::scripts::arguments(script, "mocha") {
+        {
+            for arguments in context.arguments("mocha") {
                 ran = true;
                 for (index, argument) in arguments.iter().enumerate() {
                     let value = arguments.get(index + 1);
@@ -287,6 +288,50 @@ mod tests {
         let found = setup(dir.path(), &declared(&["mocha"]), &json!({}));
         assert_eq!(found.tests, strings(&["test/**/*.test.{js,ts}", "test/**"]));
         assert_eq!(found.files, strings(&["./test/utils/setup.ts"]));
+    }
+
+    #[test]
+    fn a_config_forwarded_to_a_script_that_runs_mocha_through_its_own_bin_is_read() {
+        let dir = project(&[]);
+        std::fs::create_dir_all(dir.path().join("test/unit")).unwrap();
+        std::fs::write(
+            dir.path().join("test/unit/mocharc.cjs"),
+            "module.exports = { spec: ['test/unit/*.spec.cjs'] };",
+        )
+        .unwrap();
+        let manifest = json!({
+            "name": "mocha",
+            "bin": { "mocha": "./bin/mocha.js" },
+            "scripts": {
+                "test-unit": "npm run -s run-tests -- --config test/unit/mocharc.cjs",
+                "run-tests": "cross-env A=1 node bin/mocha.js --forbid-only"
+            }
+        });
+        let found = setup(dir.path(), &declared(&[]), &manifest);
+        assert!(
+            found.tests.contains(&"test/unit/*.spec.cjs".to_string()),
+            "{:?}",
+            found.tests
+        );
+        assert!(
+            found.files.contains(&"./test/unit/mocharc.cjs".to_string()),
+            "{:?}",
+            found.files
+        );
+        let manifest = json!({
+            "name": "mocha",
+            "bin": "bin/mocha.js",
+            "scripts": {
+                "unit": "pnpm run run-tests -- --grep \"slow case\" --config test/unit/mocharc.cjs",
+                "run-tests": "node bin/mocha.js"
+            }
+        });
+        let found = setup(dir.path(), &declared(&[]), &manifest);
+        assert!(
+            found.tests.contains(&"test/unit/*.spec.cjs".to_string()),
+            "{:?}",
+            found.tests
+        );
     }
 
     #[test]
