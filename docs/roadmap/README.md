@@ -27,6 +27,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 25. [SARIF, Code Climate e Markdown](25-report-formats.md)
 - [x] 26. [Modo produção](26-production-mode.md)
 - [x] 27. [Plugin de TypeScript](27-typescript-plugin.md)
+- [x] 28. [Vue, Svelte, Astro e MDX](28-single-file-components.md)
 
 ## Fase 1: credibilidade (concluída)
 
@@ -46,7 +47,7 @@ Vue, Svelte e Angular, os aliases de Jest e Vite) e está no item 23.
 Os pacotes e arquivos que as ferramentas carregam sem import:
 
 - [x] Plugin de TypeScript ([27](27-typescript-plugin.md)).
-- [ ] `.vue`, `.svelte`, `.astro` e `.mdx`: o script de cada um passa pelo parser.
+- [x] `.vue`, `.svelte`, `.astro` e `.mdx`: o script de cada um passa pelo parser ([28](28-single-file-components.md)).
 - [ ] Plugins declarativos para ferramentas (ESLint, Prettier, Babel, Storybook, Cypress, husky,
   lint-staged, commitlint, Tailwind, Prisma, tsup, Rollup, webpack...).
 - [ ] Plugins de frameworks (Nuxt, SvelteKit, Astro, Remix/React Router).
