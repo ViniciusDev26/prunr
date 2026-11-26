@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
-    ArrayExpressionElement, AssignmentExpression, AssignmentTarget, BinaryOperator,
+    Argument, ArrayExpressionElement, AssignmentExpression, AssignmentTarget, BinaryOperator,
     BindingIdentifier, BindingPattern, CallExpression, Class, ClassElement, Declaration,
     ExportAllDeclaration, ExportDeclaration, ExportDefaultDeclaration,
     ExportDefaultDeclarationKind, ExportFromDeclaration, ExportNamedDeclaration, Expression,
@@ -252,7 +252,11 @@ fn analyze_with(source: &str, path: &std::path::Path, markup: bool) -> Result<Fa
             AstKind::CallExpression(call) if analyzer.is_global(&call.callee, "require") => {
                 analyzer.require(node.id(), call);
             }
-            AstKind::CallExpression(call) => analyzer.call_arguments(call),
+            AstKind::CallExpression(call) => {
+                analyzer.call_arguments(call);
+                analyzer.package_call(&call.callee, &call.arguments);
+            }
+            AstKind::NewExpression(new) => analyzer.package_call(&new.callee, &new.arguments),
             AstKind::VariableDeclarator(declarator) => analyzer.declarator(declarator),
             AstKind::AssignmentExpression(assignment) => analyzer.assignment(node.id(), assignment),
             AstKind::StaticMemberExpression(member) => {
@@ -335,6 +339,30 @@ struct Analyzer<'s, 'a> {
     exports_of: BTreeMap<SymbolId, BTreeSet<String>>,
     /// The bindings the file passes to a function.
     passed_symbols: BTreeSet<SymbolId>,
+}
+
+/// The strings in `expression`, with the key of the property each is under (`key` when none).
+fn strings_by_key(expression: &Expression, key: &str, found: &mut Vec<(String, String)>) {
+    match expression {
+        Expression::StringLiteral(literal) => {
+            found.push((key.to_string(), literal.value.display().to_string()))
+        }
+        Expression::ArrayExpression(array) => {
+            for element in array.elements.iter().filter_map(|e| e.as_expression()) {
+                strings_by_key(element, key, found);
+            }
+        }
+        Expression::ObjectExpression(object) => {
+            for property in &object.properties {
+                if let ObjectPropertyKind::ObjectProperty(property) = property
+                    && let Some(name) = property.key.static_name()
+                {
+                    strings_by_key(&property.value, &name.display().to_string(), found);
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Methods the language or the platform calls by name: never reported.
@@ -876,6 +904,59 @@ impl<'a> Analyzer<'_, 'a> {
 
     /// `setup(exports)`, `extend(api)` where `api` is the exported value: the function can read
     /// any export.
+    /// A call of a binding imported from a package: the strings its arguments hold.
+    fn package_call(&mut self, callee: &Expression, arguments: &[Argument]) {
+        let Expression::Identifier(ident) = callee else {
+            return;
+        };
+        let Some(specifier) = self
+            .symbol_of(ident)
+            .and_then(|symbol| self.imported_from(symbol))
+        else {
+            return;
+        };
+        let mut found = Vec::new();
+        for argument in arguments.iter().filter_map(|a| a.as_expression()) {
+            strings_by_key(argument, "", &mut found);
+        }
+        self.facts.call_strings.extend(
+            found
+                .into_iter()
+                .map(|(key, value)| (specifier.clone(), key, value)),
+        );
+    }
+
+    /// The specifier a local binding is imported or required from.
+    fn imported_from(&self, symbol: SymbolId) -> Option<String> {
+        let nodes = self.semantic.nodes();
+        let declaration = self.semantic.symbol_declaration(symbol);
+        let kinds =
+            std::iter::once(declaration.kind()).chain(nodes.ancestor_kinds(declaration.id()));
+        for kind in kinds {
+            match kind {
+                AstKind::ImportDeclaration(import) => {
+                    return Some(import.source.value.display().to_string());
+                }
+                AstKind::VariableDeclarator(declarator) => {
+                    let Some(Expression::CallExpression(call)) = &declarator.init else {
+                        return None;
+                    };
+                    if !self.is_global(&call.callee, "require") {
+                        return None;
+                    }
+                    return match call.arguments.first()?.as_expression()? {
+                        Expression::StringLiteral(literal) => {
+                            Some(literal.value.display().to_string())
+                        }
+                        _ => None,
+                    };
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
     fn call_arguments(&mut self, call: &CallExpression<'a>) {
         for argument in call.arguments.iter().filter_map(|a| a.as_expression()) {
             if self.is_exports_object(argument) {
@@ -2196,7 +2277,8 @@ mod tests {
             "import { C } from 'lib'; import D from 'other'; const { E } = require('cjs');
              new C({ plugins: { modern: ['a', 'b'] }, name: 'c' }, 'd');
              D({ x: [{ y: 'e' }] }); E({ k: 'f' }); local({ k: 'g' }); C.m({ k: 'h' });
-             function local() {}",
+             function local() {} const F = make(); F({ k: 'i' }); const G = require(name);
+             G({ k: 'j' }); const H = 1; H({ k: 'l' }); C({ ...o, [k]: 'm', n: x });",
         );
         let call = |specifier: &str, key: &str, value: &str| {
             (specifier.to_string(), key.to_string(), value.to_string())

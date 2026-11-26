@@ -18,6 +18,7 @@ A numeração é a da priorização original e não muda quando um item termina.
 - [x] 11. [Plugins internos](11-plugins.md)
 - [x] 12. [`prunr fix` apaga a declaração que fica sem uso](12-fix-removes-declarations.md)
 - [x] 14. [Ligar e desligar plugins no `prunr.json`](14-toggle-plugins.md)
+- [x] 15. [Pacotes carregados pelo nome por outra lib](15-packages-loaded-by-name.md)
 - [x] 16. [Vite e React](16-vite-and-react.md)
 - [x] 17. [Os arquivos que os scripts rodam são entradas](17-script-entries.md)
 - [x] 18. [Dependências exigidas como peer](18-peer-dependencies.md)
@@ -85,7 +86,6 @@ A fase 2 ampliou o que o prunr enxerga; a 3 amplia o que ele reporta e quem o ad
 
 - [ ] 10. [Performance](10-performance.md)
 - [ ] 13. [`prunr fix --test-only`](13-fix-test-only.md)
-- [ ] 15. [Pacotes carregados pelo nome por outra lib](15-packages-loaded-by-name.md)
 - [ ] 22. [Um pacote de cada vez num monorepo grande](22-one-package-at-a-time.md)
 
 ## Decidido não fazer
