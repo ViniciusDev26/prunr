@@ -42,7 +42,8 @@ contra o Knip. É o teste de aceite do MVP em escala.
   pelo próprio `bin` no repositório dela (`node bin/mocha.js`): no repositório do Mocha, os
   arquivos sem uso caíram de 425 para 19.
 
-  Os demais se sustentaram: um `Symbol` local com o mesmo nome do export (undici), o mesmo nome
+  Os demais se sustentaram (58 na rodada final, com os 3 do Mocha que o `bin` passou a alcançar:
+  `command` e `describe` de módulos de comando que o `cli.js` não lê mais): um `Symbol` local com o mesmo nome do export (undici), o mesmo nome
   vindo de outro módulo (pm2), propriedades do objeto exportado que ninguém lê (nodemon), e
   exports usados só por arquivos que nenhuma entrada alcança.
 
