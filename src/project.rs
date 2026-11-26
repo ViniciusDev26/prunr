@@ -145,8 +145,8 @@ struct Manifest {
     peer_dependencies: BTreeMap<String, serde_json::Value>,
     optional_dependencies: BTreeMap<String, serde_json::Value>,
     scripts: BTreeMap<String, String>,
-    /// Jest's configuration, when it lives in `package.json`.
-    jest: Option<serde_json::Value>,
+    /// The whole `package.json`, for the plugins: tools keep their configuration in it.
+    raw: serde_json::Value,
 }
 
 impl Manifest {
@@ -195,7 +195,7 @@ impl Manifest {
                 .into_iter()
                 .filter_map(|(name, script)| Some((name, script.as_str()?.to_string())))
                 .collect(),
-            jest: some("jest"),
+            raw: value.clone(),
         }
     }
 
@@ -353,6 +353,11 @@ fn file_id(root: &Path, path: &Path) -> Option<FileId> {
 /// The extensions of the source files prunr reads.
 const EXTENSIONS: &[&str] = &["js", "cjs", "mjs", "jsx", "ts", "cts", "mts", "tsx"];
 
+/// The extensions of the source files prunr reads, for the plugins.
+pub(crate) fn source_extensions() -> &'static [&'static str] {
+    EXTENSIONS
+}
+
 /// A TypeScript declaration file: it only declares types, so it is not part of the graph.
 fn is_declaration(path: &Path) -> bool {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
@@ -497,7 +502,7 @@ impl Project {
                 crate::plugins::contribution(&crate::plugins::Context {
                     root: &root.join(dir),
                     declared: visible,
-                    manifest: &serde_json::json!({ "jest": manifest.jest, "scripts": manifest.scripts }),
+                    manifest: &manifest.raw,
                 })
             })
             .collect();

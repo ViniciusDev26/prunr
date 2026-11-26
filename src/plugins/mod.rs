@@ -12,11 +12,13 @@ use serde_json::Value;
 
 mod drizzle;
 mod jest;
+mod mocha;
 mod nest;
 mod next;
 mod playwright;
 mod postcss;
 mod react;
+mod runners;
 mod static_config;
 mod vite;
 mod vitest;
@@ -87,6 +89,8 @@ pub trait Plugin {
 /// Every plugin, in the order they contribute.
 pub const PLUGINS: &[&dyn Plugin] = &[
     &jest::Jest,
+    &runners::Runners,
+    &mocha::Mocha,
     &vitest::Vitest,
     &playwright::Playwright,
     &drizzle::DrizzleKit,
@@ -184,6 +188,32 @@ impl Contribution {
         }
     }
 
+    /// The test files the arguments of a runner name (a folder, a file, a glob), or `defaults`
+    /// when they name none. An argument names a path only if it exists or has glob characters:
+    /// the values of flags (`--reporter spec`, `--import tsx`) do not.
+    fn test_arguments(&mut self, root: &Path, arguments: &[String], defaults: &[&str]) {
+        let named: Vec<String> = arguments
+            .iter()
+            .filter(|argument| !argument.starts_with('-'))
+            .map(|argument| argument.trim_start_matches("./").trim_end_matches('/'))
+            .filter_map(|path| {
+                if root.join(path).is_dir() {
+                    Some(format!("{path}/**"))
+                } else if root.join(path).is_file() || path.contains(['*', '?', '{']) {
+                    Some(path.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if named.is_empty() {
+            self.tests
+                .extend(defaults.iter().map(|glob| glob.to_string()));
+        } else {
+            self.tests.extend(named);
+        }
+    }
+
     /// The test globs an option lists, or `defaults` when it lists none.
     fn tests(&mut self, patterns: &Value, defaults: &[&str]) {
         let patterns: Vec<String> = names(patterns)
@@ -251,6 +281,8 @@ mod tests {
             names,
             [
                 "jest",
+                "test-runners",
+                "mocha",
                 "vitest",
                 "@playwright/test",
                 "drizzle-kit",
@@ -267,7 +299,7 @@ mod tests {
     fn without_a_known_package_no_plugin_contributes() {
         let dir = project(&[("jest.config.js", "module.exports = {};")]);
         assert_eq!(
-            setup(dir.path(), &declared(&["mocha"]), &json!({})),
+            setup(dir.path(), &declared(&["jasmine"]), &json!({})),
             Contribution::default()
         );
     }
