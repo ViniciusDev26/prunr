@@ -7,6 +7,7 @@ todas as verificações sobre esse mesmo grafo.
 |---|---|
 | `unused-file` | Nenhuma entrada de produção alcança o arquivo. Se só os testes o alcançam, a linha diz `(only tests use it)`: apague-o junto com os testes. |
 | `unused-export` | Nenhum arquivo de produção usa o export, nem o próprio arquivo onde ele está. Métodos estáticos de uma classe exportada contam como exports (`Invoice.total`). Também marca `(only tests use it)`. |
+| `unused-enum-member` | Nenhum arquivo de produção lê o membro de um enum exportado (`Color.Blue`), nem o próprio arquivo. Ler o enum inteiro (`Object.values(Color)`, `Color[chave]`, passá-lo adiante) usa todos os membros. Também marca `(only tests use it)`. |
 | `unused-import` | Um `require` ou `import` declara um binding que o arquivo nunca usa (`const x = require("./x")`, uma propriedade desestruturada, `import { a } from "./x"`). Um `require("./x");` ou `import "./x";` sozinho, por efeito colateral, não conta. |
 | `unused-ignore` | Um comentário `prunr-ignore-next-line` ou `prunr-ignore-file` não impede nenhum achado. Veja [Ignorar no código](ignore.md). |
 | `unused-dependency` | O pacote está em `dependencies` ou `devDependencies`, mas nenhum arquivo o importa, nenhum script do `package.json` o roda e nenhum pacote usado o exige como `peerDependencies`. |

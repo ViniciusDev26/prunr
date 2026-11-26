@@ -15,8 +15,9 @@ use oxc_ast::ast::{
     ExportAllDeclaration, ExportDeclaration, ExportDefaultDeclaration,
     ExportDefaultDeclarationKind, ExportFromDeclaration, ExportNamedDeclaration, Expression,
     IdentifierReference, ImportDeclaration, ImportDeclarationSpecifier, ImportExpression,
-    MethodDefinitionKind, ObjectPropertyKind, StaticMemberExpression, TSImportEqualsDeclaration,
-    TSModuleReference, TemplateLiteral, UnaryOperator, VariableDeclarator,
+    MethodDefinitionKind, ObjectPropertyKind, StaticMemberExpression, TSEnumDeclaration,
+    TSImportEqualsDeclaration, TSModuleReference, TemplateLiteral, UnaryOperator,
+    VariableDeclarator,
 };
 use oxc_ast::{AstKind, Comment};
 use oxc_parser::{ParseOptions, Parser};
@@ -84,6 +85,8 @@ pub struct Facts {
     pub exports: Vec<Export>,
     /// `module.exports` is assigned something other than an object literal.
     pub default_export: bool,
+    /// The exports that are members of an exported enum (`["E", "A"]`).
+    pub enum_members: BTreeSet<Vec<String>>,
     /// The file has ESM `import` or `export` declarations.
     pub esm: bool,
     pub reexports: Vec<Reexport>,
@@ -942,6 +945,8 @@ impl<'a> Analyzer<'_, 'a> {
         let nodes = semantic.nodes();
         let mut members = BTreeSet::new();
         let mut used = false;
+        // Read other than by a member (`Object.values(E)`, `E[key]`): every member is used.
+        let mut whole = false;
         for reference in semantic.symbol_references(symbol) {
             let node = reference.node_id();
             let span = nodes.kind(node).span();
@@ -953,17 +958,52 @@ impl<'a> Analyzer<'_, 'a> {
                 continue;
             }
             used = true;
-            if let AstKind::StaticMemberExpression(member) = nodes.parent_kind(node)
-                && member.object.span() == span
-            {
-                members.insert(member.property.name.to_string());
+            match nodes.parent_kind(node) {
+                AstKind::StaticMemberExpression(member) if member.object.span() == span => {
+                    members.insert(member.property.name.to_string());
+                }
+                _ => whole = true,
             }
         }
         if used {
             self.exports.insert(path.clone(), true);
         }
-        if let AstKind::Class(class) = semantic.symbol_declaration(symbol).kind() {
-            self.export_statics(&path, class, &members);
+        match semantic.symbol_declaration(symbol).kind() {
+            AstKind::Class(class) => self.export_statics(&path, class, &members),
+            AstKind::TSEnumDeclaration(enumeration) => {
+                self.export_enum_members(&path, enumeration, &members, whole)
+            }
+            _ => {}
+        }
+    }
+
+    /// The members of an exported enum; `read` are the ones the file reads itself, and
+    /// `whole` says it reads them all.
+    fn export_enum_members(
+        &mut self,
+        path: &[String],
+        enumeration: &TSEnumDeclaration,
+        read: &BTreeSet<String>,
+        whole: bool,
+    ) {
+        let members = &enumeration.body.members;
+        let items: Vec<Span> = members.iter().map(|member| member.span).collect();
+        for (index, member) in members.iter().enumerate() {
+            let name = member.id.static_name().display().to_string();
+            let mut path = path.to_vec();
+            let used = whole || read.contains(&name);
+            path.push(name);
+            self.sites.entry(path.clone()).or_insert(member.span);
+            self.facts
+                .export_removals
+                .entry(path.clone())
+                .or_insert(Removal::Item {
+                    items: items.clone(),
+                    index,
+                    all: None,
+                });
+            self.facts.enum_members.insert(path.clone());
+            self.exports.insert(path, used);
         }
     }
 
@@ -1846,6 +1886,7 @@ mod tests {
                 export(&["C"], false),
                 export(&["C", "m"], false),
                 export(&["E"], false),
+                export(&["E", "X"], false),
                 export(&["I"], false),
                 export(&["N"], false),
                 export(&["T"], false),
@@ -1944,6 +1985,48 @@ mod tests {
                 reexport("./u", ReexportKind::All, true),
             ]
         );
+    }
+
+    #[test]
+    fn the_members_of_an_exported_enum_are_exports() {
+        let facts = facts_at(
+            "index.ts",
+            "export enum E { A, B = 2, 'C' } export const a = E.A;
+             enum F { X, Y } const all = Object.values(F); export { F, all };",
+        );
+        assert_eq!(
+            facts.exports,
+            [
+                export(&["E"], true),
+                export(&["E", "A"], true),
+                export(&["E", "B"], false),
+                export(&["E", "C"], false),
+                export(&["F"], true),
+                export(&["F", "X"], true),
+                export(&["F", "Y"], true),
+                export(&["a"], false),
+                export(&["all"], false),
+            ]
+        );
+        assert_eq!(
+            facts.enum_members,
+            BTreeSet::from([
+                path(&["E", "A"]),
+                path(&["E", "B"]),
+                path(&["E", "C"]),
+                path(&["F", "X"]),
+                path(&["F", "Y"])
+            ])
+        );
+        assert_eq!(facts.export_lines[&path(&["E", "B"])], 1);
+        assert!(matches!(
+            facts.export_removals[&path(&["E", "B"])],
+            Removal::Item {
+                index: 1,
+                all: None,
+                ..
+            }
+        ));
     }
 
     #[test]

@@ -93,6 +93,18 @@ fn an_unused_static_method_is_an_unused_export() {
 }
 
 #[test]
+fn an_enum_member_nothing_reads_is_unused() {
+    let run = check("enum-members");
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stdout,
+        "unused-enum-member    enums.ts: Color.Blue\n\
+         \n\
+         errors: 1, warnings: 0\n"
+    );
+}
+
+#[test]
 fn a_require_that_cannot_be_followed_is_a_warning() {
     let run = check("unresolved-require");
     assert_eq!(run.code, 0, "warnings do not fail the check");

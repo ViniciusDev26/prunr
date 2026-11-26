@@ -109,6 +109,7 @@ rodar.
 |---|---|
 | `unused-file` | Nenhuma entrada de produção alcança o arquivo. |
 | `unused-export` | Nenhum código de produção usa o export. |
+| `unused-enum-member` | Nenhum código de produção lê o membro de um enum exportado. |
 | `unused-import` | Um `require` ou `import` traz um nome que o arquivo nunca usa. |
 | `unused-dependency` | Nada importa o pacote e nenhum script o roda. |
 | `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o usam. |
