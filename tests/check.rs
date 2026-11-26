@@ -111,9 +111,16 @@ fn a_class_method_no_file_calls_is_unused() {
     assert_eq!(
         run.stdout,
         "unused-class-member   cart.ts: Cart.legacyTotal\n\
+         unused-ignore         cart.ts:16: ignores nothing\n\
          \n\
-         errors: 1, warnings: 0\n"
+         errors: 2, warnings: 0\n"
     );
+}
+
+#[test]
+fn the_class_methods_of_a_published_package_are_its_interface() {
+    let run = check("class-members-published");
+    assert_eq!(run.stdout, "No findings.\n");
 }
 
 #[test]

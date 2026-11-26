@@ -48,6 +48,11 @@ pub fn plan(project: &Project, findings: &[Finding]) -> Plan {
                 file,
                 symbol,
                 test_only: false,
+            }
+            | Finding::UnusedClassMember {
+                file,
+                symbol,
+                test_only: false,
             } => {
                 let path: Vec<String> = symbol.split('.').map(str::to_string).collect();
                 if let Some(removal) = project.files[file].facts.export_removals.get(&path) {

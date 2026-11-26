@@ -13,9 +13,13 @@ export class Cart {
     return this.items.reduce((a, b) => a + b, 0);
   }
 
+  // prunr-ignore-next-line
   clear() {
     this.items = [];
   }
+
+  // prunr-ignore-next-line
+  reset() {}
 
   legacyTotal() {
     return this.items.length;

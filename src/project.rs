@@ -42,6 +42,8 @@ pub struct Workspace {
     pub dir: String,
     /// Its `name`: importing itself by it needs no declaration.
     pub name: Option<String>,
+    /// Not `"private": true`: what it exposes is used by whoever installs it.
+    pub published: bool,
     /// Packages in `dependencies`: they must be used, and by production code.
     pub dependencies: BTreeSet<String>,
     /// Packages in `devDependencies`: they must be used.
@@ -905,6 +907,7 @@ impl Project {
             workspaces.push(Workspace {
                 dir: dir.clone(),
                 name: manifest.name.clone(),
+                published: !manifest.private,
                 dependencies: manifest.dependencies.keys().cloned().collect(),
                 dev_dependencies: manifest.dev_dependencies.keys().cloned().collect(),
                 declared_packages,

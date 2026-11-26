@@ -15,9 +15,9 @@ use oxc_ast::ast::{
     ExportAllDeclaration, ExportDeclaration, ExportDefaultDeclaration,
     ExportDefaultDeclarationKind, ExportFromDeclaration, ExportNamedDeclaration, Expression,
     IdentifierReference, ImportDeclaration, ImportDeclarationSpecifier, ImportExpression,
-    MethodDefinitionKind, ObjectPropertyKind, StaticMemberExpression, TSEnumDeclaration,
-    TSImportEqualsDeclaration, TSModuleReference, TemplateLiteral, UnaryOperator,
-    VariableDeclarator,
+    MethodDefinitionKind, ObjectPropertyKind, PropertyKey, StaticMemberExpression, TSAccessibility,
+    TSEnumDeclaration, TSImportEqualsDeclaration, TSModuleReference, TemplateLiteral,
+    UnaryOperator, VariableDeclarator,
 };
 use oxc_ast::{AstKind, Comment};
 use oxc_parser::{ParseOptions, Parser};
@@ -244,7 +244,22 @@ fn analyze_with(source: &str, path: &std::path::Path, markup: bool) -> Result<Fa
             AstKind::CallExpression(call) => analyzer.call_arguments(call),
             AstKind::VariableDeclarator(declarator) => analyzer.declarator(declarator),
             AstKind::AssignmentExpression(assignment) => analyzer.assignment(node.id(), assignment),
-            AstKind::StaticMemberExpression(member) => analyzer.read(node.id(), member),
+            AstKind::StaticMemberExpression(member) => {
+                analyzer.property(&member.property.name);
+                analyzer.read(node.id(), member)
+            }
+            AstKind::ComputedMemberExpression(member) => {
+                if let Expression::StringLiteral(name) = &member.expression {
+                    analyzer.property(&name.value.display().to_string());
+                }
+            }
+            AstKind::ObjectPattern(pattern) => {
+                for property in &pattern.properties {
+                    if let Some(name) = property.key.static_name() {
+                        analyzer.property(&name.display().to_string());
+                    }
+                }
+            }
             AstKind::ImportDeclaration(import) => analyzer.import(import),
             AstKind::ImportExpression(import) => analyzer.dynamic_import(import),
             AstKind::TSImportEqualsDeclaration(import) => analyzer.import_equals(import),
@@ -300,6 +315,17 @@ struct Analyzer<'s, 'a> {
     /// The bindings the file passes to a function.
     passed_symbols: BTreeSet<SymbolId>,
 }
+
+/// Methods the language or the platform calls by name: never reported.
+const CONVENTIONAL_METHODS: &[&str] = &[
+    "toString",
+    "toJSON",
+    "valueOf",
+    "toLocaleString",
+    "then",
+    "inspect",
+    "handleEvent",
+];
 
 impl<'a> Analyzer<'_, 'a> {
     fn finish(mut self, comments: &[Comment]) -> Facts {
@@ -1032,6 +1058,42 @@ impl<'a> Analyzer<'_, 'a> {
                 self.exports.insert(member, used);
             }
         }
+        self.export_methods(path, class);
+    }
+
+    /// The public methods of an exported class that only its own code defines: one that
+    /// extends or implements something may be called through what it overrides, and a
+    /// decorated one by the framework that reads the decorator.
+    fn export_methods(&mut self, path: &[String], class: &Class) {
+        if class.heritage.is_some() || !class.implements.is_empty() {
+            return;
+        }
+        for element in &class.body.body {
+            if let ClassElement::MethodDefinition(method) = element
+                && !method.r#static
+                && method.kind != MethodDefinitionKind::Constructor
+                && method.decorators.is_empty()
+                && method
+                    .accessibility
+                    .is_none_or(|a| a == TSAccessibility::Public)
+                && let PropertyKey::StaticIdentifier(name) = &method.key
+                && !CONVENTIONAL_METHODS.contains(&name.name.as_str())
+            {
+                let mut member = path.to_vec();
+                member.push(name.name.to_string());
+                self.sites.entry(member.clone()).or_insert(method.span);
+                self.facts
+                    .export_removals
+                    .entry(member.clone())
+                    .or_insert(Removal::Statement(method.span));
+                self.facts.class_members.insert(member);
+            }
+        }
+    }
+
+    /// A property the file reads by name.
+    fn property(&mut self, name: &str) {
+        self.facts.properties.insert(name.to_string());
     }
 
     // ---- ESM exports ----

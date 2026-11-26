@@ -36,6 +36,14 @@ pub enum Finding {
         #[serde(rename = "testOnly", default, skip_serializing_if = "is_false")]
         test_only: bool,
     },
+    /// A public method of an exported class that no production file calls: no production file
+    /// reads a property with its name, on any object. With `test_only`, tests do.
+    UnusedClassMember {
+        file: FileId,
+        symbol: String,
+        #[serde(rename = "testOnly", default, skip_serializing_if = "is_false")]
+        test_only: bool,
+    },
     /// A binding a require declares that its file never references. The require still runs the
     /// module, so the edge stays until the import is deleted.
     UnusedImport {
@@ -137,6 +145,7 @@ pub fn check(
         Finding::UnusedFile { file, .. }
         | Finding::UnusedExport { file, .. }
         | Finding::UnusedEnumMember { file, .. }
+        | Finding::UnusedClassMember { file, .. }
         | Finding::UnusedImport { file, .. }
         | Finding::UnusedIgnore { file, .. }
         | Finding::MissingDependency { file, .. }
@@ -178,6 +187,7 @@ pub fn in_production(
         Finding::UnusedFile { .. }
         | Finding::UnusedExport { .. }
         | Finding::UnusedEnumMember { .. }
+        | Finding::UnusedClassMember { .. }
         | Finding::MisplacedDependency { .. } => true,
         Finding::UnusedImport { file, .. }
         | Finding::UnusedIgnore { file, .. }
@@ -308,6 +318,13 @@ fn unused_exports(
     let live_uses = uses(project, live, production);
     let none = BTreeSet::new();
     let test_uses = uses(project, &tested.difference(live).cloned().collect(), &none);
+    let properties = |files: &BTreeSet<FileId>| -> BTreeSet<&String> {
+        files
+            .iter()
+            .flat_map(|id| &project.files[id].facts.properties)
+            .collect()
+    };
+    let (live_properties, test_properties) = (properties(live), properties(tested));
     for id in live {
         let file = &project.files[id];
         let facts = &file.facts;
@@ -325,10 +342,12 @@ fn unused_exports(
         // An entry's exports are its interface: they are never reported, so nothing is ignored.
         let entry = production.contains(id);
         let mut file_ignored = false;
+        let mut alive_exports = BTreeSet::new();
         for export in &facts.exports {
             let alive = entry || export.used_internally || used_by(&live_uses, &export.path);
             let ignore = facts.ignores.get(&export.path);
             if alive {
+                alive_exports.insert(&export.path);
                 if let Some(Ignore::NextLine(line)) = ignore {
                     findings.push(unused_ignore(*line));
                 }
@@ -348,6 +367,30 @@ fn unused_exports(
                         symbol,
                         test_only,
                     },
+                });
+            }
+        }
+        // The methods of a used class (an unused class is already reported whole), in a package
+        // nobody installs: in a published one, a class the code reaches may be handed to
+        // whoever installs it, and its methods are an interface like an entry's exports.
+        let published = project.workspaces[project.workspace_of(id)].published;
+        for member in &facts.class_members {
+            let (name, class) = member.split_last().expect("a member has a class");
+            if entry || published || !alive_exports.contains(&class.to_vec()) {
+                continue;
+            }
+            let ignore = facts.ignores.get(member);
+            if live_properties.contains(name) {
+                if let Some(Ignore::NextLine(line)) = ignore {
+                    findings.push(unused_ignore(*line));
+                }
+            } else if facts.ignore_file.is_some() {
+                file_ignored = true;
+            } else if ignore.is_none() {
+                findings.push(Finding::UnusedClassMember {
+                    file: id.clone(),
+                    symbol: member.join("."),
+                    test_only: test_properties.contains(name),
                 });
             }
         }
