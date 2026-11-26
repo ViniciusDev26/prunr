@@ -6,38 +6,43 @@
 </p>
 
 <p align="center">
-  Detector de código morto para Node.js, com CommonJS como cidadão de primeira classe.
+  Dead code finder for Node.js, with CommonJS as a first-class citizen.
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@prunr/prunr"><img src="https://img.shields.io/npm/v/@prunr/prunr" alt="npm"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/npm/l/@prunr/prunr" alt="licença MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/@prunr/prunr" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ViniciusDev26/prunr/blob/main/README.md"><img src="https://img.shields.io/badge/lang-English-blue" alt="Read in English"></a>
+  <a href="https://github.com/ViniciusDev26/prunr/blob/main/README.pt-BR.md"><img src="https://img.shields.io/badge/lang-Portugu%C3%AAs%20(BR)-green" alt="Leia em português"></a>
 </p>
 
 ---
 
-O prunr monta um grafo de módulos a partir dos pontos de entrada do projeto e encontra o que
-nada usa: arquivos, exports, imports e dependências. No mesmo grafo, ele aponta dependências não
-declaradas, imports circulares e `require` que não dá para seguir.
+prunr builds a module graph from your project's entry points and finds what nothing uses: files,
+exports, imports and dependencies. From the same graph, it points out undeclared dependencies,
+circular imports and `require` calls it cannot follow.
 
-É um binário em Rust, um arquivo de configuração e um comando, no lugar da combinação de
-depcheck + madge + scripts próprios.
+It is one Rust binary, one config file and one command, in place of depcheck + madge + custom
+scripts.
 
-- **CommonJS de verdade:** `module.exports`, `exports.x`, desestruturação de `require`, métodos
-  estáticos e `require` com caminho montado (`` require(`./handlers/${nome}`) ``).
-- **ESM e TypeScript no mesmo grafo**, com `paths` do `tsconfig.json` e interop CJS/ESM como no
-  Node.
-- **Entende o seu stack** sem configuração: Jest, Vitest, Playwright, Vite, React, Next.js,
-  NestJS, Drizzle Kit, PostCSS e monorepos (npm, yarn, pnpm, bun, lerna, rush, nx, turbo).
-- **Conserta sozinho:** `prunr fix` apaga o que está morto e limpa o `package.json`.
-- **Feito para CI:** anotações no diff do PR, só os achados novos com `--since`, e um baseline
-  para adotar em código legado.
+- **Real CommonJS:** `module.exports`, `exports.x`, destructured `require`, static methods and
+  `require` with a built path (`` require(`./handlers/${name}`) ``).
+- **ESM and TypeScript in the same graph**, with `tsconfig.json` `paths` and CJS/ESM interop the
+  way Node does it.
+- **Knows your stack** with no setup: Jest, Vitest, Playwright, Vite, React, Next.js, NestJS,
+  Drizzle Kit, PostCSS and monorepos (npm, yarn, pnpm, bun, lerna, rush, nx, turbo).
+- **Fixes it for you:** `prunr fix` deletes what is dead and cleans up `package.json`.
+- **Built for CI:** annotations on the PR diff, only new findings with `--since`, and a baseline
+  for adopting it on legacy code.
 
-## Início rápido
+## Quick start
 
 ```sh
-npm i -D @prunr/prunr   # ou pnpm add -D / yarn add -D / bun add -d
-npx prunr init          # cria um prunr.json a partir do package.json
+npm i -D @prunr/prunr   # or pnpm add -D / yarn add -D / bun add -d
+npx prunr init          # creates a prunr.json from package.json
 npx prunr check
 ```
 
@@ -55,16 +60,16 @@ unresolved-require    src/index.js: require(process.env.PLUGIN) (warning)
 errors: 7, warnings: 1
 ```
 
-(É a saída do projeto em [`tests/fixtures/example/`](tests/fixtures/example/).)
+(That is the output for the project in [`tests/fixtures/example/`](tests/fixtures/example/).)
 
-O pacote baixa só o binário da sua plataforma (Linux x64/arm64, macOS x64/arm64, Windows x64),
-sem script de instalação. Os binários também estão em cada
-[release](https://github.com/ViniciusDev26/prunr/releases), com `.sha256`.
+The package downloads only the binary for your platform (Linux x64/arm64, macOS x64/arm64,
+Windows x64), with no install script. The binaries are also attached to every
+[release](https://github.com/ViniciusDev26/prunr/releases), each with a `.sha256`.
 
-## Configuração
+## Configuration
 
-O `prunr.json` diz por onde o programa começa. Tudo o que essas entradas alcançam está vivo; o
-que só os testes alcançam está morto em produção.
+`prunr.json` says where the program starts. Everything those entries reach is alive; what only
+the tests reach is dead in production.
 
 ```json
 {
@@ -76,42 +81,41 @@ que só os testes alcançam está morto em produção.
 }
 ```
 
-Os arquivos que os `scripts` do `package.json` rodam (`node src/server.js`, `tsx watch
-src/index.ts`) já são entradas, e com Jest, Vitest, Vite, Next.js ou NestJS boa parte do resto o
-prunr acha sozinho. Todas as opções estão
-em [Configuração](docs/guide/configuration.md).
+The files the `scripts` of `package.json` run (`node src/server.js`, `tsx watch src/index.ts`)
+are entries already, and with Jest, Vitest, Vite, Next.js or NestJS prunr finds most of the rest
+on its own. Every option is in [Configuration](docs/guide/configuration.md).
 
-## Comandos
+## Commands
 
-| Comando | O que faz |
+| Command | What it does |
 |---|---|
-| `prunr check` | Lista os achados. `--json` para máquinas, `--github` para anotações no PR, `--since <ref>` para só o que é novo. |
-| `prunr fix` | Remove o código morto e as dependências sem uso. `--dry-run` mostra sem mudar nada. |
-| `prunr init` | Cria um `prunr.json` a partir do `package.json`. |
-| `prunr baseline` | Grava os achados atuais, para adotar o prunr sem consertar tudo de uma vez. |
-| `prunr schema` | Imprime o JSON Schema do `prunr.json`. |
+| `prunr check` | Lists the findings. `--json` for machines, `--github` for PR annotations, `--since <ref>` for only what is new. |
+| `prunr fix` | Removes dead code and unused dependencies. `--dry-run` shows the changes without making them. |
+| `prunr init` | Creates a `prunr.json` from `package.json`. |
+| `prunr baseline` | Records the current findings, to adopt prunr without fixing everything at once. |
+| `prunr schema` | Prints the JSON Schema of `prunr.json`. |
 
-O `check` sai com `0` sem achados (ou só com avisos), `1` com achados e `2` quando não consegue
-rodar.
+`check` exits with `0` when there are no findings (or only warnings), `1` when there are
+findings, and `2` when it cannot run.
 
-## O que ele encontra
+## What it finds
 
-| Achado | Quando |
+| Finding | When |
 |---|---|
-| `unused-file` | Nenhuma entrada de produção alcança o arquivo. |
-| `unused-export` | Nenhum código de produção usa o export. |
-| `unused-import` | Um `require` ou `import` traz um nome que o arquivo nunca usa. |
-| `unused-dependency` | Nada importa o pacote e nenhum script o roda. |
-| `misplaced-dependency` | O pacote está em `dependencies`, mas só os testes o usam. |
-| `missing-dependency` | O código importa um pacote que o `package.json` não declara. |
-| `circular-import` | Há um ciclo de imports. |
-| `unused-ignore` | Um comentário `prunr-ignore` que não ignora mais nada. |
-| `unresolved-require` | Aviso: um `require` que não dá para seguir. |
+| `unused-file` | No production entry reaches the file. |
+| `unused-export` | No production code uses the export. |
+| `unused-import` | A `require` or `import` brings in a name the file never uses. |
+| `unused-dependency` | Nothing imports the package and no script runs it. |
+| `misplaced-dependency` | The package is in `dependencies`, but only the tests use it. |
+| `missing-dependency` | The code imports a package `package.json` does not declare. |
+| `circular-import` | There is an import cycle. |
+| `unused-ignore` | A `prunr-ignore` comment that no longer ignores anything. |
+| `unresolved-require` | Warning: a `require` prunr cannot follow. |
 
-Quando o único uso vem dos testes, o achado diz `(only tests use it)`. Os detalhes de cada um
-estão em [Achados](docs/guide/checks.md).
+When the only use comes from the tests, the finding says `(only tests use it)`. The details of
+each are in [Findings](docs/guide/checks.md).
 
-## No CI
+## In CI
 
 ```yaml
 - uses: actions/checkout@v4
@@ -121,44 +125,47 @@ estão em [Achados](docs/guide/checks.md).
 - run: npx prunr check --github --since origin/${{ github.base_ref }}
 ```
 
-Cada achado novo vira uma anotação na linha certa do diff. Para um código legado, comece com
-`prunr baseline`: o que já existe não falha, e o que surgir depois falha. Veja
-[CI e código legado](docs/guide/ci.md).
+Each new finding becomes an annotation on the right line of the diff. For legacy code, start
+with `prunr baseline`: what is already there does not fail, and anything that shows up later
+does. See [CI and legacy code](docs/guide/ci.md).
 
-## Guia
+## Guide
 
-- [Configuração](docs/guide/configuration.md): o `prunr.json` e os `scripts` do `package.json`.
-- [Achados](docs/guide/checks.md): o que cada um significa, ESM e TypeScript, `require` dinâmico.
-- [`prunr fix`](docs/guide/fix.md): o que ele remove e o que deixa para você.
+The guide is in Portuguese for now.
+
+- [Configuration](docs/guide/configuration.md): `prunr.json` and the `scripts` of `package.json`.
+- [Findings](docs/guide/checks.md): what each one means, ESM and TypeScript, dynamic `require`.
+- [`prunr fix`](docs/guide/fix.md): what it removes and what it leaves to you.
 - [Frameworks](docs/guide/frameworks.md): Jest, Vitest, Playwright, Vite, React, Next.js,
-  NestJS, Drizzle Kit e PostCSS.
-- [Monorepos](docs/guide/monorepos.md): como os pacotes são encontrados e checados.
-- [Ignorar no código](docs/guide/ignore.md): exports públicos de propósito.
-- [CI e código legado](docs/guide/ci.md): anotações, `--since` e baseline.
+  NestJS, Drizzle Kit and PostCSS.
+- [Monorepos](docs/guide/monorepos.md): how packages are found and checked.
+- [Ignoring in code](docs/guide/ignore.md): exports that are public on purpose.
+- [CI and legacy code](docs/guide/ci.md): annotations, `--since` and the baseline.
 
-## O que fica de fora
+## What it leaves out
 
-- **Variáveis e membros privados sem uso dentro de um arquivo** são trabalho de linter. Ligue
-  `noUnusedVariables` e `noUnusedPrivateClassMembers` no [Biome](https://biomejs.dev/): junto com
-  o `unused-import` do prunr, elas cobrem o que o `noUnusedLocals` do `tsc` pega.
-- **Formatação, estilo e tipos:** use Biome e `tsc --noEmit`.
-- **Dependências citadas só na configuração de outra ferramenta** (plugins do ESLint, presets do
-  Babel) aparecem como `unused-dependency`. Liste-as em `dependencies.ignore`.
+- **Unused variables and private members inside a file** are a linter's job. Turn on
+  `noUnusedVariables` and `noUnusedPrivateClassMembers` in [Biome](https://biomejs.dev/):
+  together with prunr's `unused-import`, they cover what `tsc`'s `noUnusedLocals` catches.
+- **Formatting, style and types:** use Biome and `tsc --noEmit`.
+- **Dependencies named only in another tool's config** (ESLint plugins, Babel presets) show up
+  as `unused-dependency`. List them in `dependencies.ignore`.
 
-O que vem depois está no [roadmap](docs/roadmap/).
+What comes next is in the [roadmap](docs/roadmap/).
 
-## Por que o prunr, e não o Knip ou outras ferramentas
+## Why prunr, and not Knip or other tools
 
-O [Knip](https://knip.dev) é a referência para ESM e TypeScript, e ferramentas como o
-`ts-prune` e o `unimported` foram arquivadas recomendando ele. O prunr existe para o caso que o
-Knip trata como secundário: **código Node.js em CommonJS**, sozinho ou misturado com ESM.
+[Knip](https://knip.dev) is the reference for ESM and TypeScript, and tools like `ts-prune` and
+`unimported` were archived pointing to it. prunr exists for the case Knip treats as secondary:
+**Node.js code in CommonJS**, alone or mixed with ESM.
 
-**CommonJS escrito como ele é escrito de verdade.** O Knip pede que o código siga uma convenção
-para entender os exports: pelo [guia de CommonJS dele](https://knip.dev/guides/working-with-commonjs),
-só `module.exports.x =` e um objeto com chaves curtas (`{ a, b }`) são exports nomeados;
-qualquer outro objeto em `module.exports` vira um único export default, e importar o módulo
-inteiro faz todos os exports nomeados aparecerem como sem uso. O prunr lê o código existente,
-sem pedir que ele mude:
+**CommonJS as it is actually written.** Knip asks code to follow a convention so it can
+understand the exports: according to its
+[CommonJS guide](https://knip.dev/guides/working-with-commonjs), only `module.exports.x =` and an
+object with shorthand keys only (`{ a, b }`) are named exports; any other object in
+`module.exports` becomes a single default export, and importing the whole module makes every
+named export show up as unused. prunr reads the code you already have, without asking you to
+change it:
 
 ```js
 // invoices.js
@@ -174,40 +181,39 @@ invoices.format(invoices.total());
 const handler = require(`./handlers/${name}`);
 ```
 
-O prunr reporta só `cancel`: lê cada chave do objeto, segue o uso por `invoices.x`, e o
-`require` montado em tempo de execução mantém vivos os arquivos de `handlers/`. Na dúvida (o
-módulo passado adiante, uma chave computada), ele considera tudo usado: é melhor deixar passar
-um export morto do que mandar apagar um vivo.
+prunr reports only `cancel`: it reads each key of the object, follows the use through
+`invoices.x`, and the `require` built at runtime keeps the files in `handlers/` alive. When in
+doubt (the module passed along, a computed key), it treats everything as used: it is better to
+let a dead export through than to tell you to delete a live one.
 
-Não é um caso teórico. O prunr nasceu num projeto Node.js de produção, todo em CommonJS, que
-adotou o Knip, ajustou os entry points, apagou o que ele apontou, e acabou removendo a ferramenta
-por excesso de falsos positivos. No mesmo projeto, o prunr apontou 26 problemas reais (arquivos e
-exports mortos, dependências sem uso e um encerramento de fila que nunca era chamado), todos
-resolvidos, e hoje roda no CI sem achados pendentes.
+This is not a hypothetical case. prunr was born in a production Node.js project, all in
+CommonJS, that adopted Knip, fixed its entry points, deleted what it pointed out, and ended up
+removing it because of too many false positives. In the same project, prunr pointed out 26 real
+problems (dead files and exports, unused dependencies and a queue shutdown that was never
+called), all of them fixed, and it now runs in CI with no pending findings.
 
-**Uma ferramenta no lugar de várias.** Arquivos, exports, imports e dependências sem uso,
-dependências não declaradas ou no lugar errado e imports circulares saem do mesmo grafo, num
-comando. É o trabalho que costuma ficar dividido entre `depcheck`, `madge`, `unimported` e
-scripts próprios.
+**One tool in place of several.** Unused files, exports, imports and dependencies, undeclared
+or misplaced dependencies and circular imports all come out of the same graph, in one command.
+That is the work usually split across `depcheck`, `madge`, `unimported` and custom scripts.
 
-**Rápido e sem executar nada.** É um binário nativo, em Rust, que lê e resolve os arquivos em
-paralelo; o pacote npm só baixa o binário da sua plataforma, sem script de instalação. Num
-monorepo de 13 mil arquivos, o check leva 0,6 s. As configurações das ferramentas (Jest,
-Vitest, Playwright, Vite...) são lidas como texto, nunca executadas.
+**Fast, and it runs nothing.** It is a native binary, written in Rust, that reads and resolves
+files in parallel; the npm package only downloads the binary for your platform, with no install
+script. On a monorepo of 13,000 files, the check takes 0.6 s. Tool configs (Jest, Vitest,
+Playwright, Vite...) are read as text, never executed.
 
-**Feito para adotar num código que já existe.** Baseline para não ter que resolver tudo de uma
-vez, `--since` e anotações no diff para barrar só o que é novo no PR, e um `prunr fix` que apaga
-o código morto e limpa o `package.json`.
+**Built to adopt on existing code.** A baseline so you do not have to fix everything at once,
+`--since` and diff annotations to block only what is new in the PR, and a `prunr fix` that
+deletes dead code and cleans up `package.json`.
 
-**Quando o Knip é a melhor escolha.** Num projeto só em ESM e TypeScript, o Knip tem bem mais
-plugins (o prunr conhece Jest, Vitest, Playwright, Vite, React, Next.js, NestJS, Drizzle Kit e
-PostCSS) e mais tempo de estrada. O prunr vale a pena quando há CommonJS no meio, ou quando a
-velocidade e uma ferramenta só pesam mais.
+**When Knip is the better choice.** On a project that is only ESM and TypeScript, Knip has many
+more plugins (prunr knows Jest, Vitest, Playwright, Vite, React, Next.js, NestJS, Drizzle Kit
+and PostCSS) and more mileage. prunr pays off when there is CommonJS in the mix, or when speed
+and a single tool matter more.
 
-## Contribuindo
+## Contributing
 
-O prunr é feito com TDD e 100% de cobertura de testes. Veja [CONTRIBUTING.md](CONTRIBUTING.md).
+prunr is built with TDD and 100% test coverage. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Licença
+## License
 
 [MIT](LICENSE)
