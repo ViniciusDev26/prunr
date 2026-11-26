@@ -59,11 +59,16 @@ pub enum Finding {
     CircularImport { cycle: Vec<FileId> },
     /// A require the graph cannot follow. A warning: it does not fail the check.
     UnresolvedRequire { file: FileId, specifier: String },
+    /// A file the graph reaches but that does not parse: what it uses is unknown. A warning.
+    UnparsedFile { file: FileId, message: String },
 }
 
 impl Finding {
     pub fn is_warning(&self) -> bool {
-        matches!(self, Self::UnresolvedRequire { .. })
+        matches!(
+            self,
+            Self::UnresolvedRequire { .. } | Self::UnparsedFile { .. }
+        )
     }
 }
 
@@ -104,6 +109,12 @@ pub fn check(
                     specifier: require.specifier.clone(),
                 });
             }
+        }
+        if let Some(message) = &project.files[id].parse_error {
+            findings.push(Finding::UnparsedFile {
+                file: id.clone(),
+                message: message.clone(),
+            });
         }
         for specifier in &project.files[id].unresolved {
             findings.push(Finding::UnresolvedRequire {

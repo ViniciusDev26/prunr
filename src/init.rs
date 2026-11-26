@@ -243,10 +243,26 @@ mod tests {
     }
 
     #[test]
-    fn a_file_that_does_not_parse_is_an_error() {
-        let dir = project(&[("index.js", "const = ;")]);
+    fn an_invalid_package_json_of_a_workspace_is_an_error() {
+        let dir = project(&[
+            ("package.json", r#"{ "workspaces": ["packages/*"] }"#),
+            ("packages/a/package.json", "{ nope"),
+        ]);
         let error = init(dir.path()).unwrap_err();
-        assert!(error.starts_with("index.js: "), "{error}");
+        assert!(error.starts_with("invalid package.json: "), "{error}");
+    }
+
+    #[test]
+    fn a_file_that_does_not_parse_does_not_stop_it() {
+        let dir = project(&[
+            ("index.js", "const = ;"),
+            ("fixtures/broken.js", "const = ;"),
+        ]);
+        init(dir.path()).unwrap();
+        assert_eq!(
+            written(&dir)["entries"]["production"],
+            serde_json::json!(["index.js"])
+        );
     }
 
     #[cfg(unix)]

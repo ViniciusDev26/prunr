@@ -112,6 +112,7 @@ rodar.
 | `circular-import` | Há um ciclo de imports. |
 | `unused-ignore` | Um comentário `prunr-ignore` que não ignora mais nada. |
 | `unresolved-require` | Aviso: um `require` que não dá para seguir. |
+| `unparsed-file` | Aviso: um arquivo que o grafo alcança não faz parse, então o que ele usa é desconhecido. |
 
 Quando o único uso vem dos testes, o achado diz `(only tests use it)`. Os detalhes de cada um
 estão em [Achados](docs/guide/checks.md).
