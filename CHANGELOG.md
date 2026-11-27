@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/sugomi-dev/prunr/compare/v0.6.0...v0.6.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* rename the action so the marketplace accepts it ([#99](https://github.com/sugomi-dev/prunr/issues/99)) ([926be9b](https://github.com/sugomi-dev/prunr/commit/926be9b5a528735c2de861a63b1a21ee56527864))
+
 ## [0.6.0](https://github.com/ViniciusDev26/prunr/compare/v0.5.0...v0.6.0) (2026-11-26)
 
 
