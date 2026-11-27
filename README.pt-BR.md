@@ -15,8 +15,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ViniciusDev26/prunr/blob/main/README.md"><img src="https://img.shields.io/badge/lang-English-blue" alt="Read in English"></a>
-  <a href="https://github.com/ViniciusDev26/prunr/blob/main/README.pt-BR.md"><img src="https://img.shields.io/badge/lang-Portugu%C3%AAs%20(BR)-green" alt="Leia em português"></a>
+  <a href="https://github.com/sugomi-dev/prunr/blob/main/README.md"><img src="https://img.shields.io/badge/lang-English-blue" alt="Read in English"></a>
+  <a href="https://github.com/sugomi-dev/prunr/blob/main/README.pt-BR.md"><img src="https://img.shields.io/badge/lang-Portugu%C3%AAs%20(BR)-green" alt="Leia em português"></a>
 </p>
 
 ---
@@ -67,7 +67,7 @@ errors: 7, warnings: 1
 
 O pacote baixa só o binário da sua plataforma (Linux x64/arm64, macOS x64/arm64, Windows x64),
 sem script de instalação. Os binários também estão em cada
-[release](https://github.com/ViniciusDev26/prunr/releases), com `.sha256`.
+[release](https://github.com/sugomi-dev/prunr/releases), com `.sha256`.
 
 ## Configuração
 

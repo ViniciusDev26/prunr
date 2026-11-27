@@ -175,7 +175,7 @@ pub fn sarif(findings: &[Finding], stale: &[Finding], project: &Project) -> Stri
             "tool": { "driver": {
                 "name": "prunr",
                 "version": env!("CARGO_PKG_VERSION"),
-                "informationUri": "https://github.com/ViniciusDev26/prunr",
+                "informationUri": "https://github.com/sugomi-dev/prunr",
                 "rules": rules,
             } },
             "results": results,

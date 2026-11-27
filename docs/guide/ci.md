@@ -26,7 +26,7 @@ A Action do prunr baixa a versão pedida do npm e roda o check, sem passo de ins
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- uses: ViniciusDev26/prunr@v0
+- uses: sugomi-dev/prunr@v0
   with:
     since: origin/${{ github.base_ref }}
 ```
