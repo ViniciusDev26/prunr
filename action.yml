@@ -1,4 +1,4 @@
-name: prunr
+name: prunr check
 description: Dead code detector for Node.js, with CommonJS as a first-class citizen
 author: sugomi-dev
 branding:
