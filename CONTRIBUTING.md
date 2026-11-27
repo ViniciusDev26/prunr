@@ -54,4 +54,4 @@ novo (por exemplo, o de uma plataforma nova) é criado uma vez, à mão, por um 
    minutos.
 3. Opcional: `npm deprecate <pacote>@0.0.0 "placeholder, install a real release"`.
 4. Ligar o pacote ao workflow de release:
-   `npm trust github <pacote> --file release.yml --repo ViniciusDev26/prunr --allow-publish --yes`.
+   `npm trust github <pacote> --file release.yml --repo sugomi-dev/prunr --allow-publish --yes`.

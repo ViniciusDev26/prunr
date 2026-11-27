@@ -15,8 +15,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ViniciusDev26/prunr/blob/main/README.md"><img src="https://img.shields.io/badge/lang-English-blue" alt="Read in English"></a>
-  <a href="https://github.com/ViniciusDev26/prunr/blob/main/README.pt-BR.md"><img src="https://img.shields.io/badge/lang-Portugu%C3%AAs%20(BR)-green" alt="Leia em português"></a>
+  <a href="https://github.com/sugomi-dev/prunr/blob/main/README.md"><img src="https://img.shields.io/badge/lang-English-blue" alt="Read in English"></a>
+  <a href="https://github.com/sugomi-dev/prunr/blob/main/README.pt-BR.md"><img src="https://img.shields.io/badge/lang-Portugu%C3%AAs%20(BR)-green" alt="Leia em português"></a>
 </p>
 
 ---
@@ -67,7 +67,7 @@ errors: 7, warnings: 1
 
 The package downloads only the binary for your platform (Linux x64/arm64, macOS x64/arm64,
 Windows x64), with no install script. The binaries are also attached to every
-[release](https://github.com/ViniciusDev26/prunr/releases), each with a `.sha256`.
+[release](https://github.com/sugomi-dev/prunr/releases), each with a `.sha256`.
 
 ## Configuration
 
@@ -138,7 +138,7 @@ Or with the Action, which needs no install step:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: ViniciusDev26/prunr@v0
+- uses: sugomi-dev/prunr@v0
 ```
 
 Each new finding becomes an annotation on the right line of the diff. For legacy code, start

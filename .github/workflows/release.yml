@@ -47,7 +47,7 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # The Action is used by its major version (`ViniciusDev26/prunr@v0`): each release moves that
+  # The Action is used by its major version (`sugomi-dev/prunr@v0`): each release moves that
   # tag to itself.
   major-tag:
     name: Move the major tag
